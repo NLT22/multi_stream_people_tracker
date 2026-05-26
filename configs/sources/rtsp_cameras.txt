@@ -1,0 +1,23 @@
+# =============================================================================
+# RTSP Camera Sources
+# =============================================================================
+# List one RTSP URL per line. Lines starting with # are ignored.
+#
+# Format: rtsp://[user:password@]host:port/path
+#
+# IMPORTANT — when using RTSP sources you must also set in pipeline.yaml:
+#   (This is handled automatically by the pipeline builder in Milestone 2+)
+#   - nvstreammux: live-source=1
+#   - nveglglessink: sync=0, async=0
+#
+# TIP: Test your URL with: ffplay rtsp://... before using it here.
+#      If ffplay shows video, DeepStream will too.
+#
+# =============================================================================
+# TODO: Replace with your actual RTSP camera URLs.
+# =============================================================================
+
+# rtsp://admin:password@192.168.1.100:554/stream1
+# rtsp://admin:password@192.168.1.101:554/stream1
+# rtsp://admin:password@192.168.1.102:554/stream1
+# rtsp://admin:password@192.168.1.103:554/stream1

@@ -1,0 +1,29 @@
+# =============================================================================
+# NvDCF Tracker Config — Accuracy Mode
+# =============================================================================
+# Same algorithm as nvdcf_perf.yaml but with stronger visual features.
+# IDs are more stable under occlusion; uses more GPU resources.
+#
+# TODO (Milestone 5): Switch pipeline.yaml tracker.config_file to this file
+#                     and compare ID stability vs performance.
+# =============================================================================
+
+BaseConfig:
+  minDetectorConfidence: 0.2
+
+TargetManagement:
+  maxTargetsPerStream: 50
+  enableBboxUnClipping: true
+  maxShadowTrackingAge: 60   # keep lost tracks longer for re-association
+
+DataAssociator:
+  attributeName: dcf
+  minMatchingScore4Overall: 0.0
+  minMatchingScore4VisualSimilarity: 0.3  # stricter match = fewer ID swaps
+
+VisualTracker:
+  useColorNames: true
+  useHOG: true
+  featureImgSizeLevel: 4        # larger features → more accurate, slower
+  SearchRegionPaddingScale: 1.5 # wider search → handles fast movement better
+  useNormalisedPatch: true       # normalise patch brightness

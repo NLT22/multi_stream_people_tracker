@@ -1,0 +1,65 @@
+# =============================================================================
+# Multi-Stream People Tracker — Master Pipeline Config
+# =============================================================================
+# This file is the single control panel for the entire pipeline.
+# Edit this file to switch source mode, detection model, and tracker.
+# =============================================================================
+
+# ── Source Mode ──────────────────────────────────────────────────────────────
+# Choose ONE mode by setting source_mode. The path for each mode is below.
+#
+#   video_files  → read from a text file listing video paths/URIs (start here)
+#   folder_input → scan a folder for all video files automatically
+#   rtsp_cameras → read RTSP camera stream URLs from a text file
+#
+source_mode: video_files
+
+source_configs:
+  video_files:  configs/sources/video_files.txt
+  folder_input: configs/sources/folder_input.yaml
+  rtsp_cameras: configs/sources/rtsp_cameras.txt
+
+# ── Detection ────────────────────────────────────────────────────────────────
+# Switch model by changing config_file path.
+# Default: TrafficCamNet — a ResNet18 model bundled with DeepStream.
+#   class_id 0 = vehicle, 1 = bicycle, 2 = person, 3 = road sign
+#
+# TODO (Milestone 4): First run will build a TensorRT engine (~1-3 min).
+#                     Subsequent runs load the cached .engine file (fast).
+#
+detection:
+  enabled: true
+  config_file: configs/models/nvinfer_trafficcamnet.yml
+  # config_file: configs/models/nvinfer_yolov8_people.yml  # TODO future milestone
+
+# ── Tracker ──────────────────────────────────────────────────────────────────
+# nvtracker assigns a unique integer object_id to each tracked person
+# that persists across frames (unlike detection, which is per-frame only).
+#
+# Switch tracker by changing config_file:
+#   nvdcf_perf.yaml     → NvDCF visual tracker (GPU-based, recommended)
+#   nvdcf_accuracy.yaml → NvDCF accurate mode (slower, more stable IDs)
+#   iou.yaml            → IoU tracker (CPU, simplest, good for learning)
+#
+tracker:
+  enabled: true
+  config_file: configs/tracker/nvdcf_perf.yaml
+  # config_file: configs/tracker/iou.yaml   # simpler, try this first
+  tracker_width: 640    # should match nvinfer input width
+  tracker_height: 384   # should match nvinfer input height
+
+# ── Display ──────────────────────────────────────────────────────────────────
+display:
+  osd_enabled: true       # draw bounding boxes + labels (Milestone 6+)
+  tiled_display: true     # NxN grid layout (Milestone 7+); false = last stream only
+  tile_width: 1280        # per-tile width in pixels
+  tile_height: 720        # per-tile height in pixels
+
+# ── Performance (tuned for RTX 3050Ti, 4 GB VRAM) ────────────────────────────
+# batch_size: how many frames processed together in one GPU pass.
+#   - Must equal the number of input streams for best throughput.
+#   - Keep ≤ 8 on 4 GB VRAM with FP16.
+#   - The model config also has batch-size; they should match.
+#
+batch_size: 4
+gpu_id: 0

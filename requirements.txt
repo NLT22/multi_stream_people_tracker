@@ -1,0 +1,10 @@
+# =============================================================================
+# Python dependencies for multi_stream_people_tracker
+# =============================================================================
+# IMPORTANT: pyservicemaker is NOT listed here because it cannot be installed
+# from PyPI. It must be installed from the DeepStream SDK wheel file.
+# See setup_venv.sh for the correct installation command.
+# =============================================================================
+
+# YAML parsing (for pipeline.yaml and tracker configs)
+pyyaml>=6.0

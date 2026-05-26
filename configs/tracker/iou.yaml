@@ -1,0 +1,26 @@
+# =============================================================================
+# IoU Tracker Config — Simplest Tracker (Great for Learning)
+# =============================================================================
+# IoU (Intersection over Union) tracking is the simplest approach:
+# "If a detection in frame N overlaps enough with one in frame N-1, same object."
+#
+# Pros: CPU-only, very fast, easy to understand, zero GPU memory overhead
+# Cons: IDs break on occlusion, fast movement, or when detector misses a frame
+#
+# Use this first to understand WHAT tracking does before switching to NvDCF.
+#
+# TODO (Milestone 5): Start here, then switch to nvdcf_perf.yaml and compare.
+# =============================================================================
+
+BaseConfig:
+  minDetectorConfidence: 0.2
+
+TargetManagement:
+  maxTargetsPerStream: 100   # IoU is lightweight, can handle more targets
+  maxShadowTrackingAge: 5    # lose ID quickly — pure IoU, no appearance model
+
+DataAssociator:
+  # "iou" = match detections to tracks purely by bounding box overlap
+  attributeName: iou
+  iouThreshold: 0.3          # minimum IOU to consider "same object"
+  # TODO: Increase to 0.5 if you get too many ID swaps on overlapping people

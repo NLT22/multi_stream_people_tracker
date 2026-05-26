@@ -1,0 +1,26 @@
+# =============================================================================
+# Folder Input Source Config
+# =============================================================================
+# When source_mode=folder_input, the pipeline scans this folder for videos.
+# All matching files are loaded as separate streams (one stream per file).
+#
+# TODO: Set folder_path to a directory containing your video files.
+# =============================================================================
+
+folder_path: /path/to/your/videos/folder
+
+# File extensions to include (case-insensitive)
+extensions:
+  - .mp4
+  - .mkv
+  - .avi
+  - .h264
+  - .h265
+  - .ts
+
+# Maximum number of video files to load (0 = no limit)
+# Useful for testing: set max_files=2 to test with only 2 streams.
+max_files: 0
+
+# Sort order for files: name | mtime | none
+sort_by: name

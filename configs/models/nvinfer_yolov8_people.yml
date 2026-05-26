@@ -1,0 +1,55 @@
+# =============================================================================
+# nvinfer Config — YOLOv8 People-Only Detector (FUTURE MILESTONE)
+# =============================================================================
+# This config is a STUB for a future milestone.
+# To use it: export a YOLOv8n/s model trained on COCO person class only,
+# or use a pretrained people-detection ONNX.
+#
+# Steps to activate (TODO):
+#   1. Export model:
+#      from ultralytics import YOLO
+#      model = YOLO("yolov8n.pt")
+#      model.export(format="onnx", dynamic=False, imgsz=640)
+#
+#   2. Update onnx-file and model-engine-file paths below
+#
+#   3. YOLOv8 has dynamic ONNX output — must set infer-dims
+#      (see LEARNING_NOTES.md § dynamic ONNX models)
+#
+#   4. Update pipeline.yaml:
+#      detection:
+#        config_file: configs/models/nvinfer_yolov8_people.yml
+# =============================================================================
+
+property:
+  gpu-id: 0
+
+  # TODO: Set these paths after exporting your YOLOv8 ONNX model
+  onnx-file: /path/to/yolov8n_people.onnx
+  model-engine-file: /path/to/yolov8n_people_b4_gpu0_fp16.engine
+
+  labelfile-path: configs/labels/people_only_labels.txt
+
+  net-scale-factor: 0.0039215697906911373
+
+  # CRITICAL for YOLOv8: dynamic ONNX requires explicit infer-dims
+  # Format: channels;height;width
+  infer-dims: 3;640;640
+
+  batch-size: 4
+  network-mode: 2   # FP16
+  num-detected-classes: 1  # people only
+  interval: 0
+  gie-unique-id: 1
+  process-mode: 1
+  network-type: 0
+
+  # YOLOv8 (v8/v11): pre-NMS output [batch, 84, 8400] → cluster-mode: 2
+  # YOLOv10+:        post-NMS output [batch, 300, 6]   → cluster-mode: 4
+  # TODO: Check your model output shape and set accordingly
+  cluster-mode: 2
+
+class-attrs-all:
+  pre-cluster-threshold: 0.25
+  topk: 20
+  nms-iou-threshold: 0.45

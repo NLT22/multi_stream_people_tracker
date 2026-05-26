@@ -1,0 +1,26 @@
+# =============================================================================
+# Video File Sources
+# =============================================================================
+# List one video source per line.
+# Lines starting with # are ignored (comments).
+#
+# Supported URI formats:
+#   file:///absolute/path/to/video.mp4   ← explicit URI (preferred)
+#   /absolute/path/to/video.mp4          ← absolute path (auto-converted)
+#
+# Supported formats: .mp4, .mkv, .avi, .h264, .h265, .ts
+#
+# nvurisrcbin handles all formats automatically — no need to specify codec.
+#
+# TIP: Start with a single video for Milestone 1, then add more for Milestone 2+.
+# The pipeline auto-detects the number of sources and adjusts batch_size and
+# tile grid accordingly.
+#
+# =============================================================================
+# TODO: Replace these placeholder paths with your actual video file paths.
+# =============================================================================
+
+file:///path/to/your/video1.mp4
+# file:///path/to/your/video2.mp4
+# file:///path/to/your/video3.mp4
+# file:///path/to/your/video4.mp4
