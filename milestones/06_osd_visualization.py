@@ -161,8 +161,7 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str):
         "batch-size": num_sources,
         "gpu-id": 0,
     })
-    pipeline.attach("pgie", "measure_fps_probe", "fps_probe",
-                    {"print-fps-interval": 5})
+    pipeline.attach("pgie", "measure_fps_probe", "fps_probe")
 
     # NVTRACKER
     pipeline.add("nvtracker", "tracker", {

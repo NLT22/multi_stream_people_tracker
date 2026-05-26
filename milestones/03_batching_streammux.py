@@ -58,7 +58,7 @@ BATCHED_PUSH_TIMEOUT = 40000  # 40ms — good for file sources
 
 # Set True to simulate live-source behavior (normally only for RTSP).
 # With True: muxer uses NTP timestamps; sink must use sync=0.
-IS_LIVE_SOURCE = False
+IS_LIVE_SOURCE = True
 
 
 class BatchInspectorProbe(psm.BatchMetadataOperator):
@@ -90,8 +90,8 @@ class BatchInspectorProbe(psm.BatchMetadataOperator):
 
         # TODO Exercise 4: Print source_id for each frame to see which
         #                  streams contributed to this batch:
-        for frame_meta in batch_meta.frame_items:
-            print(f"  source_id={frame_meta.source_id}")
+        # for frame_meta in batch_meta.frame_items:
+        #     print(f"  source_id={frame_meta.source_id}")
 
 
 def run(sources_txt: str):

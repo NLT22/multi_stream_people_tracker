@@ -172,8 +172,7 @@ class PipelineBuilder:
         })
         # Built-in FPS probe — prints throughput every 5 seconds
         # Attach to nvinfer, NEVER to a sink element
-        self._pipeline.attach("pgie", "measure_fps_probe", "fps_probe",
-                               {"print-fps-interval": 5})
+        self._pipeline.attach("pgie", "measure_fps_probe", "fps_probe")
 
     def _add_tracker(self):
         """

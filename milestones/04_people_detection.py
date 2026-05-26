@@ -132,8 +132,8 @@ def run(sources_txt: str, nvinfer_config: str):
 
     # FPS PROBE — MUST attach to "pgie", NOT to "sink"
     # Attaching to a sink raises: RuntimeError: Probe failure
-    pipeline.attach("pgie", "measure_fps_probe", "fps_probe",
-                    {"print-fps-interval": 5})
+    # Built-in probe: 3 string args only — no dict (C++ binding requires str, str, str)
+    pipeline.attach("pgie", "measure_fps_probe", "fps_probe")
 
     # Custom probes must be wrapped: psm.Probe("name", instance)
     pipeline.attach("pgie", psm.Probe("det_probe", DetectionVerifierProbe()))
