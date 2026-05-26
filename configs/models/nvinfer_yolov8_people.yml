@@ -28,7 +28,7 @@ property:
   onnx-file: /path/to/yolov8n_people.onnx
   model-engine-file: /path/to/yolov8n_people_b4_gpu0_fp16.engine
 
-  labelfile-path: configs/labels/people_only_labels.txt
+  labelfile-path: ../labels/people_only_labels.txt
 
   net-scale-factor: 0.0039215697906911373
 

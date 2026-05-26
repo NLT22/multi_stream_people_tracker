@@ -17,15 +17,18 @@ property:
   gpu-id: 0
 
   # ── Model files ────────────────────────────────────────────────────────────
-  # ONNX source model (used once to build TensorRT engine)
-  onnx-file: /opt/nvidia/deepstream/deepstream/samples/models/Primary_Detector/resnet18_trafficcamnet_pruned.onnx
+  # ONNX source model — absolute path (bundled with DeepStream 9.0)
+  # NOTE: DeepStream 9.0 installs under deepstream-9.0/, not deepstream/
+  onnx-file: /opt/nvidia/deepstream/deepstream-9.0/samples/models/Primary_Detector/resnet18_trafficcamnet_pruned.onnx
 
-  # Cached TensorRT engine (generated on first run, reused after)
-  # File name encodes: batch size (b4), GPU (gpu0), precision (fp16)
-  model-engine-file: /opt/nvidia/deepstream/deepstream/samples/models/Primary_Detector/resnet18_trafficcamnet_pruned_b4_gpu0_fp16.engine
+  # Cached TensorRT engine — stored in project engine_cache/ (writable)
+  # Path is RELATIVE TO THIS CONFIG FILE (configs/models/), so ../../ = project root
+  # Engine name encodes batch size automatically (e.g. _b11_ for 11 sources)
+  model-engine-file: ../../engine_cache/trafficcamnet_gpu0_fp16.engine
 
-  # Class label file — one label per line, line N = class_id N
-  labelfile-path: configs/labels/trafficcamnet_labels.txt
+  # Label file — RELATIVE TO THIS CONFIG FILE (configs/models/)
+  # ../labels/ resolves to configs/labels/ correctly
+  labelfile-path: ../labels/trafficcamnet_labels.txt
 
   # ── Preprocessing ──────────────────────────────────────────────────────────
   # Scale factor: pixel values → model input range
