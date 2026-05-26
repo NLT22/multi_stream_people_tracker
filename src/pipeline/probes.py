@@ -12,7 +12,7 @@ WHY PROBES EXIST:
 
   pyservicemaker wraps this in BatchMetadataOperator:
     class MyProbe(psm.BatchMetadataOperator):
-        def execute(self, batch_meta):
+        def handle_metadata(self, batch_meta):
             ...  # runs once per buffer (= once per batch of frames)
 
 HOW ITERATORS WORK (CRITICAL):

@@ -189,7 +189,7 @@ class PipelineBuilder:
         cfg = self.config
         self._pipeline.add("nvtracker", "tracker", {
             "ll-lib-file": (
-                "/opt/nvidia/deepstream/deepstream/lib/"
+                "/opt/nvidia/deepstream/deepstream-9.0/lib/"
                 "libnvds_nvmultiobjecttracker.so"
             ),
             "ll-config-file": cfg.tracker.config_file,

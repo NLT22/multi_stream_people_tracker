@@ -35,33 +35,48 @@ chmod +x setup_venv.sh
 # 3. Activate venv (every new terminal)
 source venv/bin/activate
 
-# 4. Edit your video source (replace the placeholder path)
+# 4. Edit video sources (replace placeholder paths)
 nano configs/sources/video_files.txt
 
-# 5. Run Milestone 1
+# 5. Run Milestone 1 — single video playback
 python milestones/01_single_video_display.py --input /path/to/video.mp4
+
+# 6. Run Milestone 3 — people detection with bounding boxes
+python milestones/03_people_detection.py
 ```
 
 ---
 
-## Learning Path — Milestones
+## Learning Path — 8 Milestones
 
-Work through these in order. Each builds on the previous.
+Each milestone has **visual output on screen**. Work through them in order.
 
-| # | Script | What You Learn | Run Command |
-|---|--------|----------------|-------------|
-| 1 | `01_single_video_display.py` | Pipeline basics, nvurisrcbin, nvstreammux, sink | `python milestones/01_single_video_display.py --input /path/to/video.mp4` |
-| 2 | `02_multi_video_input.py` | N sources, batch-size, nvmultistreamtiler | `python milestones/02_multi_video_input.py` |
-| 3 | `03_batching_streammux.py` | Batch buffers, batched-push-timeout, live-source | `python milestones/03_batching_streammux.py` |
-| 4 | `04_people_detection.py` | nvinfer, TensorRT engine, FP16, FPS probe | `python milestones/04_people_detection.py` |
-| 5 | `05_object_tracking.py` | nvtracker, persistent IDs, IoU vs NvDCF | `python milestones/05_object_tracking.py` |
-| 6 | `06_osd_visualization.py` | nvosdbin, DisplayMeta, Text/Color/Font API | `python milestones/06_osd_visualization.py` |
-| 7 | `07_tiled_display.py` | Full pipeline, NxN tiling, tile grid math | `python milestones/07_tiled_display.py` |
-| 8 | `08_metadata_extraction.py` | BatchMeta traversal, iterators, JSON export | `python milestones/08_metadata_extraction.py` |
-| 9 | `09_reid_extension_stub.py` | Re-ID concept, NvDeepSORT, cross-camera (stub) | `python milestones/09_reid_extension_stub.py` |
+| # | Script | Visual Output | DeepStream Element(s) Added |
+|---|--------|--------------|----------------------------|
+| 1 | `01_single_video_display.py` | Video plays | `nvurisrcbin` → `nvstreammux` → sink |
+| 2 | `02_multi_video_tiled.py` | NxN grid of videos | + `nvmultistreamtiler` |
+| 3 | `03_people_detection.py` | **Bounding boxes on all detections** | + `nvinfer` + `nvosdbin` |
+| 4 | `04_people_tracking.py` | **"Person #42" labels per person** | + `nvtracker` + probe |
+| 5 | `05_multi_stream_tracking.py` | **NxN grid + "Cam0 #42" labels** | Scale M4 to N streams |
+| 6 | `06_batching_deep_dive.py` | Full visual + batch logs in console | `nvstreammux` internals |
+| 7 | `07_metadata_extraction.py` | Full visual + per-camera stats | metadata traversal |
+| 8 | `08_reid_stub.py` | Concept guide (no runnable code) | ReID / NvDeepSORT |
 
-Each script is self-contained with a `--sources` argument (default:
-`configs/sources/video_files.txt`) and its own TODO exercises.
+Run commands (all use `--sources configs/sources/video_files.txt` by default):
+
+```bash
+python milestones/01_single_video_display.py --input /path/to/video.mp4
+python milestones/02_multi_video_tiled.py
+python milestones/03_people_detection.py
+python milestones/04_people_tracking.py
+python milestones/04_people_tracking.py --tracker-config configs/tracker/iou.yaml
+python milestones/05_multi_stream_tracking.py
+python milestones/05_multi_stream_tracking.py --tile-w 640 --tile-h 360
+python milestones/06_batching_deep_dive.py
+python milestones/07_metadata_extraction.py
+python milestones/07_metadata_extraction.py --save-json
+python milestones/08_reid_stub.py   # prints concept guide
+```
 
 ---
 
@@ -76,7 +91,7 @@ source_mode: video_files
 # Use a folder of videos
 # source_mode: folder_input
 
-# Use RTSP cameras (future)
+# Use RTSP cameras
 # source_mode: rtsp_cameras
 ```
 
@@ -86,14 +101,14 @@ Then edit the corresponding config file in `configs/sources/`.
 
 ## Switching Detection Model
 
-Edit the `detection.config_file` in `configs/pipeline.yaml`:
+Edit `detection.config_file` in `configs/pipeline.yaml`:
 
 ```yaml
 detection:
   # Default: TrafficCamNet (bundled with DeepStream, no download needed)
   config_file: configs/models/nvinfer_trafficcamnet.yml
 
-  # Future: YOLOv8 people-only (requires model export, see config for instructions)
+  # Future: YOLOv8 people-only (requires model export, see stub config)
   # config_file: configs/models/nvinfer_yolov8_people.yml
 ```
 
@@ -107,11 +122,12 @@ Edit `tracker.config_file` in `configs/pipeline.yaml`:
 
 ```yaml
 tracker:
-  # Recommended progression:
-  config_file: configs/tracker/iou.yaml            # 1st: simplest, learn the concept
-  # config_file: configs/tracker/nvdcf_perf.yaml   # 2nd: GPU visual tracker
-  # config_file: configs/tracker/nvdcf_accuracy.yaml  # 3rd: more stable IDs
+  config_file: configs/tracker/iou.yaml            # start here: simplest
+  # config_file: configs/tracker/nvdcf_perf.yaml   # GPU visual tracker (recommended)
+  # config_file: configs/tracker/nvdcf_accuracy.yaml  # slower, most stable IDs
 ```
+
+**Recommended progression:** `iou.yaml` → `nvdcf_perf.yaml` → `nvdcf_accuracy.yaml`
 
 ---
 
@@ -120,30 +136,40 @@ tracker:
 ```
 multi_stream_people_tracker/
 ├── configs/
-│   ├── pipeline.yaml              ← master control panel
+│   ├── pipeline.yaml                  ← master control panel (source/model/tracker)
 │   ├── sources/
-│   │   ├── video_files.txt        ← your video paths (edit this first!)
+│   │   ├── video_files.txt            ← edit this first — add your video paths
 │   │   ├── folder_input.yaml
 │   │   └── rtsp_cameras.txt
 │   ├── models/
-│   │   ├── nvinfer_trafficcamnet.yml   ← default model config
-│   │   └── nvinfer_yolov8_people.yml  ← future model stub
+│   │   ├── nvinfer_trafficcamnet.yml  ← default detector (FP16, class 2 = person)
+│   │   └── nvinfer_yolov8_people.yml  ← future YOLOv8 stub
 │   ├── tracker/
-│   │   ├── iou.yaml               ← simplest tracker
-│   │   ├── nvdcf_perf.yaml        ← GPU tracker (fast)
-│   │   └── nvdcf_accuracy.yaml    ← GPU tracker (accurate)
+│   │   ├── iou.yaml                   ← start here
+│   │   ├── nvdcf_perf.yaml            ← recommended
+│   │   └── nvdcf_accuracy.yaml
 │   └── labels/
-│       └── trafficcamnet_labels.txt
-├── milestones/                    ← standalone learning scripts (01–09)
+│       ├── trafficcamnet_labels.txt
+│       └── people_only_labels.txt
+├── engine_cache/                      ← TensorRT engines saved here (auto-created)
+├── milestones/                        ← 8 standalone learning scripts
+│   ├── 01_single_video_display.py
+│   ├── 02_multi_video_tiled.py
+│   ├── 03_people_detection.py         ← bounding boxes visible from here
+│   ├── 04_people_tracking.py          ← tracking IDs visible from here
+│   ├── 05_multi_stream_tracking.py    ← full N-stream pipeline
+│   ├── 06_batching_deep_dive.py
+│   ├── 07_metadata_extraction.py
+│   └── 08_reid_stub.py
 ├── src/
-│   ├── config/loader.py           ← PipelineConfig dataclass
+│   ├── config/loader.py               ← PipelineConfig dataclass
 │   ├── pipeline/
-│   │   ├── builder.py             ← full pipeline assembler
-│   │   ├── sources.py             ← URI loaders (txt/folder/rtsp)
-│   │   └── probes.py              ← metadata probe classes
-│   └── utils/platform_utils.py   ← sink type, GPU info
-├── LEARNING_NOTES.md              ← concept explanations (read this!)
-├── README.md                      ← this file
+│   │   ├── builder.py                 ← full pipeline assembler (M5+)
+│   │   ├── sources.py                 ← URI loaders (txt/folder/rtsp)
+│   │   └── probes.py                  ← reusable probe classes
+│   └── utils/platform_utils.py        ← sink type, GPU info
+├── LEARNING_NOTES.md                  ← concept explanations (read this!)
+├── README.md
 ├── requirements.txt
 └── setup_venv.sh
 ```
@@ -154,49 +180,65 @@ multi_stream_people_tracker/
 
 ### Black screen / no video
 
-- **Cause:** Display not available or sink type wrong.
 - **Check:** `echo $DISPLAY` — must be set (e.g. `:0`)
-- **Fix:** Run in a local desktop session, or set `DISPLAY=:0` before running.
+- **Fix:** Run in a local desktop session, or `export DISPLAY=:0`
 
 ### `ModuleNotFoundError: No module named 'pyservicemaker'`
 
-- **Cause:** Running without the venv, or venv missing the wheel.
-- **Fix:** `source venv/bin/activate` then check `setup_venv.sh` ran correctly.
+- **Fix:** `source venv/bin/activate` then verify `setup_venv.sh` ran successfully.
 
-### `[NvDsInferContextImpl] Building network engine...` takes forever
+### Engine build takes a long time on first run
 
-- **Normal!** First run builds a TensorRT engine. Takes 1–3 min on 3050Ti.
-- **After first run:** Subsequent runs load the cached `.engine` file in < 5s.
+- **Normal!** First run builds a TensorRT engine (~1–3 min on RTX 3050Ti).
+- Engine is saved to `engine_cache/` and reused on all subsequent runs (< 5s).
 
 ### `TypeError: object has no len()`
 
-- **Cause:** Calling `len()` on `frame_meta.object_items` (it's an iterator).
-- **Fix:** See `LEARNING_NOTES.md` § Iterator vs List.
+- **Cause:** `frame_meta.object_items` is an iterator, not a list.
+- **Fix:** Use `sum(1 for _ in frame_meta.object_items)` to count.
+- See `LEARNING_NOTES.md` § Iterator vs List.
 
-### `RuntimeError: Probe failure`
+### `Exception: Unsupported object type for Pipeline.attach`
 
-- **Cause:** Attaching `measure_fps_probe` to a sink element.
-- **Fix:** Attach to `"pgie"` or `"nvosdbin"` instead. See `LEARNING_NOTES.md`.
+- **Cause:** Passing a probe instance directly instead of wrapping in `psm.Probe`.
+- **Wrong:** `pipeline.attach("tracker", MyProbe(), "name", {})`
+- **Right:** `pipeline.attach("tracker", psm.Probe("name", MyProbe()))`
 
-### Pipeline stuck at "Setting to PLAYING"
+### `TypeError: attach(): incompatible function arguments`
+
+- **Cause:** Passing a dict as 4th argument to `pipeline.attach` for built-in probes.
+- **Wrong:** `pipeline.attach("pgie", "measure_fps_probe", "fps", {"interval": 5})`
+- **Right:** `pipeline.attach("pgie", "measure_fps_probe", "fps")`
+
+### Pipeline stuck at "Setting to PLAYING" / black window
 
 - **Cause:** Live source or tee split without `async=0` on sink.
-- **Fix:** Add `"async": 0` to sink properties. See `LEARNING_NOTES.md`.
+- **Fix:** Add `"async": 0` to sink properties.
 
-### VRAM out of memory with 4+ streams
+### VRAM issues with many streams
 
-- Reduce `batch_size` in `pipeline.yaml`
-- Reduce `tile_width`/`tile_height` in `pipeline.yaml`
-- Add `interval: 2` to the nvinfer config (run inference every 3rd frame)
-- Ensure `network-mode: 2` (FP16) in the nvinfer config
+```bash
+# Lower tile resolution
+python milestones/05_multi_stream_tracking.py --tile-w 640 --tile-h 360
+
+# Skip inference frames (edit nvinfer config)
+# interval: 2  → run inference every 3rd frame
+
+# Ensure FP16 in nvinfer config
+# network-mode: 2
+```
 
 ---
 
 ## Key Paths (DeepStream 9.0)
 
 ```
-TrafficCamNet ONNX: /opt/nvidia/deepstream/deepstream/samples/models/Primary_Detector/
-Tracker library:    /opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
-Sample configs:     /opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/
-pyservicemaker WHL: /opt/nvidia/deepstream/deepstream/service-maker/python/
+TrafficCamNet ONNX: /opt/nvidia/deepstream/deepstream-9.0/samples/models/Primary_Detector/
+Tracker library:    /opt/nvidia/deepstream/deepstream-9.0/lib/libnvds_nvmultiobjecttracker.so
+Sample configs:     /opt/nvidia/deepstream/deepstream-9.0/samples/configs/deepstream-app/
+pyservicemaker WHL: /opt/nvidia/deepstream/deepstream-9.0/service-maker/python/
 ```
+
+> **Note:** DeepStream 9.0 installs under `deepstream-9.0/`, not `deepstream/`.
+> All paths in nvinfer config files are **relative to the config file's directory**,
+> not the working directory.
