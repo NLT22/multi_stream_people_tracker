@@ -80,7 +80,7 @@ class MetadataExtractorProbe(psm.BatchMetadataOperator):
             self._output_dir.mkdir(parents=True, exist_ok=True)
             print(f"[M8] Saving metadata JSON to: {self._output_dir}")
 
-    def execute(self, batch_meta):
+    def handle_metadata(self, batch_meta):
         self._frame_count += 1
 
         # ── Outer loop: one iteration per source stream in the batch ─────────
@@ -205,8 +205,8 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
         "tracker-width": 640, "tracker-height": 384, "gpu-id": 0,
     })
 
-    # METADATA EXTRACTOR PROBE
-    pipeline.attach("tracker", extractor_probe, "meta_probe", {})
+    # METADATA EXTRACTOR PROBE — custom probes must be wrapped
+    pipeline.attach("tracker", psm.Probe("meta_probe", extractor_probe))
 
     # OSD (optional visualization while extracting)
     pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})

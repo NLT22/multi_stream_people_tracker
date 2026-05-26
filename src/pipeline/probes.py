@@ -40,12 +40,12 @@ class PersonCountProbe(psm.BatchMetadataOperator):
     Milestone 8: Count detected/tracked persons per frame and print to console.
 
     Attach this to nvtracker (or nvinfer if no tracker) with:
-        pipeline.attach("tracker", PersonCountProbe(), "count_probe", {})
+        pipeline.attach("tracker", psm.Probe("count_probe", PersonCountProbe()))
     """
 
     PERSON_CLASS_ID = PERSON_CLASS_ID_TRAFFICCAMNET
 
-    def execute(self, batch_meta):
+    def handle_metadata(self, batch_meta):
         """
         Called once per buffer (one batch of frames from nvstreammux).
         Each batch contains one frame per source stream.
@@ -82,7 +82,7 @@ class PersonOSDProbe(psm.BatchMetadataOperator):
     which nvosdbin then renders onto the video.
 
     Attach this between tracker and osd:
-        pipeline.attach("tracker", PersonOSDProbe(), "osd_probe", {})
+        pipeline.attach("tracker", psm.Probe("osd_probe", PersonOSDProbe()))
 
     WHY NOT USE nvosdbin's built-in display?
       nvosdbin auto-draws class labels from the label file. The custom probe
@@ -92,7 +92,7 @@ class PersonOSDProbe(psm.BatchMetadataOperator):
 
     PERSON_CLASS_ID = PERSON_CLASS_ID_TRAFFICCAMNET
 
-    def execute(self, batch_meta):
+    def handle_metadata(self, batch_meta):
         for frame_meta in batch_meta.frame_items:
             display_meta = psm.DisplayMeta(frame_meta)
 
@@ -142,7 +142,7 @@ class MetadataExtractorProbe(psm.BatchMetadataOperator):
         super().__init__()
         self._frame_count = 0
 
-    def execute(self, batch_meta):
+    def handle_metadata(self, batch_meta):
         for frame_meta in batch_meta.frame_items:
             self._frame_count += 1
 

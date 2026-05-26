@@ -69,7 +69,7 @@ class DetectionVerifierProbe(psm.BatchMetadataOperator):
         self._print_interval = print_interval
         self._frame_count = 0
 
-    def execute(self, batch_meta):
+    def handle_metadata(self, batch_meta):
         self._frame_count += 1
         if self._frame_count % self._print_interval != 0:
             return
@@ -135,8 +135,8 @@ def run(sources_txt: str, nvinfer_config: str):
     pipeline.attach("pgie", "measure_fps_probe", "fps_probe",
                     {"print-fps-interval": 5})
 
-    # DETECTION VERIFIER PROBE — our custom probe to confirm detections exist
-    pipeline.attach("pgie", DetectionVerifierProbe(), "det_probe", {})
+    # Custom probes must be wrapped: psm.Probe("name", instance)
+    pipeline.attach("pgie", psm.Probe("det_probe", DetectionVerifierProbe()))
 
     # TILER
     pipeline.add("nvmultistreamtiler", "tiler", {

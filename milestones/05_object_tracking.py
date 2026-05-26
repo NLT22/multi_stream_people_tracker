@@ -68,7 +68,7 @@ class TrackingIDProbe(psm.BatchMetadataOperator):
         self._active_ids: set[int] = set()
         self._frame_count = 0
 
-    def execute(self, batch_meta):
+    def handle_metadata(self, batch_meta):
         self._frame_count += 1
         if self._frame_count % 30 != 0:
             return
@@ -149,8 +149,8 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str):
         "gpu-id": 0,
     })
 
-    # TRACKING ID PROBE — observe how IDs evolve over time
-    pipeline.attach("tracker", TrackingIDProbe(), "tracking_probe", {})
+    # Custom probes must be wrapped: psm.Probe("name", instance)
+    pipeline.attach("tracker", psm.Probe("tracking_probe", TrackingIDProbe()))
 
     # TILER + SINK
     pipeline.add("nvmultistreamtiler", "tiler", {

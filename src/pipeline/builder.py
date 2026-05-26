@@ -212,8 +212,8 @@ class PipelineBuilder:
         process-mode: 0 = CPU rendering (slower, for debugging)
         """
         # Attach the custom label probe BEFORE the OSD element
-        # so nvosdbin renders our custom text on top of detections
-        self._pipeline.attach(upstream, PersonOSDProbe(), "osd_probe", {})
+        # Custom probes must be wrapped: psm.Probe("name", instance)
+        self._pipeline.attach(upstream, psm.Probe("osd_probe", PersonOSDProbe()))
 
         self._pipeline.add("nvosdbin", "osd", {
             "gpu-id": self.config.gpu_id,

@@ -74,7 +74,7 @@ class BatchInspectorProbe(psm.BatchMetadataOperator):
         super().__init__()
         self._batch_count = 0
 
-    def execute(self, batch_meta):
+    def handle_metadata(self, batch_meta):
         self._batch_count += 1
 
         # Count frames in this batch (can be < batch_size if partial batch)
@@ -90,8 +90,8 @@ class BatchInspectorProbe(psm.BatchMetadataOperator):
 
         # TODO Exercise 4: Print source_id for each frame to see which
         #                  streams contributed to this batch:
-        # for frame_meta in batch_meta.frame_items:
-        #     print(f"  source_id={frame_meta.source_id}")
+        for frame_meta in batch_meta.frame_items:
+            print(f"  source_id={frame_meta.source_id}")
 
 
 def run(sources_txt: str):
@@ -133,7 +133,8 @@ def run(sources_txt: str):
     # ── Batch inspector probe ─────────────────────────────────────────────────
     # Attach to mux (src pad) to inspect each batch as it leaves the muxer.
     # This is WHERE the NvDsBatchMeta is first available.
-    pipeline.attach("mux", BatchInspectorProbe(), "batch_inspector", {})
+    # Custom probes must be wrapped: psm.Probe("name", instance)
+    pipeline.attach("mux", psm.Probe("batch_inspector", BatchInspectorProbe()))
 
     # ── Tiler + Sink ─────────────────────────────────────────────────────────
     import math

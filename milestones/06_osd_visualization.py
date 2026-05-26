@@ -74,7 +74,7 @@ class PersonOSDProbe(psm.BatchMetadataOperator):
     Runs BEFORE nvosdbin so the text gets included in the render pass.
     """
 
-    def execute(self, batch_meta):
+    def handle_metadata(self, batch_meta):
         for frame_meta in batch_meta.frame_items:  # ITERATOR
             # DisplayMeta is attached to this frame for our custom overlays
             display_meta = psm.DisplayMeta(frame_meta)
@@ -176,8 +176,8 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str):
     })
 
     # OSD PROBE — must attach BEFORE nvosdbin
-    # The probe writes text into DisplayMeta; nvosdbin reads and renders it.
-    pipeline.attach("tracker", PersonOSDProbe(), "osd_probe", {})
+    # Custom probes must be wrapped: psm.Probe("name", instance)
+    pipeline.attach("tracker", psm.Probe("osd_probe", PersonOSDProbe()))
 
     # NVOSDBIN — renders bounding boxes (from nvinfer) + custom text (from probe)
     # process-mode: 1 = GPU rendering (uses NVMM directly, fastest)

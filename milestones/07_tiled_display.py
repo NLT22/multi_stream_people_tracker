@@ -65,7 +65,7 @@ PERSON_CLASS_ID = 2
 class PersonOSDProbe(psm.BatchMetadataOperator):
     """OSD probe: show "Cam N | Person #ID" for each tracked person."""
 
-    def execute(self, batch_meta):
+    def handle_metadata(self, batch_meta):
         for frame_meta in batch_meta.frame_items:
             display_meta = psm.DisplayMeta(frame_meta)
             source_id = frame_meta.source_id
@@ -150,8 +150,8 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
         "gpu-id": 0,
     })
 
-    # OSD PROBE (before nvosdbin)
-    pipeline.attach("tracker", PersonOSDProbe(), "osd_probe", {})
+    # OSD PROBE (before nvosdbin) — custom probes must be wrapped
+    pipeline.attach("tracker", psm.Probe("osd_probe", PersonOSDProbe()))
 
     # NVOSDBIN
     pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
