@@ -17,14 +17,13 @@ property:
   gpu-id: 0
 
   # ── Model files ────────────────────────────────────────────────────────────
-  # ONNX source model — absolute path (bundled with DeepStream 9.0)
-  # NOTE: DeepStream 9.0 installs under deepstream-9.0/, not deepstream/
-  onnx-file: /opt/nvidia/deepstream/deepstream-9.0/samples/models/Primary_Detector/resnet18_trafficcamnet_pruned.onnx
+  # Paths are relative to THIS config file (configs/models/).
+  # ../../models/trafficcamnet/ → project_root/models/trafficcamnet/
+  onnx-file: ../../models/trafficcamnet/resnet18_trafficcamnet_pruned.onnx
 
-  # Cached TensorRT engine — stored in project engine_cache/ (writable)
-  # Path is RELATIVE TO THIS CONFIG FILE (configs/models/), so ../../ = project root
-  # Engine name encodes batch size automatically (e.g. _b11_ for 11 sources)
-  model-engine-file: ../../engine_cache/trafficcamnet_gpu0_fp16.engine
+  # Engine: built on first run, saved next to the ONNX file.
+  # Delete to force rebuild (e.g. after changing batch-size or network-mode).
+  model-engine-file: ../../models/trafficcamnet/resnet18_trafficcamnet_pruned.onnx_b4_gpu0_fp16.engine
 
   # Label file — RELATIVE TO THIS CONFIG FILE (configs/models/)
   # ../labels/ resolves to configs/labels/ correctly
@@ -49,9 +48,13 @@ property:
   #   2 = FP16 (recommended for RTX 3050Ti — half VRAM, minimal accuracy loss)
   #
   # TODO (M3 Exercise 2): Try network-mode: 0 (FP32) and compare VRAM with `nvidia-smi`.
-  # FP32 uses ~2× VRAM but no accuracy change for TrafficCamNet.
+  # NOTE: Changing network-mode changes the engine filename (_fp16 vs _fp32).
+  #       Delete the old .engine file next to the model before switching.
+  #         FP32 (mode 0): VRAM ~665MB, FPS ~61-62
+  #         FP16 (mode 2): VRAM ~615MB, FPS ~120 
   network-mode: 2
 
+  # 4 video - net
   num-detected-classes: 4
 
   # interval: run inference every N+1 frames (0=every frame, 1=every other frame)
@@ -77,5 +80,5 @@ property:
 # Lower value = more detections (higher recall, more false positives).
 class-attrs-all:
   pre-cluster-threshold: 0.2
-  topk: 20
+  topk: 20 # max detections per class (after NMS)
   nms-iou-threshold: 0.5

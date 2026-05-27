@@ -22,5 +22,4 @@ TargetManagement:
 DataAssociator:
   # "iou" = match detections to tracks purely by bounding box overlap
   attributeName: iou
-  iouThreshold: 0.3          # minimum IOU to consider "same object"
-  # TODO: Increase to 0.5 if you get too many ID swaps on overlapping people
+  iouThreshold: 0.2          # minimum IOU to consider "same object"

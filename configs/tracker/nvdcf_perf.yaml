@@ -31,7 +31,7 @@ TargetManagement:
   maxTargetsPerStream: 50
 
   # Unclip bounding boxes that go partially outside the frame
-  enableBboxUnClipping: true
+  enableBboxUnClipping: 1
 
   # How many frames a lost target is kept before its ID is removed
   # TODO: Increase to 60 for longer re-identification window
@@ -48,10 +48,10 @@ DataAssociator:
 
 VisualTracker:
   # Color names feature: robust to lighting changes
-  useColorNames: true
+  useColorNames: 1
 
   # HOG (Histogram of Oriented Gradients): robust to pose changes
-  useHOG: true
+  useHOG: 1
 
   # Feature image size level (1=small/fast, 5=large/accurate)
   # Level 3 is a good balance for real-time on 3050Ti

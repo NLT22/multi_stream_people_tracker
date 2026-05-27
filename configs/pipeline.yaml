@@ -21,30 +21,48 @@ source_configs:
 
 # ── Detection ────────────────────────────────────────────────────────────────
 # Switch model by changing config_file path.
-# Default: TrafficCamNet — a ResNet18 model bundled with DeepStream.
-#   class_id 0 = vehicle, 1 = bicycle, 2 = person, 3 = road sign
+# Default: YOLOv8n COCO — person class id is inferred as 0.
 #
-# TODO (Milestone 4): First run will build a TensorRT engine (~1-3 min).
-#                     Subsequent runs load the cached .engine file (fast).
+# First run builds a TensorRT engine next to the selected model (~1-3 min).
+# Subsequent runs load that .engine file (fast).
 #
 detection:
   enabled: true
-  config_file: configs/models/nvinfer_trafficcamnet.yml
-  # config_file: configs/models/nvinfer_yolov8_people.yml  # TODO future milestone
+
+  # ── Model options ─────────────────────────────────────────────────────────
+  # YOLOv8n (default):
+  #   80 COCO classes, person class id inferred from configs/labels/coco_labels.txt
+  #   Requires models/yolov8/yolov8n.onnx and custom parser .so.
+  config_file: configs/models/nvinfer_yolov8_people.yml
+
+  # TrafficCamNet (bundled with DeepStream):
+  #   4 classes: vehicle(0), bicycle(1), PERSON(2), road_sign(3)
+  #   person class id is inferred from configs/labels/trafficcamnet_labels.txt
+  # config_file: configs/models/nvinfer_trafficcamnet.yml
+
+  # PeopleNet v2.6.3 (recommended for people tracking, download required):
+  #   3 classes: PERSON(0), bag(1), face(2)  — bag+face filtered automatically
+  #   person class id is inferred from configs/labels/peoplenet_labels.txt
+  #   Download: bash scripts/download_peoplenet.sh
+  # config_file: configs/models/nvinfer_peoplenet.yml
 
 # ── Tracker ──────────────────────────────────────────────────────────────────
 # nvtracker assigns a unique integer object_id to each tracked person
 # that persists across frames (unlike detection, which is per-frame only).
 #
 # Switch tracker by changing config_file:
-#   nvdcf_perf.yaml     → NvDCF visual tracker (GPU-based, recommended)
-#   nvdcf_accuracy.yaml → NvDCF accurate mode (slower, more stable IDs)
+#   nvdcf_perf.yaml     → NvDCF visual tracker, fast (recommended start)
+#   nvdcf_accuracy.yaml → NvDCF tuned for people (tuned from NVIDIA reference
+#                          project deepstream-tracker-3d-multi-view)
 #   iou.yaml            → IoU tracker (CPU, simplest, good for learning)
+#   nvdeepsort_reid.yaml → NvDeepSORT + Re-ID model (required for Milestone 8)
 #
 tracker:
   enabled: true
   config_file: configs/tracker/nvdcf_perf.yaml
-  # config_file: configs/tracker/iou.yaml   # simpler, try this first
+  # config_file: configs/tracker/nvdcf_accuracy.yaml   # better ID stability
+  # config_file: configs/tracker/iou.yaml              # simplest, try first
+  # config_file: configs/tracker/nvdeepsort_reid.yaml  # for Milestone 8 ReID
   tracker_width: 640    # should match nvinfer input width
   tracker_height: 384   # should match nvinfer input height
 

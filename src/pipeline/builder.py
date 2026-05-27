@@ -46,7 +46,8 @@ import pyservicemaker as psm
 
 from src.config.loader import PipelineConfig
 from src.utils.platform_utils import get_sink_element, get_sink_properties
-from src.pipeline.probes import PersonOSDProbe, PersonCountProbe
+from src.pipeline.model_utils import deepstream_tracker_lib_path, infer_person_class_id
+from src.pipeline.probes import PersonOSDProbe
 
 
 class PipelineBuilder:
@@ -55,6 +56,7 @@ class PipelineBuilder:
         self.config = config
         self.uris = uris
         self.num_sources = len(uris)
+        self.person_class_id = infer_person_class_id(config.detection.config_file)
         self._pipeline: psm.Pipeline | None = None
 
     # ── Public API ──────────────────────────────────────────────────────────
@@ -65,8 +67,8 @@ class PipelineBuilder:
 
         self._pipeline = psm.Pipeline("people-tracker")
 
-        self._add_sources()
         self._add_muxer()
+        self._add_sources()
 
         last_element = "mux"
 
@@ -165,7 +167,8 @@ class PipelineBuilder:
           - Class labels
 
         On FIRST RUN: nvinfer builds a TensorRT engine from the ONNX file.
-        This takes 1-3 minutes. Subsequent runs load the cached .engine file.
+        This takes 1-3 minutes. Subsequent runs load the .engine file from the
+        corresponding model directory.
 
         WHY FPS probe attaches to nvinfer (NOT the sink):
           Attaching measure_fps_probe to a sink element raises RuntimeError.
@@ -195,10 +198,7 @@ class PipelineBuilder:
         """
         cfg = self.config
         self._pipeline.add("nvtracker", "tracker", {
-            "ll-lib-file": (
-                "/opt/nvidia/deepstream/deepstream-9.0/lib/"
-                "libnvds_nvmultiobjecttracker.so"
-            ),
+            "ll-lib-file": deepstream_tracker_lib_path(),
             "ll-config-file": cfg.tracker.config_file,
             "tracker-width":  cfg.tracker.tracker_width,
             "tracker-height": cfg.tracker.tracker_height,
@@ -219,7 +219,10 @@ class PipelineBuilder:
         """
         # Attach the custom label probe BEFORE the OSD element
         # Custom probes must be wrapped: psm.Probe("name", instance)
-        self._pipeline.attach(upstream, psm.Probe("osd_probe", PersonOSDProbe()))
+        self._pipeline.attach(
+            upstream,
+            psm.Probe("osd_probe", PersonOSDProbe(self.person_class_id)),
+        )
 
         self._pipeline.add("nvosdbin", "osd", {
             "gpu-id": self.config.gpu_id,

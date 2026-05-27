@@ -1,0 +1,38 @@
+services:
+  tracker:
+    build: .
+    image: multi_stream_people_tracker:latest
+    gpus: all
+
+    # GPU access
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, video, compute, utility]
+
+    environment:
+      - DISPLAY=${DISPLAY}
+      - NVIDIA_DRIVER_CAPABILITIES=video,compute,utility,graphics
+
+    volumes:
+      # X11 socket for display output
+      - /tmp/.X11-unix:/tmp/.X11-unix
+
+      # Mount your video files here.
+      # Usage: VIDEO_DIR=/absolute/path/to/videos docker compose up
+      - ${VIDEO_DIR:-./videos}:/videos:ro
+
+      # Models are writable so TensorRT engines are built next to each model.
+      # First run rebuilds .engine files; subsequent runs are fast.
+      - ./models:/app/models
+
+    # Override to run a different milestone:
+    #   docker compose run --rm tracker python3 milestones/04_people_tracking.py --sources configs/sources/video_files_docker.txt
+    command: python3 milestones/05_multi_stream_tracking.py --sources configs/sources/video_files_docker.txt
+
+    network_mode: host
+    stdin_open: true
+    tty: true

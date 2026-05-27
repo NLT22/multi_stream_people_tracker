@@ -91,15 +91,27 @@ nvinfer reads batch buffers, runs TensorRT inference, and writes
 property:
   gpu-id: 0
   onnx-file: /absolute/path/to/model.onnx        # absolute = always safe
-  labelfile-path: ../labels/trafficcamnet.txt     # relative to THIS config file
-  model-engine-file: ../../engine_cache/model.engine  # writable location
+  labelfile-path: ../labels/coco_labels.txt        # relative to THIS config file
+  model-engine-file: ../../models/<model_dir>/model.onnx_b4_gpu0_fp16.engine
   batch-size: 4
   network-mode: 2   # FP16
   network-type: 0   # 0=detector
 ```
 
 **First run:** builds TensorRT engine from ONNX (~1 min on RTX 3050Ti).
-**Subsequent runs:** loads cached `.engine` file (< 5s).
+**Subsequent runs:** loads the `.engine` file from the model directory (< 5s).
+
+In this project, engines are written next to their source models:
+
+```text
+models/yolov8/yolov8n.onnx_b4_gpu0_fp16.engine
+models/trafficcamnet/resnet18_trafficcamnet_pruned.onnx_b4_gpu0_fp16.engine
+models/peoplenet/resnet34_peoplenet.onnx_b4_gpu0_fp16.engine
+models/reid/resnet50_market1501.etlt_b16_gpu0_fp16.engine
+```
+
+Do not commit `.engine` files. They are specific to the GPU, driver, CUDA,
+TensorRT, and DeepStream versions that generated them.
 
 ---
 
@@ -109,14 +121,16 @@ nvosdbin reads `NvDsObjectMeta` from nvinfer and renders:
 - Default bounding rectangles with class labels
 - Any custom text/rects added by probe callbacks (via `DisplayMeta`)
 
-**Must come AFTER nvinfer in the pipeline.** Without it, detections are
-invisible (metadata exists but nothing draws it).
+**Must come AFTER tiler AND after any probe that adds text.**
 
 ```
-nvinfer → nvosdbin → tiler → sink
-          ↑
-          also reads DisplayMeta added by probes
+mux → nvinfer → tracker → tiler → [probe adds text] → nvosdbin → sink
+                             ↑                              ↑
+                      scales metadata coords         draws everything
 ```
+
+If nvosdbin is placed before the tiler, all streams' boxes collapse onto
+one stream's surface using un-scaled coordinates.
 
 ---
 
@@ -131,7 +145,7 @@ class MyProbe(psm.BatchMetadataOperator):
             ...
 
 # Attach — custom probes MUST be wrapped in psm.Probe()
-pipeline.attach("tracker", psm.Probe("my_probe", MyProbe()))
+pipeline.attach("tiler", psm.Probe("my_probe", MyProbe()))
 
 # Built-in probes use string name with NO dict argument
 pipeline.attach("pgie", "measure_fps_probe", "fps")
@@ -140,6 +154,41 @@ pipeline.attach("pgie", "measure_fps_probe", "fps")
 **Two common mistakes:**
 1. Using `execute` instead of `handle_metadata` → probe never fires
 2. Passing a dict to built-in probe → `TypeError: incompatible arguments`
+
+---
+
+## 7b. OSD / DisplayMeta — Adding Text Overlays (Milestone 4+)
+
+The OSD API lives in the `pyservicemaker.osd` submodule — import it separately.
+
+```python
+from pyservicemaker import osd
+
+class MyProbe(psm.BatchMetadataOperator):
+    def handle_metadata(self, batch_meta):
+        for frame_meta in batch_meta.frame_items:
+            # Acquire DisplayMeta from the batch (one per frame)
+            display_meta = batch_meta.acquire_display_meta()
+
+            for obj_meta in frame_meta.object_items:
+                text = osd.Text()
+                text.display_text = f"ID #{obj_meta.object_id}".encode()  # must be bytes
+                text.x_offset = int(obj_meta.rect_params.left)
+                text.y_offset = max(0, int(obj_meta.rect_params.top) - 20)
+                text.font.name = osd.FontFamily.Serif  # Serif is the only available font
+                text.font.size = 14
+                text.font.color = osd.Color(0.0, 1.0, 0.0, 1.0)  # RGBA
+                display_meta.add_text(text)
+
+            # Must append to frame_meta — without this, text is silently discarded
+            frame_meta.append(display_meta)
+```
+
+**Key points:**
+- `display_text` expects **bytes** — use `"my label".encode()` or `b"my label"`
+- Position uses `x_offset` / `y_offset`, not `x` / `y`
+- Only `osd.FontFamily.Serif` is available in DeepStream 9.0 pyservicemaker
+- `frame_meta.append(display_meta)` is required to register the overlay with the pipeline
 
 ---
 
@@ -229,7 +278,7 @@ network-mode: 2   # 0=FP32, 1=INT8, 2=FP16
 FP16 cuts model memory by ~50% vs FP32 with < 1% accuracy loss on most detectors.
 
 **VRAM budget for 11 streams at FP16:**
-- TrafficCamNet model: ~60 MB
+- Detector engine: usually tens to low hundreds of MB, depending on model
 - 11 × 1080p NV12 batch buffers: ~360 MB
 - Tracker: ~100 MB
 - Total: ~520 MB — well within 4 GB
@@ -255,19 +304,23 @@ PSM wheel:   /opt/nvidia/deepstream/deepstream-9.0/service-maker/python/pyservic
 
 ---
 
-## 14. TrafficCamNet Class IDs
+## 14. Person Class IDs
 
-| class_id | Label | Filter in probe |
-|----------|-------|----------------|
-| 0 | Vehicle | `obj.class_id == 0` |
-| 1 | Bicycle | `obj.class_id == 1` |
-| **2** | **Person** | `obj.class_id == 2` ← our target |
-| 3 | RoadSign | `obj.class_id == 3` |
+The current default detector is YOLOv8n COCO:
+
+| Model | Config | Person class_id |
+|-------|--------|-----------------|
+| YOLOv8n COCO | `configs/models/nvinfer_yolov8_people.yml` | 0 |
+| TrafficCamNet | `configs/models/nvinfer_trafficcamnet.yml` | 2 |
+| PeopleNet | `configs/models/nvinfer_peoplenet.yml` | 0 |
+
+Milestones 04-08 call `infer_person_class_id()` so the probes follow the
+selected label file instead of hard-coding a single detector's person index.
 
 ```python
-PERSON_CLASS_ID = 2
+person_class_id = infer_person_class_id(nvinfer_config)
 for obj_meta in frame_meta.object_items:
-    if obj_meta.class_id != PERSON_CLASS_ID:
+    if obj_meta.class_id != person_class_id:
         continue
     # this is a person detection
 ```

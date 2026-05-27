@@ -44,7 +44,13 @@ import math
 import sys
 
 import pyservicemaker as psm
+from pyservicemaker import osd
 
+from src.pipeline.model_utils import (
+    deepstream_tracker_lib_path,
+    infer_person_class_id,
+    infer_source_id_from_tiled_box,
+)
 from src.pipeline.sources import load_uris_from_txt
 from src.utils.platform_utils import get_sink_element, get_sink_properties
 
@@ -55,40 +61,85 @@ IS_LIVE  = False  # True = NTP sync mode (needed for RTSP)
 PRINT_EVERY = 30  # print batch info every N batches
 
 
-PERSON_CLASS_ID = 2
+class SourceIdCollectorProbe(psm.BatchMetadataOperator):
+    """
+    Runs on 'tracker' output (pre-tiler) where source_id is still valid.
+    Collects pre-tiler batch stats while source_id is still explicit.
+
+    After nvmultistreamtiler source_id resets to 0 — must read it here.
+    """
+
+    def __init__(self, id_map: dict, batch_stats: dict, person_class_id: int):
+        super().__init__()
+        self._id_map = id_map
+        self._batch_stats = batch_stats  # shared: batch_n → (num_frames, src_ids)
+        self._person_class_id = person_class_id
+        self._n = 0
+
+    def handle_metadata(self, batch_meta):
+        self._n += 1
+        log = self._n % PRINT_EVERY == 0
+
+        num_frames = 0
+        src_ids = []
+
+        for frame_meta in batch_meta.frame_items:
+            num_frames += 1
+            src = frame_meta.source_id
+            if log:
+                src_ids.append(src)
+            for obj in frame_meta.object_items:
+                if obj.class_id == self._person_class_id:
+                    self._id_map[obj.object_id] = src
+
+        if log:
+            self._batch_stats[self._n] = (num_frames, src_ids)
 
 
 class BatchInspectorProbe(psm.BatchMetadataOperator):
-    """Logs batch composition + draws Person labels for visual context."""
+    """
+    Runs on 'tiler' output (post-tiler) — tiled canvas coordinates.
+    Draws Person labels and prints batch stats collected by SourceIdCollectorProbe.
+    """
 
-    def __init__(self):
+    def __init__(self, id_map: dict, batch_stats: dict, person_class_id: int,
+                 tile_w: int, tile_h: int, cols: int, num_sources: int):
         super().__init__()
+        self._id_map = id_map
+        self._batch_stats = batch_stats
+        self._person_class_id = person_class_id
+        self._tile_w = tile_w
+        self._tile_h = tile_h
+        self._cols = cols
+        self._num_sources = num_sources
         self._n = 0
 
     def handle_metadata(self, batch_meta):
         self._n += 1
 
-        # Count frames in this batch — use iterator, NOT len()
-        frames = list(batch_meta.frame_items)
-        num_frames = len(frames)
-
-        if self._n % PRINT_EVERY == 0:
-            src_ids = [f.source_id for f in frames]
+        # Print stats collected pre-tiler (source_ids are correct there)
+        if self._n in self._batch_stats:
+            num_frames, src_ids = self._batch_stats.pop(self._n)
             print(f"[M6] batch #{self._n:06d}: {num_frames} frame(s)  sources={src_ids}")
 
-        # Also draw labels so we can see tracking visually while learning
-        for frame_meta in frames:
-            dm = psm.DisplayMeta(frame_meta)
+        for frame_meta in batch_meta.frame_items:
+            dm = batch_meta.acquire_display_meta()
             for obj in frame_meta.object_items:
-                if obj.class_id != PERSON_CLASS_ID:
+                if obj.class_id != self._person_class_id:
                     continue
                 b = obj.rect_params
-                dm.add_text(psm.Text(
-                    f"#{obj.object_id}",
-                    x=int(b.left), y=max(0, int(b.top) - 18),
-                    font=psm.Font(psm.FontFamily.Sans, 12),
-                    color=psm.Color(0.0, 1.0, 0.5, 1.0),
-                ))
+                src = infer_source_id_from_tiled_box(
+                    b, self._tile_w, self._tile_h, self._cols,
+                    self._num_sources)
+                t = osd.Text()
+                t.display_text = f"Cam{src} #{obj.object_id}".encode()
+                t.x_offset = int(b.left)
+                t.y_offset = max(0, int(b.top) - 50)
+                t.font.name = osd.FontFamily.Serif
+                t.font.size = 12
+                t.font.color = osd.Color(0.0, 1.0, 0.5, 1.0)
+                dm.add_text(t)
+            frame_meta.append(dm)
 
 
 def compute_grid(n):
@@ -105,7 +156,9 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str):
 
     n = len(uris)
     rows, cols = compute_grid(n)
+    person_class_id = infer_person_class_id(nvinfer_config)
     print(f"[M6] {n} source(s)  timeout={TIMEOUT}µs  live={IS_LIVE}")
+    print(f"[M6] person_class_id={person_class_id} inferred from {nvinfer_config}")
 
     pipeline = psm.Pipeline("m6-batching")
 
@@ -129,13 +182,18 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str):
     pipeline.attach("pgie", "measure_fps_probe", "fps_probe")
 
     pipeline.add("nvtracker", "tracker", {
-        "ll-lib-file": (
-            "/opt/nvidia/deepstream/deepstream-9.0/lib/"
-            "libnvds_nvmultiobjecttracker.so"
-        ),
+        "ll-lib-file": deepstream_tracker_lib_path(),
         "ll-config-file": tracker_config,
         "tracker-width": 640, "tracker-height": 384, "gpu-id": 0,
     })
+
+    # Shared state between the two probes
+    id_map: dict[int, int] = {}
+    batch_stats: dict[int, tuple] = {}  # batch_n → (num_frames, src_ids)
+
+    # Probe 1 on tracker (pre-tiler): source_id still valid here
+    pipeline.attach("tracker", psm.Probe(
+        "src_collector", SourceIdCollectorProbe(id_map, batch_stats, person_class_id)))
 
     # TILER first — composites streams, scales metadata to tile coords
     pipeline.add("nvmultistreamtiler", "tiler", {
@@ -143,8 +201,11 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str):
         "width": 1280 * cols, "height": 720 * rows, "gpu-id": 0,
     })
 
-    # Batch inspector probe attaches to tiler output (tiled canvas)
-    pipeline.attach("tiler", psm.Probe("batch_probe", BatchInspectorProbe()))
+    # Probe 2 on tiler (post-tiler): tiled canvas coordinates for drawing
+    pipeline.attach("tiler", psm.Probe(
+        "batch_probe",
+        BatchInspectorProbe(
+            id_map, batch_stats, person_class_id, 1280, 720, cols, n)))
     pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
 
     sink_props = get_sink_properties(is_live=IS_LIVE)
@@ -170,7 +231,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Milestone 6: Batching deep dive")
     parser.add_argument("--sources", default="configs/sources/video_files.txt")
     parser.add_argument("--nvinfer-config",
-                        default="configs/models/nvinfer_trafficcamnet.yml")
+                        default="configs/models/nvinfer_yolov8_people.yml",
+                        help="nvinfer config. Default: YOLOv8. "
+                             "Alternatives: configs/models/nvinfer_peoplenet.yml, "
+                             "configs/models/nvinfer_trafficcamnet.yml")
     parser.add_argument("--tracker-config",
                         default="configs/tracker/nvdcf_perf.yaml")
     args = parser.parse_args()

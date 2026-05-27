@@ -1,0 +1,18 @@
+# =============================================================================
+# Video sources for Docker container
+# =============================================================================
+# Videos are mounted to /videos inside the container.
+# Edit docker-compose.yml to point the volume to your actual video folder,
+# then list the files below using /videos/<filename>.
+#
+# Example (4-camera warehouse set):
+# /videos/cam1.mp4
+# /videos/cam2.mp4
+# /videos/cam3.mp4
+# /videos/cam4.mp4
+# =============================================================================
+
+/videos/cam1.mp4
+/videos/cam2.mp4
+/videos/cam3.mp4
+/videos/cam4.mp4

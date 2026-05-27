@@ -1,3 +1,8 @@
 venv
 dataset
 *__pycache__/
+models/**/*.engine
+models/**/*.static_b1.onnx
+models/**/*.onnx
+models/**/*.etlt
+*.pt

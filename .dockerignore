@@ -1,0 +1,9 @@
+venv/
+dataset/
+models/**/*.engine
+models/**/*.static_b1.onnx
+*.pt
+__pycache__/
+**/__pycache__/
+*.pyc
+.git/

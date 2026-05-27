@@ -71,15 +71,7 @@ def main():
 
     # ── Build and run pipeline ───────────────────────────────────────────────
     builder = PipelineBuilder(config, uris)
-
-    # TODO (Milestone 4): Uncomment after understanding individual milestones
-    # pipeline = builder.build()
-
-    # TODO: Remove this placeholder once builder is tested
-    print("\n[TODO] Pipeline build is not called yet.")
-    print("       Complete milestones 01–07 first, then uncomment builder.build() above.")
-    print("       Run: python milestones/01_single_video_display.py --input /path/to/video.mp4")
-    sys.exit(0)
+    pipeline = builder.build()
 
     try:
         pipeline.start()

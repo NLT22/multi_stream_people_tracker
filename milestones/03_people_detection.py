@@ -7,7 +7,7 @@ WHAT YOU LEARN:
   - nvinfer: runs TensorRT inference on each frame
   - nvosdbin: renders bounding boxes from nvinfer metadata onto the video
   - Why OSD comes AFTER nvinfer in the pipeline
-  - TrafficCamNet class IDs (2 = Person)
+  - YOLOv8/COCO person detections (class 0 = Person)
   - FP16 precision for RTX 3050Ti
 
 PIPELINE TOPOLOGY:
@@ -24,7 +24,8 @@ PIPELINE TOPOLOGY:
 
 FIRST RUN — ENGINE BUILD:
   nvinfer builds a TensorRT engine from the ONNX on first run (~1 min).
-  Saved to engine_cache/. Subsequent runs load it in seconds.
+  Saved next to the model file under models/yolov8/. Subsequent runs load it
+  in seconds.
 
 RUN:
   python milestones/03_people_detection.py
@@ -32,17 +33,17 @@ RUN:
 
 EXPECTED: Video with colored bounding boxes on every detected object.
   - Green/default boxes = nvosdbin's auto-drawn detection boxes
-  - Labels show class name from labelfile (Vehicle, Bicycle, Person, RoadSign)
+  - Labels show class names from the COCO labelfile
 
 TODO EXERCISES:
-  1. In configs/models/nvinfer_trafficcamnet.yml:
-       pre-cluster-threshold: 0.2  →  0.5  (fewer boxes, less noise)
-                                   →  0.1  (maximum recall, very noisy)
-  2. In configs/models/nvinfer_trafficcamnet.yml:
+  1. In configs/models/nvinfer_yolov8_people.yml:
+       pre-cluster-threshold: 0.25 →  0.5  (fewer boxes, less noise)
+                                    →  0.1  (maximum recall, very noisy)
+  2. In configs/models/nvinfer_yolov8_people.yml:
        network-mode: 2 (FP16)  →  0 (FP32)
        Run `nvidia-smi` in a second terminal and watch VRAM usage.
        FP16 uses roughly half the VRAM with minimal accuracy impact.
-  3. In configs/models/nvinfer_trafficcamnet.yml:
+  3. In configs/models/nvinfer_yolov8_people.yml:
        interval: 0  →  2  (inference every 3rd frame)
        At this milestone (no tracker) you will see boxes flicker.
        After Milestone 4 adds nvtracker, the tracker fills the gaps.
@@ -110,7 +111,7 @@ def run(sources_txt: str, nvinfer_config: str):
     pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
 
     # SINK
-    pipeline.add(get_sink_element(), "sink", {"sync": 0, "qos": 0})
+    pipeline.add(get_sink_element(), "sink", {"sync": 1, "qos": 0})
 
     # LINK: mux → nvinfer → tiler → nvosdbin → sink
     pipeline.link("mux", "pgie")
@@ -132,6 +133,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Milestone 3: People detection with OSD")
     parser.add_argument("--sources", default="configs/sources/video_files.txt")
     parser.add_argument("--nvinfer-config",
-                        default="configs/models/nvinfer_trafficcamnet.yml")
+                        default="configs/models/nvinfer_yolov8_people.yml",
+                        help="nvinfer config. Default: YOLOv8. "
+                             "Alternatives: configs/models/nvinfer_peoplenet.yml, "
+                             "configs/models/nvinfer_trafficcamnet.yml")
     args = parser.parse_args()
     run(args.sources, args.nvinfer_config)

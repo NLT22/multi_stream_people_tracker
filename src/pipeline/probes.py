@@ -23,16 +23,18 @@ HOW ITERATORS WORK (CRITICAL):
 
 PERSON CLASS IDs:
   TrafficCamNet: class_id 2 = Person
-  YOLOv8 (people-only model): class_id 0 = Person
-  The PERSON_CLASS_ID constant below must match your model.
+  YOLOv8 COCO / PeopleNet: class_id 0 = Person
+  Pass the selected model's person class id into each reusable probe.
 """
 
 import pyservicemaker as psm
+from pyservicemaker import osd
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 PERSON_CLASS_ID_TRAFFICCAMNET = 2   # TrafficCamNet label index for "Person"
-PERSON_CLASS_ID_PEOPLE_ONLY   = 0   # YOLOv8 people-only model
+PERSON_CLASS_ID_COCO          = 0   # YOLOv8 COCO label index for "person"
+PERSON_CLASS_ID_DEFAULT       = PERSON_CLASS_ID_COCO
 
 
 class PersonCountProbe(psm.BatchMetadataOperator):
@@ -43,7 +45,9 @@ class PersonCountProbe(psm.BatchMetadataOperator):
         pipeline.attach("tracker", psm.Probe("count_probe", PersonCountProbe()))
     """
 
-    PERSON_CLASS_ID = PERSON_CLASS_ID_TRAFFICCAMNET
+    def __init__(self, person_class_id: int = PERSON_CLASS_ID_DEFAULT):
+        super().__init__()
+        self._person_class_id = person_class_id
 
     def handle_metadata(self, batch_meta):
         """
@@ -54,7 +58,7 @@ class PersonCountProbe(psm.BatchMetadataOperator):
             person_count = 0
 
             for obj_meta in frame_meta.object_items:  # ITERATOR — not a list!
-                if obj_meta.class_id == self.PERSON_CLASS_ID:
+                if obj_meta.class_id == self._person_class_id:
                     person_count += 1
 
                     # TODO (Milestone 8): Log tracking ID, bounding box, confidence
@@ -90,14 +94,16 @@ class PersonOSDProbe(psm.BatchMetadataOperator):
       showing "Person #42 (conf=0.87)" instead of just "Person".
     """
 
-    PERSON_CLASS_ID = PERSON_CLASS_ID_TRAFFICCAMNET
+    def __init__(self, person_class_id: int = PERSON_CLASS_ID_DEFAULT):
+        super().__init__()
+        self._person_class_id = person_class_id
 
     def handle_metadata(self, batch_meta):
         for frame_meta in batch_meta.frame_items:
-            display_meta = psm.DisplayMeta(frame_meta)
+            display_meta = batch_meta.acquire_display_meta()
 
             for obj_meta in frame_meta.object_items:
-                if obj_meta.class_id != self.PERSON_CLASS_ID:
+                if obj_meta.class_id != self._person_class_id:
                     # TODO (Milestone 6): Decide whether to show non-person classes
                     # Options: skip them, use a different color, etc.
                     continue
@@ -113,19 +119,20 @@ class PersonOSDProbe(psm.BatchMetadataOperator):
                 x = int(obj_meta.rect_params.left)
                 y = max(0, int(obj_meta.rect_params.top) - 20)  # above the box
 
-                display_meta.add_text(
-                    psm.Text(
-                        label,
-                        x=x,
-                        y=y,
-                        font=psm.Font(psm.FontFamily.Sans, 14),
-                        color=psm.Color(0.0, 1.0, 0.0, 1.0),  # green RGBA
-                    )
-                )
+                text = osd.Text()
+                text.display_text = label.encode()
+                text.x_offset = x
+                text.y_offset = y
+                text.font.name = osd.FontFamily.Serif
+                text.font.size = 14
+                text.font.color = osd.Color(0.0, 1.0, 0.0, 1.0)
+                display_meta.add_text(text)
 
                 # TODO (Milestone 6): Add a custom colored rectangle instead of
                 # relying on nvosdbin's default rectangle rendering
                 # display_meta.add_rect(psm.Rect(...))
+
+            frame_meta.append(display_meta)
 
 
 class MetadataExtractorProbe(psm.BatchMetadataOperator):
@@ -136,11 +143,11 @@ class MetadataExtractorProbe(psm.BatchMetadataOperator):
     Use this to understand the data model before building real logic.
     """
 
-    PERSON_CLASS_ID = PERSON_CLASS_ID_TRAFFICCAMNET
-
-    def __init__(self):
+    def __init__(self, person_class_id: int = PERSON_CLASS_ID_DEFAULT):
         super().__init__()
+        self._person_class_id = person_class_id
         self._frame_count = 0
+
 
     def handle_metadata(self, batch_meta):
         for frame_meta in batch_meta.frame_items:
@@ -148,7 +155,7 @@ class MetadataExtractorProbe(psm.BatchMetadataOperator):
 
             persons = []
             for obj_meta in frame_meta.object_items:
-                if obj_meta.class_id == self.PERSON_CLASS_ID:
+                if obj_meta.class_id == self._person_class_id:
                     persons.append({
                         "object_id": obj_meta.object_id,         # tracker-assigned ID
                         "confidence": round(obj_meta.confidence, 3),
