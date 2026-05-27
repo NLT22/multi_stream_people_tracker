@@ -48,13 +48,15 @@ property:
   #   1 = INT8 (fastest, needs calibration data)
   #   2 = FP16 (recommended for RTX 3050Ti — half VRAM, minimal accuracy loss)
   #
-  # TODO (Milestone 4): Try network-mode: 0 and compare performance/VRAM usage
+  # TODO (M3 Exercise 2): Try network-mode: 0 (FP32) and compare VRAM with `nvidia-smi`.
+  # FP32 uses ~2× VRAM but no accuracy change for TrafficCamNet.
   network-mode: 2
 
   num-detected-classes: 4
 
   # interval: run inference every N+1 frames (0=every frame, 1=every other frame)
-  # TODO: Try interval: 2 to reduce GPU load; check if tracking compensates
+  # TODO (M3 Exercise 3): Try interval: 2 → inference runs every 3rd frame.
+  # At M3 (no tracker) this makes boxes flicker. At M4+ nvtracker fills gaps.
   interval: 0
 
   # gie-unique-id: identifier for this inference engine
@@ -71,7 +73,8 @@ property:
 # Applied after network output to filter weak/overlapping detections.
 # Lower pre-cluster-threshold = more detections (but more false positives).
 #
-# TODO: Increase pre-cluster-threshold to 0.4 to see fewer false positives
+# TODO (M3 Exercise 1): Change pre-cluster-threshold → 0.5 (fewer boxes) or 0.1 (noisy).
+# Lower value = more detections (higher recall, more false positives).
 class-attrs-all:
   pre-cluster-threshold: 0.2
   topk: 20

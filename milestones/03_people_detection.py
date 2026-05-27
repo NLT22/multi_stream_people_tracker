@@ -35,12 +35,17 @@ EXPECTED: Video with colored bounding boxes on every detected object.
   - Labels show class name from labelfile (Vehicle, Bicycle, Person, RoadSign)
 
 TODO EXERCISES:
-  1. Change pre-cluster-threshold in nvinfer config from 0.2 → 0.5
-     Fewer boxes appear. Change back to 0.1 to see all (noisy) detections.
-  2. Change network-mode in the config: 0=FP32, 2=FP16. Compare VRAM usage
-     with `nvidia-smi` in another terminal.
-  3. Change `interval` in the config to 2 — inference runs every 3rd frame.
-     Notice it becomes slightly choppy but faster.
+  1. In configs/models/nvinfer_trafficcamnet.yml:
+       pre-cluster-threshold: 0.2  →  0.5  (fewer boxes, less noise)
+                                   →  0.1  (maximum recall, very noisy)
+  2. In configs/models/nvinfer_trafficcamnet.yml:
+       network-mode: 2 (FP16)  →  0 (FP32)
+       Run `nvidia-smi` in a second terminal and watch VRAM usage.
+       FP16 uses roughly half the VRAM with minimal accuracy impact.
+  3. In configs/models/nvinfer_trafficcamnet.yml:
+       interval: 0  →  2  (inference every 3rd frame)
+       At this milestone (no tracker) you will see boxes flicker.
+       After Milestone 4 adds nvtracker, the tracker fills the gaps.
 =============================================================================
 """
 
