@@ -12,15 +12,16 @@ WHAT YOU LEARN:
 
 PIPELINE TOPOLOGY (COMPLETE):
   [src_0] ──┐
-  [src_1] ──┼──→ [mux] → [nvinfer] → [nvtracker]
-  [src_N] ──┘                              │
-                                  [PersonLabelProbe]
-                                           ↓
-                                      [nvosdbin]
-                                           ↓
-                               [nvmultistreamtiler]  ← NxN grid
-                                           ↓
-                                       [sink]
+  [src_1] ──┼──→ [mux] → [nvinfer] → [nvtracker] → [tiler]
+  [src_N] ──┘                                          │
+                                              [PersonLabelProbe]
+                                                       ↓
+                                                  [nvosdbin]
+                                                       ↓
+                                                   [sink]
+
+  tiler BEFORE probe+OSD: tiler scales all N streams into one canvas
+  and updates metadata coords → probe and OSD use correct tile positions.
 
 MEMORY NOTE FOR RTX 3050Ti (4GB VRAM):
   Wildtrack 7 cams (1920×1080) + 4 warehouse cams (1920×1080) = 11 streams
@@ -148,25 +149,27 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
         "gpu-id": 0,
     })
 
-    # LABEL PROBE → OSD
-    pipeline.attach("tracker", psm.Probe("label_probe", PersonLabelProbe()))
-    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
-
-    # TILER
+    # TILER — composites N streams, scales metadata to tile canvas coords
     pipeline.add("nvmultistreamtiler", "tiler", {
         "rows": rows, "columns": cols,
         "width": total_w, "height": total_h, "gpu-id": 0,
     })
 
+    # LABEL PROBE — attaches AFTER tiler (reads tiled canvas coordinates)
+    pipeline.attach("tiler", psm.Probe("label_probe", PersonLabelProbe()))
+
+    # OSD — draws on the tiled canvas
+    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
+
     # SINK
     pipeline.add(get_sink_element(), "sink", {"sync": 0, "qos": 0})
 
-    # LINK
+    # LINK: mux → nvinfer → tracker → tiler → osd → sink
     pipeline.link("mux", "pgie")
     pipeline.link("pgie", "tracker")
-    pipeline.link("tracker", "osd")
-    pipeline.link("osd", "tiler")
-    pipeline.link("tiler", "sink")
+    pipeline.link("tracker", "tiler")
+    pipeline.link("tiler", "osd")
+    pipeline.link("osd", "sink")
 
     try:
         pipeline.start()

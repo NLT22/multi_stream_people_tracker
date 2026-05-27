@@ -11,16 +11,23 @@ WHAT YOU LEARN:
   - Why object_id=0 without nvtracker, and persistent ID with it
 
 PIPELINE TOPOLOGY:
-  [sources] → [mux] → [nvinfer] → [nvtracker] → [PersonLabelProbe]
-                                                         ↓
-                                                    [nvosdbin]
-                                                         ↓
-                                                [tiler] → [sink]
+  [sources] → [mux] → [nvinfer] → [nvtracker] → [tiler]
+                                                     │
+                                            [PersonLabelProbe]
+                                                     ↓
+                                               [nvosdbin] → [sink]
 
-  nvinfer:         detects persons, writes NvDsObjectMeta (class_id, rect)
-  nvtracker:       links detections across frames, assigns persistent object_id
-  PersonLabelProbe: adds "Person #42" text to DisplayMeta before OSD renders
-  nvosdbin:        draws both the detection boxes AND our custom text
+  nvinfer:          detects persons, writes NvDsObjectMeta (class_id, rect)
+  nvtracker:        links detections across frames, assigns persistent object_id
+  tiler:            composites N streams → one canvas, SCALES metadata coords
+  PersonLabelProbe: adds "Person #42" text using TILED coordinates
+  nvosdbin:         draws boxes + our text on the tiled canvas
+
+  WHY probe attaches to "tiler" (not "tracker"):
+    After the tiler runs, metadata coordinates are in tiled canvas space.
+    The probe draws text at those coordinates so labels appear at the right
+    position on screen. Attaching before the tiler would use original
+    1920×1080 coordinates, which are wrong after downscaling.
 
 WITHOUT TRACKER: object_id is always 0. Every frame "forgets" who was who.
 WITH TRACKER:    object_id=42 follows that person until they leave the frame.
@@ -147,25 +154,28 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str):
         "gpu-id": 0,
     })
 
-    # PERSON LABEL PROBE — runs BEFORE nvosdbin to add custom text
-    pipeline.attach("tracker", psm.Probe("label_probe", PersonLabelProbe()))
-
-    # NVOSDBIN — draws boxes (from nvinfer) + our text (from probe)
-    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
-
-    # TILER + SINK
+    # TILER — must come BEFORE probe and OSD
+    # Composites all N streams into one canvas; scales metadata to tile coords.
     pipeline.add("nvmultistreamtiler", "tiler", {
         "rows": rows, "columns": cols,
         "width": 1280 * cols, "height": 720 * rows, "gpu-id": 0,
     })
+
+    # PERSON LABEL PROBE — attaches to tiler output (tiled canvas coordinates)
+    pipeline.attach("tiler", psm.Probe("label_probe", PersonLabelProbe()))
+
+    # NVOSDBIN — draws boxes + custom text on the tiled canvas
+    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
+
+    # SINK
     pipeline.add(get_sink_element(), "sink", {"sync": 0, "qos": 0})
 
-    # LINK: mux → nvinfer → nvtracker → osd → tiler → sink
+    # LINK: mux → nvinfer → nvtracker → tiler → osd → sink
     pipeline.link("mux", "pgie")
     pipeline.link("pgie", "tracker")
-    pipeline.link("tracker", "osd")
-    pipeline.link("osd", "tiler")
-    pipeline.link("tiler", "sink")
+    pipeline.link("tracker", "tiler")
+    pipeline.link("tiler", "osd")
+    pipeline.link("osd", "sink")
 
     try:
         pipeline.start()

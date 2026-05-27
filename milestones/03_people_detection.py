@@ -11,14 +11,16 @@ WHAT YOU LEARN:
   - FP16 precision for RTX 3050Ti
 
 PIPELINE TOPOLOGY:
-  [sources] → [mux] → [nvinfer] → [nvosdbin] → [tiler] → [sink]
-                           ↑               ↑
-                     detects objects   draws boxes
+  [sources] → [mux] → [nvinfer] → [tiler] → [nvosdbin] → [sink]
+                           ↑           ↑           ↑
+                     detects objects  composites  draws boxes
+                                     N streams    on tiled canvas
 
-  nvinfer:  reads frames, runs the model, writes NvDsObjectMeta
-            (bounding box + class_id + confidence) into each frame's metadata.
-  nvosdbin: reads NvDsObjectMeta, draws the boxes and class labels on screen.
-            Without it, detections are invisible (metadata only).
+  CRITICAL ORDER: tiler BEFORE nvosdbin.
+    The tiler composites all N streams into one canvas and scales each
+    frame's metadata coordinates to the tile positions.
+    nvosdbin then draws on the single tiled canvas using those coordinates.
+    If OSD runs before tiler, all streams' boxes collapse onto one tile.
 
 FIRST RUN — ENGINE BUILD:
   nvinfer builds a TensorRT engine from the ONNX on first run (~1 min).
@@ -91,23 +93,25 @@ def run(sources_txt: str, nvinfer_config: str):
     # FPS probe: built-in, 3 string args only
     pipeline.attach("pgie", "measure_fps_probe", "fps_probe")
 
-    # NVOSDBIN — reads detection metadata, draws boxes and labels on screen
-    # process-mode 1 = GPU rendering (NVMM buffers, fastest)
-    # display-text=1, display-bbox=1 are defaults
-    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
-
-    # TILER + SINK
+    # TILER — composites N streams into one grid canvas
+    # Must come BEFORE nvosdbin so OSD draws on the composited frame.
+    # The tiler scales each frame's metadata coordinates to tile positions.
     pipeline.add("nvmultistreamtiler", "tiler", {
         "rows": rows, "columns": cols,
         "width": 1280 * cols, "height": 720 * rows, "gpu-id": 0,
     })
+
+    # NVOSDBIN — draws boxes on the tiled canvas (after tiler scales coords)
+    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
+
+    # SINK
     pipeline.add(get_sink_element(), "sink", {"sync": 0, "qos": 0})
 
-    # LINK: mux → nvinfer → nvosdbin → tiler → sink
+    # LINK: mux → nvinfer → tiler → nvosdbin → sink
     pipeline.link("mux", "pgie")
-    pipeline.link("pgie", "osd")
-    pipeline.link("osd", "tiler")
-    pipeline.link("tiler", "sink")
+    pipeline.link("pgie", "tiler")
+    pipeline.link("tiler", "osd")
+    pipeline.link("osd", "sink")
 
     try:
         pipeline.start()

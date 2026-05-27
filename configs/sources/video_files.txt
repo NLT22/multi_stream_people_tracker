@@ -19,7 +19,6 @@
 # =============================================================================
 # TODO: Replace these placeholder paths with your actual video file paths.
 # =============================================================================
-
 /media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam1.mp4
 /media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam2.mp4
 /media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam3.mp4

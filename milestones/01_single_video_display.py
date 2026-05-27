@@ -39,8 +39,7 @@ EXPECTED RESULT:
 TODO EXERCISES:
   1. Change --input to a different video file and verify it plays.
   2. Try sync=0 (already in code) vs sync=1 — what changes?
-  3. Change the window title via the --title argument.
-  4. (Advanced) Try rtsp://... as --input without changing any code.
+  3. (Advanced) Try rtsp://... as --input without changing any code.
      nvurisrcbin handles it transparently.
 =============================================================================
 """
@@ -91,7 +90,7 @@ def run(video_path: str):
         "batch-size": 1,
         "width":  1920,
         "height": 1080,
-        "batched-push-timeout": 40000,
+        "batched-push-timeout": 40000, # 40ms
         "gpu-id": 0,
     })
 
@@ -100,8 +99,15 @@ def run(video_path: str):
     # sync=0 → as fast as possible (good for benchmarking)
     #
     # TODO Exercise 2: Change sync=1 and notice the difference in playback speed
+    # nveglglessink / nv3dsink supported window properties:
+    #   window-x, window-y  → top-left corner position (pixels)
+    #   window-width, window-height → initial window size
+    # NOTE: "title" is NOT a supported property on these sinks — window title
+    #       must be set via the OS/display manager after the window appears.
     pipeline.add(get_sink_element(), "sink", {
         "sync": 1,
+        "window-width": 1280,
+        "window-height": 720,
     })
 
     # ── Link elements ────────────────────────────────────────────────────────

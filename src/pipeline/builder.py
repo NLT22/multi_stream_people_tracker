@@ -9,19 +9,26 @@ WHY A BUILDER CLASS:
     - Understand which elements exist and how they are connected
     - Reuse the same logic from both milestones and main.py
 
-PIPELINE TOPOLOGY (fully assembled, Milestone 7+):
+PIPELINE TOPOLOGY (fully assembled, Milestone 5+):
 
     [nvurisrcbin_0] ─┐
     [nvurisrcbin_1] ─┼─→ [nvstreammux] → [nvinfer/pgie] → [nvtracker]
     [nvurisrcbin_N] ─┘                                         │
                                                                 ↓
-                                           [nvosdbin] ← ─ ─ ─ ─
-                                               │
-                                               ↓
-                                    [nvmultistreamtiler]
-                                               │
-                                               ↓
-                                       [nveglglessink]
+                                                  [nvmultistreamtiler]
+                                                         │
+                                                   [OSD probe]
+                                                         ↓
+                                                    [nvosdbin]
+                                                         │
+                                                         ↓
+                                                 [nveglglessink]
+
+  CRITICAL: tiler BEFORE nvosdbin.
+    The tiler composites N streams into one canvas and scales each frame's
+    metadata coords to tile positions. OSD then draws on the tiled canvas
+    using correct coordinates. Putting OSD before tiler makes all boxes
+    appear in one tile.
 
 HOW TO USE (Milestone 7+):
     config = PipelineConfig.from_yaml("configs/pipeline.yaml")
@@ -73,14 +80,14 @@ class PipelineBuilder:
             self._pipeline.link(last_element, "tracker")
             last_element = "tracker"
 
-        if cfg.display.osd_enabled:
-            self._add_osd(upstream=last_element)
-            last_element = "osd"
-
         if cfg.display.tiled_display and self.num_sources > 1:
             self._add_tiler()
             self._pipeline.link(last_element, "tiler")
             last_element = "tiler"
+
+        if cfg.display.osd_enabled:
+            self._add_osd(upstream=last_element)
+            last_element = "osd"
 
         self._add_sink(upstream=last_element)
 

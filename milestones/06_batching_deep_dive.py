@@ -137,23 +137,24 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str):
         "tracker-width": 640, "tracker-height": 384, "gpu-id": 0,
     })
 
-    # Batch inspector probe attaches to tracker output
-    pipeline.attach("tracker", psm.Probe("batch_probe", BatchInspectorProbe()))
-    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
-
+    # TILER first — composites streams, scales metadata to tile coords
     pipeline.add("nvmultistreamtiler", "tiler", {
         "rows": rows, "columns": cols,
         "width": 1280 * cols, "height": 720 * rows, "gpu-id": 0,
     })
+
+    # Batch inspector probe attaches to tiler output (tiled canvas)
+    pipeline.attach("tiler", psm.Probe("batch_probe", BatchInspectorProbe()))
+    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
 
     sink_props = get_sink_properties(is_live=IS_LIVE)
     pipeline.add(get_sink_element(), "sink", sink_props)
 
     pipeline.link("mux", "pgie")
     pipeline.link("pgie", "tracker")
-    pipeline.link("tracker", "osd")
-    pipeline.link("osd", "tiler")
-    pipeline.link("tiler", "sink")
+    pipeline.link("tracker", "tiler")
+    pipeline.link("tiler", "osd")
+    pipeline.link("osd", "sink")
 
     try:
         pipeline.start()

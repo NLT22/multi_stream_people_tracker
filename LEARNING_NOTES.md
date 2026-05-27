@@ -274,15 +274,28 @@ for obj_meta in frame_meta.object_items:
 
 ---
 
-## 15. Probe Attachment Points
+## 15. Correct Pipeline Order: Tiler BEFORE OSD
 
+**Wrong (all boxes appear in one tile):**
 ```
-mux → pgie → tracker → [probe here] → osd → tiler → sink
-                ↑           ↑
-         measure_fps_probe  PersonLabelProbe
-         (built-in)         (custom, before OSD)
+mux → pgie → tracker → osd → tiler → sink
 ```
 
-- **`measure_fps_probe`** → attach to `"pgie"` (processing element), NEVER to sink
-- **Custom label probes** → attach to `"tracker"` so OSD renders the text
-- **Metadata read-only probes** → can attach to `"tracker"` or `"pgie"`
+**Correct:**
+```
+mux → pgie → tracker → tiler → [probe] → osd → sink
+                          ↑        ↑        ↑
+                   composites   custom   draws on
+                   N streams    labels   tiled canvas
+                   scales coords
+```
+
+**Why order matters:** The tiler composites all N streams into one canvas
+and scales each frame's metadata coordinates to the tile positions.
+If OSD runs before the tiler, it gets un-scaled coordinates and all frames'
+metadata is rendered onto one stream's surface.
+
+**Probe attachment points:**
+- **`measure_fps_probe`** → attach to `"pgie"`, NEVER to sink
+- **Custom label probes** → attach to `"tiler"` (after tiler scales coords)
+- **Metadata read-only probes** → attach to `"tiler"` for tiled coords, or `"tracker"` for original frame coords (useful for analytics, not for drawing)
