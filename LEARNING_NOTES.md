@@ -352,3 +352,90 @@ metadata is rendered onto one stream's surface.
 - **`measure_fps_probe`** → attach to `"pgie"`, NEVER to sink
 - **Custom label probes** → attach to `"tiler"` (after tiler scales coords)
 - **Metadata read-only probes** → attach to `"tiler"` for tiled coords, or `"tracker"` for original frame coords (useful for analytics, not for drawing)
+
+---
+
+## 16. Cross-Camera ReID Stabilization (Milestone 8)
+
+Milestone 8 has two identity layers:
+
+```text
+NvDeepSORT local ID:
+  stable inside one camera while the tracker keeps the same object_id
+
+Python Global ID:
+  links different camera-local IDs into one cross-camera identity
+```
+
+The current M8 Hungarian pipeline:
+
+```text
+YOLOv8 detector
+  -> NvDeepSORT tracker + ReID embedding
+  -> SourceIdCollectorProbe
+  -> Tiler
+  -> CrossCameraGalleryProbe
+       -> tracklet embedding
+       -> gallery prototypes
+       -> Hungarian one-to-one assignment
+       -> ID stickiness / ambiguity rejection
+       -> online Global ID merge
+  -> OSD
+```
+
+### Why Each Method Exists
+
+| Method | Symptom | Fix idea |
+|--------|---------|----------|
+| Tracklet embedding | Similarity changes wildly frame by frame. | Average recent embeddings per `(camera, local_track_id)`. |
+| Gallery prototypes | Same person looks different across front/back/side cameras. | Keep several appearance vectors per Global ID. |
+| Hungarian assignment | Two people in the same camera both pick one Global ID. | Solve one-to-one assignment per stream/frame. |
+| Duplicate guard | A known Global ID appears twice in one stream. | Release the weaker duplicate back to assignment. |
+| ID stickiness | Label bounces between two close IDs, e.g. `G14` and `G8`. | Require extra margin before switching away from previous ID. |
+| Ambiguity rejection | Top-1 and top-2 scores are nearly tied. | Reject uncertain matches instead of choosing randomly. |
+| Online Global ID merge | Opposite camera creates `G19` even though the person is already `G4`. | Merge stable duplicate IDs after enough tracklet evidence. |
+| Bounded candidate search | Long videos create many temporary IDs and the pipeline lags. | Limit gallery candidates and run merge only every N batches. |
+
+### Important Counters
+
+`active_gids` is the number of Global IDs still in the gallery.
+
+`total_gids_ever_assigned` is a historical counter. It only increases, even
+when `G19` is merged into `G4`. Use `active_gids` to judge whether the gallery
+is actually growing too large.
+
+### Practical Tuning Order
+
+Start from the default settings, then tune in this order:
+
+1. If labels bounce between two IDs:
+   increase `--id-switch-margin` or `--match-ambiguity-margin`.
+
+2. If one person splits into two stable IDs across cameras:
+   lower `--global-merge-threshold` slightly or reduce
+   `--global-merge-min-embeddings`.
+
+3. If false merges happen:
+   increase `--global-merge-threshold`, increase
+   `--global-merge-margin`, or disable merge for A/B testing.
+
+4. If the pipeline slows down on long videos:
+   lower `--gallery-max-age`, `--assignment-max-candidates`, or
+   `--global-merge-max-candidates`; increase `--global-merge-interval`.
+
+Useful commands:
+
+```bash
+# Inspect matching and merge decisions.
+python milestones/08_reid_stub_hungarian.py --debug-similarity
+
+# Lower CPU load on long videos.
+python milestones/08_reid_stub_hungarian.py \
+  --gallery-max-age 300 \
+  --assignment-max-candidates 40 \
+  --global-merge-interval 30 \
+  --global-merge-max-candidates 20
+
+# Compare with merge disabled.
+python milestones/08_reid_stub_hungarian.py --disable-global-merge
+```

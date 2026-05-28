@@ -34,7 +34,7 @@ from src.pipeline.model_utils import set_object_label
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 PERSON_CLASS_ID_TRAFFICCAMNET = 2   # TrafficCamNet label index for "Person"
-PERSON_CLASS_ID_COCO          = 0   # YOLOv8 COCO label index for "person"
+PERSON_CLASS_ID_COCO          = 0   # COCO label index for "person"
 PERSON_CLASS_ID_DEFAULT       = PERSON_CLASS_ID_COCO
 
 

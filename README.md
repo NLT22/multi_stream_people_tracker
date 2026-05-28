@@ -172,7 +172,7 @@ flowchart LR
     TRK["nvtracker<br/>NvDeepSORT + ReID embeddings"]
     SRC["SourceIdCollectorProbe<br/>(camera_id, local_track_id) -> embedding"]
     TILER["nvmultistreamtiler<br/>2x2 visualization grid"]
-    REID["CrossCameraGalleryProbe<br/>tracklets + gallery prototypes + Hungarian"]
+    REID["CrossCameraGalleryProbe<br/>tracklets + prototypes + Hungarian + merge"]
     OSD["nvosdbin<br/>draw bbox + GlobalID label"]
 
     subgraph Outputs["Outputs"]
@@ -195,10 +195,47 @@ flowchart LR
 - `nvmultistreamtiler` combines all streams into one grid for visualization.
 - `CrossCameraGalleryProbe` links local track IDs into cross-camera Global IDs.
   The Hungarian variant in `milestones/08_reid_stub_hungarian.py` adds:
-  tracklet embedding averaging, gallery prototypes, and one-to-one assignment
-  so one Global ID cannot appear twice in the same camera frame.
+  tracklet embedding averaging, gallery prototypes, one-to-one assignment,
+  ID stickiness, ambiguity rejection, and bounded online Global ID merging.
 - `nvosdbin` draws the final labels, for example
-  `Global:3|Cam:1|Person:7`.
+  `Global:3`.
+
+### ReID Stabilization Methods
+
+`milestones/08_reid_stub_hungarian.py` contains the current cross-camera ReID
+prototype. The extra logic is there to handle common failure modes in MTMC
+tracking:
+
+| Method | Problem it solves | Key controls |
+|--------|-------------------|--------------|
+| Tracklet embedding | Single-frame ReID crops are noisy, especially during occlusion or bbox jitter. | `--tracklet-window`, `--tracklet-min-embeddings` |
+| Gallery prototypes | One person can look different from front/back/side cameras. Multiple vectors preserve different views. | `GALLERY_MAX_PROTOTYPES`, `PROTOTYPE_ADD_THRESHOLD` |
+| Hungarian assignment | Multiple new tracks in one camera can otherwise choose the same Global ID. | `--disable-hungarian`, `--assignment-max-candidates` |
+| Duplicate guard | A Global ID should not appear twice in the same stream at the same time. | `--allow-duplicate-gid-per-stream` |
+| ID stickiness | Prevents labels from bouncing between two similar Global IDs, e.g. `G14 <-> G8`. | `--id-switch-margin`, `--disable-id-stickiness` |
+| Ambiguity rejection | Avoids accepting a match when top-1 and top-2 similarities are too close. | `--match-ambiguity-margin`, `--allow-ambiguous-match` |
+| Online Global ID merge | Fixes stable ID splits, e.g. one camera stays `G4` while the opposite camera becomes `G19`. | `--global-merge-threshold`, `--global-merge-interval` |
+| Bounded candidate search | Prevents lag when many IDs have been created over a long video. | `--gallery-max-age`, `--assignment-max-candidates`, `--global-merge-max-candidates` |
+
+Useful tuning examples:
+
+```bash
+# Default ReID/Hungarian run
+python milestones/08_reid_stub_hungarian.py
+
+# Debug similarity decisions and merge events
+python milestones/08_reid_stub_hungarian.py --debug-similarity
+
+# Lower CPU load on long videos with many temporary IDs
+python milestones/08_reid_stub_hungarian.py \
+  --gallery-max-age 300 \
+  --assignment-max-candidates 40 \
+  --global-merge-interval 30 \
+  --global-merge-max-candidates 20
+
+# A/B test without online ID merge
+python milestones/08_reid_stub_hungarian.py --disable-global-merge
+```
 
 Useful ReID commands:
 
@@ -211,12 +248,13 @@ python milestones/08_reid_stub_hungarian.py \
 
 python milestones/08_reid_stub_hungarian.py \
   --debug-similarity \
-  --tracklet-window 12 \
-  --tracklet-min-embeddings 3
+  --tracklet-window 16 \
+  --tracklet-min-embeddings 8
 ```
 
-Use `--disable-tracklet` or `--allow-duplicate-gid-per-stream` for A/B tests
-against the simpler matching behavior.
+Use `--disable-tracklet`, `--disable-id-stickiness`,
+`--allow-ambiguous-match`, `--disable-global-merge`, or
+`--allow-duplicate-gid-per-stream` for A/B tests against simpler behavior.
 
 ---
 
@@ -312,7 +350,7 @@ or pass `--nvinfer-config` to any milestone from 03 onward.
 
 | Model | Config | Person Class | Notes |
 |-------|--------|--------------|-------|
-| YOLOv8n COCO | `configs/models/nvinfer_yolov8_people.yml` | 0 | default, dynamic ONNX, custom parser |
+| YOLOv8n COCO | `configs/models/nvinfer_yolov8_people.yml` | 0 | default, stable baseline, dynamic ONNX, custom parser |
 | TrafficCamNet | `configs/models/nvinfer_trafficcamnet.yml` | 2 | bundled-style detector |
 | PeopleNet | `configs/models/nvinfer_peoplenet.yml` | 0 | person-focused TAO detector |
 

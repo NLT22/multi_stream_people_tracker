@@ -28,7 +28,13 @@ TWO-LEVEL APPROACH IN THIS MILESTONE:
 
   Level 2 — CrossCameraGalleryProbe (Python probe, this file):
     Reads NvDeepSORT embeddings from tracker ReID metadata.
-    Matches each (cam, track_id) against a cross-camera gallery.
+    Matches each (cam, track_id) against a cross-camera gallery using:
+      - tracklet embedding averages for noisy frame-level ReID vectors
+      - per-identity prototypes for different camera views
+      - Hungarian assignment so one Global ID is not duplicated per stream
+      - ID stickiness and ambiguity rejection to prevent ID bouncing
+      - online Global ID merge to repair stable cross-view ID splits
+      - bounded candidate search to keep long videos responsive
     Assigns a stable "global_id" that persists across cameras.
 
 PIPELINE TOPOLOGY:
@@ -54,6 +60,7 @@ SETUP:
 RUN:
   python milestones/08_reid_stub_hungarian.py
   python milestones/08_reid_stub_hungarian.py --debug-similarity
+  python milestones/08_reid_stub_hungarian.py --disable-global-merge
 
 TODO EXERCISES:
   1. Run with nvdcf_perf.yaml first — gallery runs, cross-cam labels show G#N
@@ -61,9 +68,11 @@ TODO EXERCISES:
   2. Run with nvdeepsort_reid.yaml — first run builds Re-ID engine (~1 min).
      Watch console: "Re-ID: Cam1#7 → G#42 (similarity=0.81)" means a match.
   3. Walk a person from cam0 to cam1. Check if global_id stays the same.
-  4. Tune SIMILARITY_THRESHOLD: lower = more matches (more false positives),
-     higher = fewer matches (more identity splits). Try 0.3 and 0.7.
-  5. Add trajectory logging: save (global_id, cam, frame, x, y) to CSV.
+  4. If IDs bounce between two labels, tune ID_SWITCH_MARGIN and
+     MATCH_AMBIGUITY_MARGIN.
+  5. If one person becomes two stable Global IDs across opposite cameras,
+     tune GLOBAL_ID_MERGE_THRESHOLD and GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS.
+  6. If long videos lag, lower GALLERY_MAX_AGE and the candidate limits.
 =============================================================================
 """
 
@@ -93,15 +102,91 @@ from src.pipeline.sources import load_uris_from_txt
 from src.utils.platform_utils import get_sink_element
 
 
-SIMILARITY_THRESHOLD = 0.5  # cosine similarity to accept a Re-ID match
-GALLERY_MAX_AGE = 100       # drop gallery entry after N frames without a match
-GALLERY_MAX_PROTOTYPES = 8    # 0 disables multi-prototype and keeps one vector
-PROTOTYPE_ADD_THRESHOLD = 0.6  # add a new prototype if it is visually distinct
+# =============================================================================
+# ReID / Global-ID Tuning
+# =============================================================================
+#
+# Match threshold:
+#   Higher -> fewer false matches, but more ID splits.
+#   Lower  -> easier to reconnect the same person, but more merge risk.
+SIMILARITY_THRESHOLD = 0.6
+
+# Gallery memory:
+#   Gallery stores known Global IDs after a local track disappears.
+#   Increase age if people leave/re-enter after a long gap.
+#   Decrease age if old identities are reused incorrectly.
+GALLERY_MAX_AGE = 1800
+
+# Gallery prototypes:
+#   Each Global ID can keep multiple appearance vectors for different views.
+#   More prototypes improve view coverage but increase matching cost.
+#   Set to 0 to disable multi-prototype mode and keep one vector per Global ID.
+GALLERY_MAX_PROTOTYPES = 6
+
+# Prototype admission:
+#   Add a new prototype when the current embedding is visually different enough.
+#   Higher -> compact gallery, less noise.
+#   Lower  -> more view coverage, more chance of storing bad crops.
+PROTOTYPE_ADD_THRESHOLD = 0.7
+
+# Assignment:
+#   Hungarian solves one-to-one assignment for new local tracks within a stream.
+#   This prevents multiple people in the same camera from selecting one Global ID.
+USE_HUNGARIAN_ASSIGNMENT = True
+GLOBAL_ASSIGNMENT_MAX_CANDIDATES = 80
+
+# Duplicate guard:
+#   Keeps already-known local tracks from displaying the same Global ID twice in
+#   one stream. Keep this on with Hungarian; disable only for A/B debugging.
 ENFORCE_UNIQUE_GLOBAL_PER_STREAM = True
+
+# ID stickiness:
+#   A local track that already has a Global ID should not switch to another ID
+#   unless the new candidate is clearly better than the current one.
+#   This prevents labels from bouncing between two visually similar IDs.
+ENABLE_ID_STICKINESS = True
+ID_SWITCH_MARGIN = 0.1
+
+# Ambiguous match rejection:
+#   For a new/released local track, accept an existing Global ID only when the
+#   best match beats the runner-up by this margin. If G14=0.64 and G8=0.62,
+#   create/keep a separate ID instead of randomly bouncing between them.
+ENABLE_AMBIGUOUS_MATCH_REJECTION = True
+MATCH_AMBIGUITY_MARGIN = 0.05
+
+# Global-ID merge:
+#   A cross-view track may first become a new Global ID because the opposite
+#   camera crop looks very different. After enough tracklet evidence, merge the
+#   duplicate ID into the best older Global ID if the match is strong and does
+#   not create two copies of one Global ID in the same stream frame.
+ENABLE_GLOBAL_ID_MERGE = True
+GLOBAL_ID_MERGE_THRESHOLD = 0.68
+GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS = 8
+GLOBAL_ID_MERGE_MARGIN = 0.05
+GLOBAL_ID_MERGE_INTERVAL = 15
+GLOBAL_ID_MERGE_MAX_CANDIDATES = 40
+
+# Tracklet embedding:
+#   Tracklet mode averages recent embeddings for each (camera, local_track_id).
+#   This is more stable than matching on a single noisy frame crop.
 USE_TRACKLET_EMBEDDING = True
-TRACKLET_MAX_AGE = 100
-TRACKLET_MAX_EMBEDDINGS = 12
-TRACKLET_MIN_EMBEDDINGS_FOR_MATCH = 3
+
+# Tracklet memory:
+#   Drop inactive local tracklets after this many batches.
+TRACKLET_MAX_AGE = 1800
+
+# Tracklet smoothing window:
+#   Number of recent embeddings kept per local track.
+#   Larger -> smoother but slower to adapt if tracker switches identity.
+TRACKLET_MAX_EMBEDDINGS = 16
+
+# Tracklet warmup:
+#   Use raw frame embedding until the local tracklet has this many embeddings.
+#   Larger -> more stable first match, but slower cross-camera linking.
+TRACKLET_MIN_EMBEDDINGS_FOR_MATCH = 8
+
+# Debug:
+#   Number of nearest Global IDs printed when --debug-similarity is enabled.
 DEBUG_TOP_K = 3
 
 
@@ -369,6 +454,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
     def __init__(self, id_map: dict, embeddings: dict, person_class_id: int,
                  tile_w: int, tile_h: int, cols: int, num_sources: int,
                  debug_similarity: bool = False,
+                 use_hungarian_assignment: bool = True,
                  enforce_unique_per_stream: bool = True):
         super().__init__()
         self._id_map = id_map
@@ -384,6 +470,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         self._next_gid = 1
         self._frame_count = 0
         self._debug_similarity = debug_similarity
+        self._use_hungarian_assignment = use_hungarian_assignment
         self._enforce_unique_per_stream = enforce_unique_per_stream
 
     def handle_metadata(self, batch_meta):
@@ -433,11 +520,12 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     track_key, src, oid, embedding)
                 match_embedding = self._tracklet_embedding(
                     tracklet, fallback=embedding)
-                gid = self._track_to_gid.get(track_key)
-                if gid is None:
-                    gid = tracklet.get("gid")
-                if gid not in self._gallery:
-                    gid = None
+                previous_gid = self._track_to_gid.get(track_key)
+                if previous_gid is None:
+                    previous_gid = tracklet.get("gid")
+                if previous_gid not in self._gallery:
+                    previous_gid = None
+                gid = previous_gid
 
                 rows.append({
                     "src": src,
@@ -447,10 +535,12 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     "raw_embedding": embedding,
                     "tracklet_len": len(tracklet["embeddings"]),
                     "gid": gid,
+                    "previous_gid": previous_gid,
                 })
 
-            if self._enforce_unique_per_stream:
-                self._release_duplicate_known_assignments(rows)
+            if self._use_hungarian_assignment:
+                if self._enforce_unique_per_stream:
+                    self._release_duplicate_known_assignments(rows)
                 self._assign_new_tracks_with_hungarian(rows, log)
             else:
                 self._assign_new_tracks_greedy(rows, log)
@@ -459,12 +549,19 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 gid = row["gid"]
                 self._track_to_gid[row["track_key"]] = gid
                 self._tracklets[row["track_key"]]["gid"] = gid
-                self._update_gallery(gid, row["embedding"], row["src"])
+                if row.get("gallery_updated") is not True:
+                    self._update_gallery(gid, row["embedding"], row["src"])
+
+            if (
+                ENABLE_GLOBAL_ID_MERGE
+                and self._frame_count % GLOBAL_ID_MERGE_INTERVAL == 0
+            ):
+                self._merge_duplicate_global_ids(rows, log)
 
             label_by_track = {
                 row["track_id"]: (
                     # f"Global:{row['gid']}|Cam:{row['src']}|Person:{row['track_id']}"
-                    f"Global:{row['gid']}|Cam:{row['src']}"
+                    f"Global:{row['gid']}"
                 )
                 for row in rows
             }
@@ -484,20 +581,26 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             active_tracklets = len(self._tracklets)
             print(f"[M8] frame={self._frame_count:06d}  "
                   f"gallery={active}  tracklets={active_tracklets}  "
-                  f"total_gids_assigned={self._next_gid - 1}")
+                  f"active_gids={active}  "
+                  f"total_gids_ever_assigned={self._next_gid - 1}")
 
     def _find_or_create(self, embedding: list[float], src: int,
                         track_id: int, log: bool,
-                        tracklet_len: int = 0) -> int:
+                        tracklet_len: int = 0,
+                        previous_gid: int | None = None) -> int:
         """Match embedding against gallery; return existing or new global_id."""
         ranked = self._rank_gallery(embedding)
         best_gid = ranked[0][0] if ranked else -1
         best_score = ranked[0][1] if ranked else 0.0
+        allowed, block_reason = self._is_gid_match_allowed(
+            embedding, best_gid, previous_gid, ranked)
 
-        matched = best_score >= SIMILARITY_THRESHOLD and best_gid != -1
+        matched = best_gid != -1 and allowed
         reason = "no_embedding" if not embedding else (
             "empty_gallery" if best_gid == -1 else "below_threshold"
         )
+        if best_gid != -1 and not allowed:
+            reason = block_reason
         should_log_similarity = self._debug_similarity or (log and matched)
         if should_log_similarity:
             status = "MATCH" if matched else "NEW"
@@ -511,6 +614,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 f"max_similarity={best_score:.3f} "
                 f"threshold={SIMILARITY_THRESHOLD:.3f} "
                 f"tracklet_len={tracklet_len} "
+                f"previous_gid={previous_gid if previous_gid is not None else 'None'} "
                 f"status={status} reason={display_reason} top{DEBUG_TOP_K}=[{top}]"
             )
 
@@ -539,12 +643,22 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 active[key] = row
                 continue
 
-            row["gid"] = None
+            existing_score = self._score_gid(gid, existing["embedding"])
+            row_score = self._score_gid(gid, row["embedding"])
+            if row_score > existing_score:
+                released = existing
+                active[key] = row
+            else:
+                released = row
+
+            released["gid"] = None
             if self._debug_similarity:
                 print(
-                    f"  [Re-ID Hungarian] Cam{row['src']}#{row['track_id']} "
+                    f"  [Re-ID Hungarian] Cam{released['src']}#{released['track_id']} "
                     f"released_duplicate=G{gid} "
-                    f"held_by=Cam{row['src']}#{existing['track_id']}"
+                    f"held_by=Cam{active[key]['src']}#{active[key]['track_id']} "
+                    f"released_score={self._score_gid(gid, released['embedding']):.3f} "
+                    f"held_score={self._score_gid(gid, active[key]['embedding']):.3f}"
                 )
 
     def _assign_new_tracks_greedy(self, rows: list[dict], log: bool) -> None:
@@ -552,10 +666,11 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             if row["gid"] is None:
                 row["gid"] = self._find_or_create(
                     row["embedding"], row["src"], row["track_id"], log,
-                    row["tracklet_len"])
+                    row["tracklet_len"], row.get("previous_gid"))
                 # Match the original milestone behavior: once a new track is
                 # assigned, later detections in the same tiled frame can match it.
                 self._update_gallery(row["gid"], row["embedding"], row["src"])
+                row["gallery_updated"] = True
 
     def _assign_new_tracks_with_hungarian(self, rows: list[dict],
                                           log: bool) -> None:
@@ -576,14 +691,13 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 rows_by_src.setdefault(src, []).append(row)
             else:
                 occupied_by_src.setdefault(src, set()).add(row["gid"])
-                self._update_gallery(row["gid"], row["embedding"], src)
 
         for src, new_rows in rows_by_src.items():
             occupied = occupied_by_src.setdefault(src, set())
-            existing_gids = [
-                gid for gid in self._gallery
-                if gid not in occupied
-            ]
+            existing_gids = self._candidate_gids(
+                exclude=occupied,
+                max_count=GLOBAL_ASSIGNMENT_MAX_CANDIDATES,
+            )
             columns = [("gid", gid) for gid in existing_gids]
             columns += [("new", i) for i in range(len(new_rows))]
 
@@ -593,7 +707,15 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 for kind, value in columns:
                     if kind == "gid":
                         score = self._score_gid(value, row["embedding"])
-                        row_weights.append(score if score >= SIMILARITY_THRESHOLD else -1.0)
+                        ranked = [
+                            (gid, self._score_gid(gid, row["embedding"]))
+                            for gid in existing_gids
+                        ]
+                        ranked.sort(key=lambda item: item[1], reverse=True)
+                        allowed, _ = self._is_gid_match_allowed(
+                            row["embedding"], value, row.get("previous_gid"),
+                            ranked)
+                        row_weights.append(score if allowed else -1.0)
                     else:
                         row_weights.append(0.0)
                 weights.append(row_weights)
@@ -632,11 +754,126 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                         f"assigned=G{row['gid']} score={score:.3f} "
                         f"threshold={SIMILARITY_THRESHOLD:.3f} "
                         f"tracklet_len={row['tracklet_len']} "
+                        f"previous_gid={row.get('previous_gid') if row.get('previous_gid') is not None else 'None'} "
                         f"status={status} reason={reason} top{DEBUG_TOP_K}=[{top}]"
                     )
 
             for row in new_rows:
                 self._update_gallery(row["gid"], row["embedding"], row["src"])
+                row["gallery_updated"] = True
+
+    def _merge_duplicate_global_ids(self, rows: list[dict], log: bool) -> None:
+        """Merge stable duplicate Global IDs created by difficult cross views."""
+        active_by_src: dict[int, set[int]] = {}
+        for row in rows:
+            active_by_src.setdefault(row["src"], set()).add(row["gid"])
+
+        for row in rows:
+            source_gid = row["gid"]
+            if source_gid is None or source_gid not in self._gallery:
+                continue
+            if self._gallery[source_gid].get("age", 0) > 1:
+                continue
+            if row["tracklet_len"] < GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS:
+                continue
+            if not row["embedding"]:
+                continue
+
+            candidate = self._best_merge_candidate(
+                source_gid, row["embedding"], row["src"], active_by_src)
+            if candidate is None:
+                continue
+
+            target_gid, score, runner_up = candidate
+            self._merge_gid(source_gid, target_gid)
+            for update_row in rows:
+                if update_row["gid"] == source_gid:
+                    update_row["gid"] = target_gid
+                    update_row["previous_gid"] = target_gid
+                    self._track_to_gid[update_row["track_key"]] = target_gid
+                    self._tracklets[update_row["track_key"]]["gid"] = target_gid
+
+            if self._debug_similarity or log:
+                print(
+                    f"  [Re-ID merge] G{source_gid} -> G{target_gid} "
+                    f"score={score:.3f} runner_up={runner_up:.3f} "
+                    f"tracklet_len={row['tracklet_len']} "
+                    f"Cam{row['src']}#{row['track_id']}"
+                )
+
+    def _best_merge_candidate(self, source_gid: int, embedding: list[float],
+                              src: int,
+                              active_by_src: dict[int, set[int]]
+                              ) -> tuple[int, float, float] | None:
+        candidates = self._candidate_gids(
+            exclude=active_by_src.get(src, set()),
+            max_count=GLOBAL_ID_MERGE_MAX_CANDIDATES,
+            only_older_than=source_gid,
+        )
+
+        scores = []
+        for target_gid in candidates:
+            scores.append((target_gid, self._score_gid(target_gid, embedding)))
+
+        if not scores:
+            return None
+
+        scores.sort(key=lambda item: item[1], reverse=True)
+        target_gid, best_score = scores[0]
+        runner_up = scores[1][1] if len(scores) > 1 else 0.0
+        if best_score < GLOBAL_ID_MERGE_THRESHOLD:
+            return None
+        if runner_up > 0.0 and best_score < runner_up + GLOBAL_ID_MERGE_MARGIN:
+            return None
+        return target_gid, best_score, runner_up
+
+    def _candidate_gids(self, exclude: set[int] | None = None,
+                        max_count: int = 80,
+                        only_older_than: int | None = None) -> list[int]:
+        """Return a bounded list of recent gallery IDs for expensive matching."""
+        exclude = exclude or set()
+        candidates = []
+        for gid, entry in self._gallery.items():
+            if gid in exclude:
+                continue
+            if only_older_than is not None and gid >= only_older_than:
+                continue
+            candidates.append((entry.get("age", 0), gid))
+
+        candidates.sort(key=lambda item: (item[0], -item[1]))
+        return [gid for _, gid in candidates[:max_count]]
+
+    def _merge_gid(self, source_gid: int, target_gid: int) -> None:
+        if source_gid == target_gid or source_gid not in self._gallery:
+            return
+        if target_gid not in self._gallery:
+            self._gallery[target_gid] = self._new_gallery_entry()
+
+        self._merge_gallery_entries(source_gid, target_gid)
+        for track_key, gid in list(self._track_to_gid.items()):
+            if gid == source_gid:
+                self._track_to_gid[track_key] = target_gid
+        for tracklet in self._tracklets.values():
+            if tracklet.get("gid") == source_gid:
+                tracklet["gid"] = target_gid
+        del self._gallery[source_gid]
+
+    def _merge_gallery_entries(self, source_gid: int, target_gid: int) -> None:
+        source = self._gallery.get(source_gid, self._new_gallery_entry())
+        target = self._gallery.setdefault(target_gid, self._new_gallery_entry())
+        target["age"] = min(target.get("age", 0), source.get("age", 0))
+
+        if not self._use_prototypes():
+            source_embedding = source.get("embedding", [])
+            if source_embedding:
+                target["embedding"] = source_embedding
+            return
+
+        target_prototypes = target.setdefault("prototypes", [])
+        target_prototypes.extend(source.get("prototypes", []))
+        target_prototypes.sort(key=lambda p: p.get("last_seen", 0))
+        if len(target_prototypes) > GALLERY_MAX_PROTOTYPES:
+            del target_prototypes[:-GALLERY_MAX_PROTOTYPES]
 
     def _update_tracklet(self, track_key: tuple, src: int, track_id: int,
                          embedding: list[float]) -> dict:
@@ -680,6 +917,49 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 score = _cosine_similarity(embedding, entry.get("embedding", []))
             scores.append((gid, score))
         return sorted(scores, key=lambda item: item[1], reverse=True)
+
+    def _is_gid_match_allowed(self, embedding: list[float],
+                              candidate_gid: int | None,
+                              previous_gid: int | None,
+                              ranked: list[tuple[int, float]]) -> tuple[bool, str]:
+        """Apply threshold, stickiness, and ambiguity gates for a candidate ID."""
+        if not embedding:
+            return False, "no_embedding"
+        if candidate_gid is None or candidate_gid == -1:
+            return False, "empty_gallery"
+        if candidate_gid not in self._gallery:
+            return False, "stale_candidate"
+
+        candidate_score = self._score_gid(candidate_gid, embedding)
+        if candidate_score < SIMILARITY_THRESHOLD:
+            return False, "below_threshold"
+
+        if (
+            ENABLE_ID_STICKINESS
+            and previous_gid is not None
+            and previous_gid in self._gallery
+            and candidate_gid != previous_gid
+        ):
+            previous_score = self._score_gid(previous_gid, embedding)
+            if candidate_score < previous_score + ID_SWITCH_MARGIN:
+                return (
+                    False,
+                    f"switch_margin(prev=G{previous_gid},"
+                    f"prev_score={previous_score:.3f})",
+                )
+
+        if (
+            ENABLE_AMBIGUOUS_MATCH_REJECTION
+            and candidate_gid != previous_gid
+        ):
+            runner_up = max(
+                (score for gid, score in ranked if gid != candidate_gid),
+                default=0.0,
+            )
+            if runner_up > 0.0 and candidate_score < runner_up + MATCH_AMBIGUITY_MARGIN:
+                return False, f"ambiguous(runner_up={runner_up:.3f})"
+
+        return True, "ok"
 
     def _allocate_new_gid(self) -> int:
         while self._next_gid in self._gallery:
@@ -789,8 +1069,8 @@ def add_recording_branch(pipeline: psm.Pipeline, upstream: str,
 
 def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
         tile_w: int, tile_h: int, debug_similarity: bool,
-        enforce_unique_per_stream: bool, save_video: str | None,
-        record_bitrate: int, no_display: bool):
+        use_hungarian_assignment: bool, enforce_unique_per_stream: bool,
+        save_video: str | None, record_bitrate: int, no_display: bool):
     try:
         uris = load_uris_from_txt(sources_txt)
     except (FileNotFoundError, ValueError) as e:
@@ -805,8 +1085,25 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
     print(f"[M8] tracker={tracker_config}")
     print(f"[M8] person_class_id={person_class_id} inferred from {nvinfer_config}")
     print(f"[M8] Re-ID similarity threshold={SIMILARITY_THRESHOLD}")
+    print(f"[M8] gallery_max_age={GALLERY_MAX_AGE}")
     print(f"[M8] debug_similarity={debug_similarity}")
+    print(f"[M8] use_hungarian_assignment={use_hungarian_assignment}")
     print(f"[M8] enforce_unique_per_stream={enforce_unique_per_stream}")
+    print(f"[M8] assignment_max_candidates={GLOBAL_ASSIGNMENT_MAX_CANDIDATES}")
+    print(
+        f"[M8] id_stickiness={ENABLE_ID_STICKINESS} "
+        f"switch_margin={ID_SWITCH_MARGIN} "
+        f"ambiguous_match_rejection={ENABLE_AMBIGUOUS_MATCH_REJECTION} "
+        f"ambiguity_margin={MATCH_AMBIGUITY_MARGIN}"
+    )
+    print(
+        f"[M8] global_id_merge={ENABLE_GLOBAL_ID_MERGE} "
+        f"threshold={GLOBAL_ID_MERGE_THRESHOLD} "
+        f"min_tracklet_embeddings={GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS} "
+        f"margin={GLOBAL_ID_MERGE_MARGIN} "
+        f"interval={GLOBAL_ID_MERGE_INTERVAL} "
+        f"max_candidates={GLOBAL_ID_MERGE_MAX_CANDIDATES}"
+    )
     print(
         f"[M8] tracklet_embedding={USE_TRACKLET_EMBEDDING} "
         f"window={TRACKLET_MAX_EMBEDDINGS} "
@@ -859,6 +1156,7 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
     gallery_probe = CrossCameraGalleryProbe(
         id_map, embeddings, person_class_id, tile_w, tile_h, cols, n,
         debug_similarity=debug_similarity,
+        use_hungarian_assignment=use_hungarian_assignment,
         enforce_unique_per_stream=enforce_unique_per_stream)
     pipeline.attach("tiler", psm.Probe("reid_probe", gallery_probe))
 
@@ -891,7 +1189,7 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
     try:
         pipeline.start()
         print("[M8] Running. Gallery stats print every 60 frames.")
-        print("[M8] Labels show G#<global_id> Cam<src>#<track_id>.")
+        print("[M8] Labels show Global:<global_id>.")
         if save_video:
             print(f"[M8] Recording annotated video to: {written_path}")
         print("[M8] Press Ctrl+C to stop.")
@@ -912,7 +1210,8 @@ if __name__ == "__main__":
                         default="configs/models/nvinfer_yolov8_people.yml",
                         help="nvinfer config. Default: YOLOv8. "
                              "Alternatives: configs/models/nvinfer_peoplenet.yml, "
-                             "configs/models/nvinfer_trafficcamnet.yml")
+                             "configs/models/nvinfer_trafficcamnet.yml, "
+                             "configs/models/nvinfer_yolov8_people.yml")
     parser.add_argument("--tracker-config",
                         default="configs/tracker/nvdeepsort_reid.yaml",
                         help="Use nvdcf_perf.yaml to run without Re-ID engine")
@@ -920,9 +1219,49 @@ if __name__ == "__main__":
     parser.add_argument("--tile-h", type=int, default=720)
     parser.add_argument("--debug-similarity", action="store_true",
                         help="Print max cosine similarity for every new track")
+    parser.add_argument("--gallery-max-age", type=int,
+                        default=GALLERY_MAX_AGE,
+                        help="Drop inactive Global IDs after this many batches")
+    parser.add_argument("--disable-hungarian", action="store_true",
+                        help="Use greedy gallery matching instead of per-stream "
+                             "Hungarian assignment")
+    parser.add_argument("--assignment-max-candidates", type=int,
+                        default=GLOBAL_ASSIGNMENT_MAX_CANDIDATES,
+                        help="Limit gallery IDs scanned by Hungarian assignment")
     parser.add_argument("--allow-duplicate-gid-per-stream", action="store_true",
-                        help="Disable the guard that keeps each global ID unique "
-                             "within one stream at the same frame")
+                        help="Disable the guard that releases duplicate known "
+                             "Global IDs within one stream before Hungarian")
+    parser.add_argument("--disable-id-stickiness", action="store_true",
+                        help="Allow a known local track to switch Global IDs "
+                             "without requiring an extra similarity margin")
+    parser.add_argument("--id-switch-margin", type=float,
+                        default=ID_SWITCH_MARGIN,
+                        help="Extra similarity required before switching from "
+                             "a previous Global ID to another one")
+    parser.add_argument("--allow-ambiguous-match", action="store_true",
+                        help="Allow matching an existing Global ID even when "
+                             "the runner-up ID is very close")
+    parser.add_argument("--match-ambiguity-margin", type=float,
+                        default=MATCH_AMBIGUITY_MARGIN,
+                        help="Best existing Global ID must beat runner-up by "
+                             "this margin before it is accepted")
+    parser.add_argument("--disable-global-merge", action="store_true",
+                        help="Disable online merging of duplicate Global IDs")
+    parser.add_argument("--global-merge-threshold", type=float,
+                        default=GLOBAL_ID_MERGE_THRESHOLD,
+                        help="Similarity threshold to merge one Global ID into another")
+    parser.add_argument("--global-merge-min-embeddings", type=int,
+                        default=GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS,
+                        help="Minimum local tracklet embeddings before merge is considered")
+    parser.add_argument("--global-merge-margin", type=float,
+                        default=GLOBAL_ID_MERGE_MARGIN,
+                        help="Merge candidate must beat runner-up by this margin")
+    parser.add_argument("--global-merge-interval", type=int,
+                        default=GLOBAL_ID_MERGE_INTERVAL,
+                        help="Run duplicate Global ID merge every N batches")
+    parser.add_argument("--global-merge-max-candidates", type=int,
+                        default=GLOBAL_ID_MERGE_MAX_CANDIDATES,
+                        help="Limit older Global IDs scanned per merge candidate")
     parser.add_argument("--disable-tracklet", action="store_true",
                         help="Use only current-frame embeddings, without local "
                              "tracklet averaging")
@@ -949,10 +1288,24 @@ if __name__ == "__main__":
         ENFORCE_UNIQUE_GLOBAL_PER_STREAM
         and not args.allow_duplicate_gid_per_stream
     )
+    use_hungarian = USE_HUNGARIAN_ASSIGNMENT and not args.disable_hungarian
+    GALLERY_MAX_AGE = max(1, args.gallery_max_age)
+    GLOBAL_ASSIGNMENT_MAX_CANDIDATES = max(1, args.assignment_max_candidates)
+    ENABLE_ID_STICKINESS = not args.disable_id_stickiness
+    ID_SWITCH_MARGIN = max(0.0, args.id_switch_margin)
+    ENABLE_AMBIGUOUS_MATCH_REJECTION = not args.allow_ambiguous_match
+    MATCH_AMBIGUITY_MARGIN = max(0.0, args.match_ambiguity_margin)
+    ENABLE_GLOBAL_ID_MERGE = not args.disable_global_merge
+    GLOBAL_ID_MERGE_THRESHOLD = max(0.0, args.global_merge_threshold)
+    GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS = max(
+        1, args.global_merge_min_embeddings)
+    GLOBAL_ID_MERGE_MARGIN = max(0.0, args.global_merge_margin)
+    GLOBAL_ID_MERGE_INTERVAL = max(1, args.global_merge_interval)
+    GLOBAL_ID_MERGE_MAX_CANDIDATES = max(1, args.global_merge_max_candidates)
     USE_TRACKLET_EMBEDDING = not args.disable_tracklet
     TRACKLET_MAX_EMBEDDINGS = max(1, args.tracklet_window)
     TRACKLET_MIN_EMBEDDINGS_FOR_MATCH = max(1, args.tracklet_min_embeddings)
     TRACKLET_MAX_AGE = max(1, args.tracklet_max_age)
     run(args.sources, args.nvinfer_config, args.tracker_config,
-        args.tile_w, args.tile_h, args.debug_similarity, enforce_unique,
-        args.save_video, args.record_bitrate, args.no_display)
+        args.tile_w, args.tile_h, args.debug_similarity, use_hungarian,
+        enforce_unique, args.save_video, args.record_bitrate, args.no_display)
