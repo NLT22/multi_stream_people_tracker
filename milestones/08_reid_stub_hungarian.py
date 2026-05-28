@@ -1,6 +1,6 @@
 """
 =============================================================================
-MILESTONE 8 — Cross-Camera Person Re-Identification
+MILESTONE 8 — Cross-Camera Person Re-Identification + Hungarian Assignment
 =============================================================================
 
 WHAT YOU LEARN:
@@ -52,8 +52,8 @@ SETUP:
   Gallery probe still runs but embeddings are empty → no cross-cam matching.
 
 RUN:
-  python milestones/08_reid_stub.py
-  python milestones/08_reid_stub.py --tracker-config configs/tracker/nvdcf_perf.yaml
+  python milestones/08_reid_stub_hungarian.py
+  python milestones/08_reid_stub_hungarian.py --debug-similarity
 
 TODO EXERCISES:
   1. Run with nvdcf_perf.yaml first — gallery runs, cross-cam labels show G#N
@@ -71,6 +71,7 @@ import argparse
 import math
 from pathlib import Path
 import sys
+import traceback
 
 import pyservicemaker as psm
 
@@ -93,10 +94,14 @@ from src.utils.platform_utils import get_sink_element
 
 
 SIMILARITY_THRESHOLD = 0.5  # cosine similarity to accept a Re-ID match
-GALLERY_MAX_AGE = 1000       # drop gallery entry after N frames without a match
+GALLERY_MAX_AGE = 100       # drop gallery entry after N frames without a match
 GALLERY_MAX_PROTOTYPES = 8    # 0 disables multi-prototype and keeps one vector
 PROTOTYPE_ADD_THRESHOLD = 0.6  # add a new prototype if it is visually distinct
 ENFORCE_UNIQUE_GLOBAL_PER_STREAM = True
+USE_TRACKLET_EMBEDDING = True
+TRACKLET_MAX_AGE = 100
+TRACKLET_MAX_EMBEDDINGS = 12
+TRACKLET_MIN_EMBEDDINGS_FOR_MATCH = 3
 DEBUG_TOP_K = 3
 
 
@@ -109,7 +114,100 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
     norm_b = sum(x * x for x in b) ** 0.5
     if norm_a == 0.0 or norm_b == 0.0:
         return 0.0
-    return float(dot / (norm_a * norm_b))
+    score = float(dot / (norm_a * norm_b))
+    if not math.isfinite(score):
+        return 0.0
+    return score
+
+
+def _mean_embedding(embeddings: list[list[float]]) -> list[float]:
+    """Average same-sized embeddings and L2-normalize the result."""
+    valid = [e for e in embeddings if e]
+    if not valid:
+        return []
+
+    dim = len(valid[0])
+    same_dim = [e for e in valid if len(e) == dim]
+    if not same_dim:
+        return []
+
+    mean = [sum(e[i] for e in same_dim) / len(same_dim) for i in range(dim)]
+    norm = sum(x * x for x in mean) ** 0.5
+    if norm == 0.0:
+        return mean
+    return [float(x / norm) for x in mean]
+
+
+def max_weight_assignment(weights: list[list[float]]) -> list[int]:
+    """
+    Hungarian assignment for max-weight rectangular matrices.
+
+    Returns a list where result[row] = assigned column. The implementation uses
+    the classic O(n^2*m) shortest augmenting path form for min-cost assignment,
+    converting max weights to costs internally. It assumes columns >= rows; this
+    milestone always provides enough "new identity" dummy columns.
+    """
+    if not weights:
+        return []
+
+    n = len(weights)
+    m = len(weights[0])
+    if m < n:
+        raise ValueError("Hungarian assignment requires columns >= rows")
+
+    max_w = max(max(row) for row in weights)
+    cost = [[max_w - w for w in row] for row in weights]
+
+    u = [0.0] * (n + 1)
+    v = [0.0] * (m + 1)
+    p = [0] * (m + 1)
+    way = [0] * (m + 1)
+
+    for i in range(1, n + 1):
+        p[0] = i
+        j0 = 0
+        minv = [float("inf")] * (m + 1)
+        used = [False] * (m + 1)
+
+        while True:
+            used[j0] = True
+            i0 = p[j0]
+            delta = float("inf")
+            j1 = 0
+            for j in range(1, m + 1):
+                if used[j]:
+                    continue
+                cur = cost[i0 - 1][j - 1] - u[i0] - v[j]
+                if cur < minv[j]:
+                    minv[j] = cur
+                    way[j] = j0
+                if minv[j] < delta:
+                    delta = minv[j]
+                    j1 = j
+
+            for j in range(0, m + 1):
+                if used[j]:
+                    u[p[j]] += delta
+                    v[j] -= delta
+                else:
+                    minv[j] -= delta
+
+            j0 = j1
+            if p[j0] == 0:
+                break
+
+        while True:
+            j1 = way[j0]
+            p[j0] = p[j1]
+            j0 = j1
+            if j0 == 0:
+                break
+
+    assignment = [-1] * n
+    for j in range(1, m + 1):
+        if p[j] != 0:
+            assignment[p[j] - 1] = j - 1
+    return assignment
 
 
 class SourceIdCollectorProbe(psm.BatchMetadataOperator):
@@ -137,6 +235,13 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
         self._debug_failures_printed = 0
 
     def handle_metadata(self, batch_meta):
+        try:
+            self._handle_metadata(batch_meta)
+        except Exception:
+            print("[M8-H ERROR] SourceIdCollectorProbe failed:")
+            traceback.print_exc()
+
+    def _handle_metadata(self, batch_meta):
         self._frame_count += 1
         batch_persons = 0
         batch_embeddings = 0
@@ -248,11 +353,12 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
       track_to_gid:   (src, track_id) → global_id   ← stable while tracker holds the ID
 
     For each detected person each frame:
-      1. If (src, track_id) already mapped → reuse global_id, update embedding
-      2. Else → compare embedding against all gallery prototypes
+      1. Update a short local tracklet for (src, track_id)
+      2. If (src, track_id) already mapped → reuse global_id, update embedding
+      3. Else → compare tracklet embedding against all gallery prototypes
              match ≥ threshold → reuse that global_id
              no match         → new global_id
-      3. Draw "G#{global_id} Cam{src}#{track_id}" on screen
+      4. Draw "G#{global_id} Cam{src}#{track_id}" on screen
 
     WHY track_to_gid works:
       Within one camera a tracker ID is stable while the person is visible.
@@ -274,15 +380,22 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         self._num_sources = num_sources
         self._gallery: dict[int, dict] = {}      # global_id → gallery entry
         self._track_to_gid: dict[tuple, int] = {}  # (src, track_id) → global_id
+        self._tracklets: dict[tuple, dict] = {}   # (src, track_id) → state
         self._next_gid = 1
         self._frame_count = 0
         self._debug_similarity = debug_similarity
         self._enforce_unique_per_stream = enforce_unique_per_stream
 
     def handle_metadata(self, batch_meta):
+        try:
+            self._handle_metadata(batch_meta)
+        except Exception:
+            print("[M8-H ERROR] CrossCameraGalleryProbe failed:")
+            traceback.print_exc()
+
+    def _handle_metadata(self, batch_meta):
         self._frame_count += 1
         log = self._frame_count % 60 == 0
-        active_gid_by_stream: dict[tuple[int, int], dict] = {}
 
         # Expire stale gallery entries
         stale = [gid for gid, v in self._gallery.items()
@@ -292,8 +405,20 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             # Also clean stale track mappings pointing to this gid
             self._track_to_gid = {k: v for k, v in self._track_to_gid.items()
                                    if v != gid}
+            for tracklet in self._tracklets.values():
+                if tracklet.get("gid") == gid:
+                    tracklet["gid"] = None
+
+        stale_tracks = [
+            key for key, tracklet in self._tracklets.items()
+            if tracklet["age"] > TRACKLET_MAX_AGE
+        ]
+        for key in stale_tracks:
+            del self._tracklets[key]
+            self._track_to_gid.pop(key, None)
 
         for frame_meta in batch_meta.frame_items:
+            rows = []
             for obj_meta in frame_meta.object_items:
                 if obj_meta.class_id != self._person_class_id:
                     continue
@@ -304,38 +429,65 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     self._cols, self._num_sources)
                 embedding = self._embeddings.get((src, oid), [])
                 track_key = (src, oid)
+                tracklet = self._update_tracklet(
+                    track_key, src, oid, embedding)
+                match_embedding = self._tracklet_embedding(
+                    tracklet, fallback=embedding)
+                gid = self._track_to_gid.get(track_key)
+                if gid is None:
+                    gid = tracklet.get("gid")
+                if gid not in self._gallery:
+                    gid = None
 
-                if track_key in self._track_to_gid:
-                    # Known track — refresh age and update embedding
-                    gid = self._track_to_gid[track_key]
-                    if gid not in self._gallery:
-                        gid = self._find_or_create(embedding, src, oid, log)
-                        self._track_to_gid[track_key] = gid
-                else:
-                    # New (src, track_id) — try to match by embedding
-                    gid = self._find_or_create(embedding, src, oid, log)
-                    self._track_to_gid[track_key] = gid
+                rows.append({
+                    "src": src,
+                    "track_id": oid,
+                    "track_key": track_key,
+                    "embedding": match_embedding,
+                    "raw_embedding": embedding,
+                    "tracklet_len": len(tracklet["embeddings"]),
+                    "gid": gid,
+                })
 
-                if self._enforce_unique_per_stream:
-                    gid = self._ensure_unique_global_in_stream(
-                        active_gid_by_stream, src, oid, track_key, gid,
-                        embedding)
-                self._update_gallery(gid, embedding, src)
+            if self._enforce_unique_per_stream:
+                self._release_duplicate_known_assignments(rows)
+                self._assign_new_tracks_with_hungarian(rows, log)
+            else:
+                self._assign_new_tracks_greedy(rows, log)
 
-                label = f"Global:{gid}|Cam:{src}|Person:{oid}"
-                set_object_label(obj_meta, label)
+            for row in rows:
+                gid = row["gid"]
+                self._track_to_gid[row["track_key"]] = gid
+                self._tracklets[row["track_key"]]["gid"] = gid
+                self._update_gallery(gid, row["embedding"], row["src"])
+
+            label_by_track = {
+                row["track_id"]: (
+                    f"Global:{row['gid']}|Cam:{row['src']}|Person:{row['track_id']}"
+                )
+                for row in rows
+            }
+            for obj_meta in frame_meta.object_items:
+                label = label_by_track.get(obj_meta.object_id)
+                if label is not None:
+                    set_object_label(obj_meta, label)
 
         # Age gallery once per batch
         for v in self._gallery.values():
             v["age"] += 1
+        for tracklet in self._tracklets.values():
+            tracklet["age"] += 1
 
         if log:
             active = len(self._gallery)
+            active_tracklets = len(self._tracklets)
             print(f"[M8] frame={self._frame_count:06d}  "
-                  f"gallery={active}  total_gids_assigned={self._next_gid - 1}")
+                  f"gallery={active}  tracklets={active_tracklets}  "
+                  f"total_gids_assigned={self._next_gid - 1}")
 
     def _find_or_create(self, embedding: list[float], src: int,
-                        track_id: int, log: bool) -> int:
+                        track_id: int, log: bool,
+                        tracklet_len: int = 0) -> int:
         """Match embedding against gallery; return existing or new global_id."""
         ranked = self._rank_gallery(embedding)
         best_gid = ranked[0][0] if ranked else -1
@@ -357,6 +509,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 f"best_gid={best_gid if best_gid != -1 else 'None'} "
                 f"max_similarity={best_score:.3f} "
                 f"threshold={SIMILARITY_THRESHOLD:.3f} "
+                f"tracklet_len={tracklet_len} "
                 f"status={status} reason={display_reason} top{DEBUG_TOP_K}=[{top}]"
             )
 
@@ -367,43 +520,151 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             return best_gid
 
         # New person
-        gid = self._next_gid
-        self._next_gid += 1
+        gid = self._allocate_new_gid()
         self._gallery[gid] = self._new_gallery_entry()
         return gid
 
-    def _ensure_unique_global_in_stream(self, active: dict, src: int,
-                                        track_id: int, track_key: tuple,
-                                        gid: int,
-                                        embedding: list[float]) -> int:
+    def _release_duplicate_known_assignments(self, rows: list[dict]) -> None:
+        """Move duplicate known same-stream global IDs back to assignment."""
+        active: dict[tuple[int, int], dict] = {}
+        for row in rows:
+            gid = row["gid"]
+            if gid is None:
+                continue
+
+            key = (row["src"], gid)
+            existing = active.get(key)
+            if existing is None:
+                active[key] = row
+                continue
+
+            row["gid"] = None
+            if self._debug_similarity:
+                print(
+                    f"  [Re-ID Hungarian] Cam{row['src']}#{row['track_id']} "
+                    f"released_duplicate=G{gid} "
+                    f"held_by=Cam{row['src']}#{existing['track_id']}"
+                )
+
+    def _assign_new_tracks_greedy(self, rows: list[dict], log: bool) -> None:
+        for row in rows:
+            if row["gid"] is None:
+                row["gid"] = self._find_or_create(
+                    row["embedding"], row["src"], row["track_id"], log,
+                    row["tracklet_len"])
+                # Match the original milestone behavior: once a new track is
+                # assigned, later detections in the same tiled frame can match it.
+                self._update_gallery(row["gid"], row["embedding"], row["src"])
+
+    def _assign_new_tracks_with_hungarian(self, rows: list[dict],
+                                          log: bool) -> None:
         """
-        Prevent the same global ID from being drawn on two people in one stream.
+        Assign new tracks per stream with one-to-one Global ID constraints.
 
-        The first active track keeps the shared global ID. A later conflicting
-        track is split into a new global ID, which is conservative but avoids
-        the physically impossible state of one identity occupying two places in
-        the same camera at the same time.
+        Known local tracks keep their existing global ID. New tracks in the same
+        stream compete for currently available global IDs plus one private
+        "new ID" slot per track. This prevents the physically impossible state
+        where one global ID appears twice in one camera frame, while still
+        allowing different cameras to match the same global ID.
         """
-        key = (src, gid)
-        existing = active.get(key)
-        if existing is None or existing["track_key"] == track_key:
-            active[key] = {"track_key": track_key, "track_id": track_id}
-            return gid
+        rows_by_src: dict[int, list[dict]] = {}
+        occupied_by_src: dict[int, set[int]] = {}
+        for row in rows:
+            src = row["src"]
+            if row["gid"] is None:
+                rows_by_src.setdefault(src, []).append(row)
+            else:
+                occupied_by_src.setdefault(src, set()).add(row["gid"])
+                self._update_gallery(row["gid"], row["embedding"], src)
 
-        new_gid = self._next_gid
-        self._next_gid += 1
-        self._gallery[new_gid] = self._new_gallery_entry()
-        self._track_to_gid[track_key] = new_gid
-        active[(src, new_gid)] = {"track_key": track_key, "track_id": track_id}
+        for src, new_rows in rows_by_src.items():
+            occupied = occupied_by_src.setdefault(src, set())
+            existing_gids = [
+                gid for gid in self._gallery
+                if gid not in occupied
+            ]
+            columns = [("gid", gid) for gid in existing_gids]
+            columns += [("new", i) for i in range(len(new_rows))]
 
-        if self._debug_similarity:
-            score = self._score_gid(gid, embedding)
-            print(
-                f"  [Re-ID unique-stream] Cam{src}#{track_id} "
-                f"conflicted_with=G{gid} held_by=Cam{src}#{existing['track_id']} "
-                f"score={score:.3f} reassigned_to=G{new_gid}"
-            )
-        return new_gid
+            weights = []
+            for row in new_rows:
+                row_weights = []
+                for kind, value in columns:
+                    if kind == "gid":
+                        score = self._score_gid(value, row["embedding"])
+                        row_weights.append(score if score >= SIMILARITY_THRESHOLD else -1.0)
+                    else:
+                        row_weights.append(0.0)
+                weights.append(row_weights)
+
+            assignment = max_weight_assignment(weights)
+            for row_idx, col_idx in enumerate(assignment):
+                row = new_rows[row_idx]
+                kind, value = columns[col_idx]
+                if kind == "gid":
+                    gid = value
+                    score = self._score_gid(gid, row["embedding"])
+                    row["gid"] = gid
+                    occupied.add(gid)
+                    status = "MATCH"
+                    reason = "hungarian"
+                else:
+                    gid = self._allocate_new_gid()
+                    self._gallery[gid] = self._new_gallery_entry()
+                    row["gid"] = gid
+                    occupied.add(gid)
+                    score = self._score_gid(gid, row["embedding"])
+                    status = "NEW"
+                    reason = "new_slot"
+
+                if self._debug_similarity:
+                    ranked = [
+                        (gid, self._score_gid(gid, row["embedding"]))
+                        for gid in existing_gids
+                    ]
+                    ranked.sort(key=lambda item: item[1], reverse=True)
+                    top = ", ".join(
+                        f"G{gid}={s:.3f}" for gid, s in ranked[:DEBUG_TOP_K]
+                    ) or "none"
+                    print(
+                        f"  [Re-ID Hungarian] Cam{src}#{row['track_id']} "
+                        f"assigned=G{row['gid']} score={score:.3f} "
+                        f"threshold={SIMILARITY_THRESHOLD:.3f} "
+                        f"tracklet_len={row['tracklet_len']} "
+                        f"status={status} reason={reason} top{DEBUG_TOP_K}=[{top}]"
+                    )
+
+            for row in new_rows:
+                self._update_gallery(row["gid"], row["embedding"], row["src"])
+
+    def _update_tracklet(self, track_key: tuple, src: int, track_id: int,
+                         embedding: list[float]) -> dict:
+        tracklet = self._tracklets.setdefault(track_key, {
+            "src": src,
+            "track_id": track_id,
+            "embeddings": [],
+            "age": 0,
+            "gid": self._track_to_gid.get(track_key),
+        })
+        tracklet["age"] = 0
+        tracklet["src"] = src
+        tracklet["track_id"] = track_id
+        if embedding:
+            tracklet["embeddings"].append(embedding)
+            if len(tracklet["embeddings"]) > TRACKLET_MAX_EMBEDDINGS:
+                del tracklet["embeddings"][:-TRACKLET_MAX_EMBEDDINGS]
+        return tracklet
+
+    @staticmethod
+    def _tracklet_embedding(tracklet: dict,
+                            fallback: list[float] | None = None) -> list[float]:
+        if not USE_TRACKLET_EMBEDDING:
+            return fallback or []
+
+        embeddings = tracklet.get("embeddings", [])
+        if len(embeddings) < TRACKLET_MIN_EMBEDDINGS_FOR_MATCH:
+            return fallback or []
+        return _mean_embedding(embeddings) or (fallback or [])
 
     def _rank_gallery(self, embedding: list[float]) -> list[tuple[int, float]]:
         """Return global IDs ranked by single embedding or prototype similarity."""
@@ -418,6 +679,13 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 score = _cosine_similarity(embedding, entry.get("embedding", []))
             scores.append((gid, score))
         return sorted(scores, key=lambda item: item[1], reverse=True)
+
+    def _allocate_new_gid(self) -> int:
+        while self._next_gid in self._gallery:
+            self._next_gid += 1
+        gid = self._next_gid
+        self._next_gid += 1
+        return gid
 
     def _score_gid(self, gid: int, embedding: list[float]) -> float:
         if not embedding or gid not in self._gallery:
@@ -532,19 +800,25 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
     rows, cols = compute_grid(n)
     person_class_id = infer_person_class_id(nvinfer_config)
     total_w, total_h = tile_w * cols, tile_h * rows
-    print(f"[M8] {n} stream(s) → {rows}×{cols} grid  canvas={total_w}×{total_h}")
+    print(f"[M8-H] {n} stream(s) → {rows}×{cols} grid  canvas={total_w}×{total_h}")
     print(f"[M8] tracker={tracker_config}")
     print(f"[M8] person_class_id={person_class_id} inferred from {nvinfer_config}")
     print(f"[M8] Re-ID similarity threshold={SIMILARITY_THRESHOLD}")
     print(f"[M8] debug_similarity={debug_similarity}")
     print(f"[M8] enforce_unique_per_stream={enforce_unique_per_stream}")
+    print(
+        f"[M8] tracklet_embedding={USE_TRACKLET_EMBEDDING} "
+        f"window={TRACKLET_MAX_EMBEDDINGS} "
+        f"min_embeddings={TRACKLET_MIN_EMBEDDINGS_FOR_MATCH} "
+        f"max_age={TRACKLET_MAX_AGE}"
+    )
     if save_video:
         print(f"[M8] save_video={save_video}")
 
     id_map: dict[int, int] = {}
     embeddings: dict[tuple, list] = {}  # (source_id, object_id) → embedding vector
 
-    pipeline = psm.Pipeline("m8-reid")
+    pipeline = psm.Pipeline("m8-reid-hungarian")
 
     pipeline.add("nvstreammux", "mux", {
         "batch-size": n, "batched-push-timeout": 40000,
@@ -631,7 +905,7 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Milestone 8: Cross-camera person Re-ID")
+        description="Milestone 8: Cross-camera Re-ID with Hungarian assignment")
     parser.add_argument("--sources", default="configs/sources/video_files.txt")
     parser.add_argument("--nvinfer-config",
                         default="configs/models/nvinfer_yolov8_people.yml",
@@ -648,6 +922,19 @@ if __name__ == "__main__":
     parser.add_argument("--allow-duplicate-gid-per-stream", action="store_true",
                         help="Disable the guard that keeps each global ID unique "
                              "within one stream at the same frame")
+    parser.add_argument("--disable-tracklet", action="store_true",
+                        help="Use only current-frame embeddings, without local "
+                             "tracklet averaging")
+    parser.add_argument("--tracklet-window", type=int,
+                        default=TRACKLET_MAX_EMBEDDINGS,
+                        help="Number of recent embeddings kept per (camera, track)")
+    parser.add_argument("--tracklet-min-embeddings", type=int,
+                        default=TRACKLET_MIN_EMBEDDINGS_FOR_MATCH,
+                        help="Minimum embeddings before using the averaged tracklet "
+                             "vector for matching")
+    parser.add_argument("--tracklet-max-age", type=int,
+                        default=TRACKLET_MAX_AGE,
+                        help="Drop inactive local tracklets after this many batches")
     parser.add_argument("--save-video", nargs="?", const="output/videos/m8_reid.mp4",
                         default=None,
                         help="Save annotated output MP4. Default path when no value is "
@@ -661,6 +948,10 @@ if __name__ == "__main__":
         ENFORCE_UNIQUE_GLOBAL_PER_STREAM
         and not args.allow_duplicate_gid_per_stream
     )
+    USE_TRACKLET_EMBEDDING = not args.disable_tracklet
+    TRACKLET_MAX_EMBEDDINGS = max(1, args.tracklet_window)
+    TRACKLET_MIN_EMBEDDINGS_FOR_MATCH = max(1, args.tracklet_min_embeddings)
+    TRACKLET_MAX_AGE = max(1, args.tracklet_max_age)
     run(args.sources, args.nvinfer_config, args.tracker_config,
         args.tile_w, args.tile_h, args.debug_similarity, enforce_unique,
         args.save_video, args.record_bitrate, args.no_display)
