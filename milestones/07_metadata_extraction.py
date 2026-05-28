@@ -144,7 +144,7 @@ class MetadataExtractorProbe(psm.BatchMetadataOperator):
                 self._unique_ids.add(obj.object_id)
                 self._total += 1
 
-                set_object_label(obj, f"Cam{src} #{obj.object_id} {obj.confidence:.0%}")
+                set_object_label(obj, f"Cam:{src}|Person:{obj.object_id}|Conf:{obj.confidence:.0%}")
 
             n = len(persons)
             self._max_simultaneous = max(self._max_simultaneous, n)
@@ -252,7 +252,13 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
 
     # Probe 2 on tiler (post-tiler): tiled canvas coordinates for drawing
     pipeline.attach("tiler", psm.Probe("meta_probe", probe))
-    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
+    pipeline.add("nvosdbin", "osd", {
+        "gpu-id": 0,
+        "process-mode": 1,
+        "display-text": 1,
+        "display-bbox": 1,
+        "text-size": 18,
+    })
 
     pipeline.add(get_sink_element(), "sink", {"sync": 1, "qos": 0})
 

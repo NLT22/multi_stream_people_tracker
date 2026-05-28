@@ -108,7 +108,13 @@ def run(sources_txt: str, nvinfer_config: str):
     })
 
     # NVOSDBIN — draws boxes on the tiled canvas (after tiler scales coords)
-    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
+    pipeline.add("nvosdbin", "osd", {
+        "gpu-id": 0,
+        "process-mode": 1,
+        "display-text": 1,
+        "display-bbox": 1,
+        "text-size": 18,
+    })
 
     # SINK
     pipeline.add(get_sink_element(), "sink", {"sync": 1, "qos": 0})

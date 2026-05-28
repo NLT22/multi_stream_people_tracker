@@ -130,7 +130,7 @@ class BatchInspectorProbe(psm.BatchMetadataOperator):
                 src = infer_source_id_from_tiled_box(
                     b, self._tile_w, self._tile_h, self._cols,
                     self._num_sources)
-                set_object_label(obj, f"Cam{src} #{obj.object_id}")
+                set_object_label(obj, f"Cam:{src}|Person:{obj.object_id}|Conf:{obj.confidence:.0%}")
 
 
 def compute_grid(n):
@@ -197,7 +197,13 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str):
         "batch_probe",
         BatchInspectorProbe(
             id_map, batch_stats, person_class_id, 1280, 720, cols, n)))
-    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
+    pipeline.add("nvosdbin", "osd", {
+        "gpu-id": 0,
+        "process-mode": 1,
+        "display-text": 1,
+        "display-bbox": 1,
+        "text-size": 18,
+    })
 
     sink_props = get_sink_properties(is_live=IS_LIVE)
     pipeline.add(get_sink_element(), "sink", sink_props)

@@ -226,6 +226,9 @@ class PipelineBuilder:
         self._pipeline.add("nvosdbin", "osd", {
             "gpu-id": self.config.gpu_id,
             "process-mode": 1,
+            "display-text": 1,
+            "display-bbox": 1,
+            "text-size": 18,
         })
         self._pipeline.link(upstream, "osd")
 

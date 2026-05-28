@@ -119,7 +119,7 @@ class PersonLabelProbe(psm.BatchMetadataOperator):
                     self._cols, self._num_sources)
                 cam_counts[src] = cam_counts.get(src, 0) + 1
 
-                label = f"Cam{src} #{obj_meta.object_id}"
+                label = f"Cam:{src}|Person:{obj_meta.object_id}"
                 set_object_label(obj_meta, label)
 
         if log:
@@ -189,7 +189,13 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
         PersonLabelProbe(person_class_id, tile_w, tile_h, cols, n)))
 
     # OSD — draws on the tiled canvas
-    pipeline.add("nvosdbin", "osd", {"gpu-id": 0, "process-mode": 1})
+    pipeline.add("nvosdbin", "osd", {
+        "gpu-id": 0,
+        "process-mode": 1,
+        "display-text": 1,
+        "display-bbox": 1,
+        "text-size": 18,
+    })
 
     # SINK
     pipeline.add(get_sink_element(), "sink", {"sync": 1, "qos": 0})
