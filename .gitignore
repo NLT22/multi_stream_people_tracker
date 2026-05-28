@@ -1,5 +1,6 @@
 venv
 dataset
+output/
 *__pycache__/
 models/**/*.engine
 models/**/*.static_b1.onnx

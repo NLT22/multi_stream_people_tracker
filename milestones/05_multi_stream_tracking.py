@@ -48,12 +48,12 @@ import math
 import sys
 
 import pyservicemaker as psm
-from pyservicemaker import osd
 
 from src.pipeline.model_utils import (
     deepstream_tracker_lib_path,
     infer_person_class_id,
     infer_source_id_from_tiled_box,
+    set_object_label,
 )
 from src.pipeline.sources import load_uris_from_txt
 from src.utils.platform_utils import get_sink_element
@@ -110,8 +110,6 @@ class PersonLabelProbe(psm.BatchMetadataOperator):
         cam_counts: dict[int, int] = {}
 
         for frame_meta in batch_meta.frame_items:
-            display_meta = batch_meta.acquire_display_meta()
-
             for obj_meta in frame_meta.object_items:
                 if obj_meta.class_id != self._person_class_id:
                     continue
@@ -121,19 +119,8 @@ class PersonLabelProbe(psm.BatchMetadataOperator):
                     self._cols, self._num_sources)
                 cam_counts[src] = cam_counts.get(src, 0) + 1
 
-                box = obj_meta.rect_params
                 label = f"Cam{src} #{obj_meta.object_id}"
-
-                text = osd.Text()
-                text.display_text = label.encode()
-                text.x_offset = int(box.left)
-                text.y_offset = max(0, int(box.top) - 50)
-                text.font.name = osd.FontFamily.Serif
-                text.font.size = 12
-                text.font.color = osd.Color(0.2, 1.0, 0.2, 1.0)
-                display_meta.add_text(text)
-
-            frame_meta.append(display_meta)
+                set_object_label(obj_meta, label)
 
         if log:
             for src, count in sorted(cam_counts.items()):

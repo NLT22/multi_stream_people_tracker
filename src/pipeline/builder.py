@@ -209,10 +209,9 @@ class PipelineBuilder:
         """
         Add nvosdbin + custom OSD probe.
 
-        nvosdbin reads DisplayMeta added by probes and draws:
+        nvosdbin reads object metadata and draws:
           - Bounding rectangles around detected objects
-          - Text labels (class name + tracking ID)
-          - Any custom overlays added by PersonOSDProbe
+          - Text labels, including labels overridden by PersonOSDProbe
 
         process-mode: 1 = GPU rendering (faster, requires NVMM buffers)
         process-mode: 0 = CPU rendering (slower, for debugging)

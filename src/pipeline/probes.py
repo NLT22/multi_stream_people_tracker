@@ -28,7 +28,8 @@ PERSON CLASS IDs:
 """
 
 import pyservicemaker as psm
-from pyservicemaker import osd
+
+from src.pipeline.model_utils import set_object_label
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -80,18 +81,17 @@ class PersonCountProbe(psm.BatchMetadataOperator):
 
 class PersonOSDProbe(psm.BatchMetadataOperator):
     """
-    Milestone 6: Draw custom bounding box labels for tracked persons.
+    Milestone 6: Override built-in object labels for tracked persons.
 
-    This probe runs BEFORE nvosdbin. It adds text overlays to DisplayMeta
-    which nvosdbin then renders onto the video.
+    This probe runs BEFORE nvosdbin. It updates ObjectMetadata.label so the
+    built-in per-object OSD text is stable even with many people on screen.
 
     Attach this between tracker and osd:
         pipeline.attach("tracker", psm.Probe("osd_probe", PersonOSDProbe()))
 
-    WHY NOT USE nvosdbin's built-in display?
-      nvosdbin auto-draws class labels from the label file. The custom probe
-      lets you control the exact text, color, and position — for example,
-      showing "Person #42 (conf=0.87)" instead of just "Person".
+    WHY NOT USE extra DisplayMeta text?
+      DisplayMeta text has a small per-meta capacity. Updating the object label
+      avoids dropped labels when a tiled frame contains many people.
     """
 
     def __init__(self, person_class_id: int = PERSON_CLASS_ID_DEFAULT):
@@ -100,8 +100,6 @@ class PersonOSDProbe(psm.BatchMetadataOperator):
 
     def handle_metadata(self, batch_meta):
         for frame_meta in batch_meta.frame_items:
-            display_meta = batch_meta.acquire_display_meta()
-
             for obj_meta in frame_meta.object_items:
                 if obj_meta.class_id != self._person_class_id:
                     # TODO (Milestone 6): Decide whether to show non-person classes
@@ -114,25 +112,7 @@ class PersonOSDProbe(psm.BatchMetadataOperator):
 
                 # TODO (Milestone 6): Add confidence to label
                 # label = f"Person #{obj_meta.object_id} ({obj_meta.confidence:.0%})"
-
-                # Text position: top-left corner of the bounding box
-                x = int(obj_meta.rect_params.left)
-                y = max(0, int(obj_meta.rect_params.top) - 20)  # above the box
-
-                text = osd.Text()
-                text.display_text = label.encode()
-                text.x_offset = x
-                text.y_offset = y
-                text.font.name = osd.FontFamily.Serif
-                text.font.size = 14
-                text.font.color = osd.Color(0.0, 1.0, 0.0, 1.0)
-                display_meta.add_text(text)
-
-                # TODO (Milestone 6): Add a custom colored rectangle instead of
-                # relying on nvosdbin's default rectangle rendering
-                # display_meta.add_rect(psm.Rect(...))
-
-            frame_meta.append(display_meta)
+                set_object_label(obj_meta, label)
 
 
 class MetadataExtractorProbe(psm.BatchMetadataOperator):

@@ -31,6 +31,7 @@ ITERATOR RULES:
 RUN:
   python milestones/07_metadata_extraction.py
   python milestones/07_metadata_extraction.py --save-json
+  python milestones/07_metadata_extraction.py --save-json --output-dir output/metadata
 
 TODO EXERCISES:
   1. Uncomment --save-json to write per-frame JSON files.
@@ -48,12 +49,12 @@ import time
 from pathlib import Path
 
 import pyservicemaker as psm
-from pyservicemaker import osd
 
 from src.pipeline.model_utils import (
     deepstream_tracker_lib_path,
     infer_person_class_id,
     infer_source_id_from_tiled_box,
+    set_object_label,
 )
 from src.pipeline.sources import load_uris_from_txt
 from src.utils.platform_utils import get_sink_element
@@ -119,7 +120,6 @@ class MetadataExtractorProbe(psm.BatchMetadataOperator):
         log = self._frames % 60 == 0
 
         for frame_meta in batch_meta.frame_items:
-            dm = batch_meta.acquire_display_meta()
             persons = []
 
             for obj in frame_meta.object_items:
@@ -144,30 +144,23 @@ class MetadataExtractorProbe(psm.BatchMetadataOperator):
                 self._unique_ids.add(obj.object_id)
                 self._total += 1
 
-                b = obj.rect_params
-                t = osd.Text()
-                t.display_text = f"Cam{src} #{obj.object_id} {obj.confidence:.0%}".encode()
-                t.x_offset = int(b.left)
-                t.y_offset = max(0, int(b.top) - 50)
-                t.font.name = osd.FontFamily.Serif
-                t.font.size = 12
-                t.font.color = osd.Color(0.0, 1.0, 0.3, 1.0)
-                dm.add_text(t)
-
-            frame_meta.append(dm)
+                set_object_label(obj, f"Cam{src} #{obj.object_id} {obj.confidence:.0%}")
 
             n = len(persons)
             self._max_simultaneous = max(self._max_simultaneous, n)
 
             if log and persons:
-                # Group by source for readable output
-                by_src: dict[int, list] = {}
+                # Group by original source/frame captured before the tiler.
+                # Post-tiler frame_meta.frame_number is the tiled canvas frame
+                # and can stay at 0 in pyservicemaker metadata.
+                by_src_frame: dict[tuple[int, int], list] = {}
                 for p in persons:
-                    by_src.setdefault(p["source_id"], []).append(p["object_id"])
-                for src, ids in sorted(by_src.items()):
+                    key = (p["source_id"], p["frame_number"])
+                    by_src_frame.setdefault(key, []).append(p["object_id"])
+                for (src, frame_number), ids in sorted(by_src_frame.items()):
                     print(
                         f"[M7] Cam{src:02d} "
-                        f"frame={frame_meta.frame_number:06d}  "
+                        f"frame={frame_number:06d}  "
                         f"{len(ids)} person(s)  IDs={ids}"
                     )
 
@@ -205,7 +198,8 @@ def compute_grid(n):
     return math.ceil(n / cols), cols
 
 
-def run(sources_txt: str, nvinfer_config: str, tracker_config: str, save_json: bool):
+def run(sources_txt: str, nvinfer_config: str, tracker_config: str,
+        save_json: bool, output_dir: str):
     try:
         uris = load_uris_from_txt(sources_txt)
     except (FileNotFoundError, ValueError) as e:
@@ -222,7 +216,7 @@ def run(sources_txt: str, nvinfer_config: str, tracker_config: str, save_json: b
     frame_src: dict[tuple, int] = {}     # (source_id, object_id) → frame_number
     probe = MetadataExtractorProbe(
         id_map, frame_src, person_class_id, 1280, 720, cols, n,
-        save_json=save_json)
+        save_json=save_json, output_dir=output_dir)
 
     pipeline = psm.Pipeline("m7-metadata")
 
@@ -289,5 +283,8 @@ if __name__ == "__main__":
     parser.add_argument("--tracker-config",
                         default="configs/tracker/nvdcf_perf.yaml")
     parser.add_argument("--save-json", action="store_true")
+    parser.add_argument("--output-dir", default="output/metadata",
+                        help="Directory for --save-json files")
     args = parser.parse_args()
-    run(args.sources, args.nvinfer_config, args.tracker_config, args.save_json)
+    run(args.sources, args.nvinfer_config, args.tracker_config,
+        args.save_json, args.output_dir)

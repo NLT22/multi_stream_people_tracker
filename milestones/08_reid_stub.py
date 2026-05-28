@@ -72,7 +72,6 @@ import math
 import sys
 
 import pyservicemaker as psm
-from pyservicemaker import osd
 
 try:
     import torch
@@ -86,6 +85,7 @@ from src.pipeline.model_utils import (
     deepstream_tracker_lib_path,
     infer_person_class_id,
     infer_source_id_from_tiled_box,
+    set_object_label,
 )
 from src.pipeline.sources import load_uris_from_txt
 from src.utils.platform_utils import get_sink_element
@@ -200,8 +200,6 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                                    if v != gid}
 
         for frame_meta in batch_meta.frame_items:
-            display_meta = batch_meta.acquire_display_meta()
-
             for obj_meta in frame_meta.object_items:
                 if obj_meta.class_id != self._person_class_id:
                     continue
@@ -225,18 +223,8 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     gid = self._find_or_create(embedding, src, oid, log)
                     self._track_to_gid[track_key] = gid
 
-                box = obj_meta.rect_params
                 label = f"G#{gid} Cam{src}#{oid}"
-                text = osd.Text()
-                text.display_text = label.encode()
-                text.x_offset = int(box.left)
-                text.y_offset = max(0, int(box.top) - 50)
-                text.font.name = osd.FontFamily.Serif
-                text.font.size = 12
-                text.font.color = osd.Color(0.2, 1.0, 0.2, 1.0)
-                display_meta.add_text(text)
-
-            frame_meta.append(display_meta)
+                set_object_label(obj_meta, label)
 
         # Age gallery once per batch
         for v in self._gallery.values():

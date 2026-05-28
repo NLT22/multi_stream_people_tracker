@@ -60,3 +60,20 @@ def infer_source_id_from_tiled_box(
     if 0 <= src < num_sources:
         return src
     return fallback
+
+
+def set_object_label(obj_meta, label: str) -> None:
+    """Set the object label used by nvosdbin's built-in per-object text."""
+    try:
+        obj_meta.label = label
+    except (AttributeError, TypeError):
+        pass
+
+    # Some pyservicemaker builds expose NvOSD_TextParams here. Updating it keeps
+    # the rendered label in sync without relying on extra DisplayMeta text slots.
+    text_params = getattr(obj_meta, "text_params", None)
+    if text_params is not None and hasattr(text_params, "display_text"):
+        try:
+            text_params.display_text = label.encode()
+        except (AttributeError, TypeError):
+            pass

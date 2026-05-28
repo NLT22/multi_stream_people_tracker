@@ -44,12 +44,12 @@ import math
 import sys
 
 import pyservicemaker as psm
-from pyservicemaker import osd
 
 from src.pipeline.model_utils import (
     deepstream_tracker_lib_path,
     infer_person_class_id,
     infer_source_id_from_tiled_box,
+    set_object_label,
 )
 from src.pipeline.sources import load_uris_from_txt
 from src.utils.platform_utils import get_sink_element, get_sink_properties
@@ -123,7 +123,6 @@ class BatchInspectorProbe(psm.BatchMetadataOperator):
             print(f"[M6] batch #{self._n:06d}: {num_frames} frame(s)  sources={src_ids}")
 
         for frame_meta in batch_meta.frame_items:
-            dm = batch_meta.acquire_display_meta()
             for obj in frame_meta.object_items:
                 if obj.class_id != self._person_class_id:
                     continue
@@ -131,15 +130,7 @@ class BatchInspectorProbe(psm.BatchMetadataOperator):
                 src = infer_source_id_from_tiled_box(
                     b, self._tile_w, self._tile_h, self._cols,
                     self._num_sources)
-                t = osd.Text()
-                t.display_text = f"Cam{src} #{obj.object_id}".encode()
-                t.x_offset = int(b.left)
-                t.y_offset = max(0, int(b.top) - 50)
-                t.font.name = osd.FontFamily.Serif
-                t.font.size = 12
-                t.font.color = osd.Color(0.0, 1.0, 0.5, 1.0)
-                dm.add_text(t)
-            frame_meta.append(dm)
+                set_object_label(obj, f"Cam{src} #{obj.object_id}")
 
 
 def compute_grid(n):

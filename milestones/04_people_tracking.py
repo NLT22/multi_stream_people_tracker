@@ -41,7 +41,7 @@ RUN:
   python milestones/04_people_tracking.py
   python milestones/04_people_tracking.py --tracker-config configs/tracker/iou.yaml
 
-EXPECTED: Video with bounding boxes + green "Person #N" labels that persist
+EXPECTED: Video with bounding boxes + "Person #N" labels that persist
   across frames. IDs should NOT change unless the person leaves the scene.
 
 TODO EXERCISES:
@@ -58,27 +58,22 @@ import math
 import sys
 
 import pyservicemaker as psm
-from pyservicemaker import osd
 
-from src.pipeline.model_utils import deepstream_tracker_lib_path, infer_person_class_id
+from src.pipeline.model_utils import (
+    deepstream_tracker_lib_path,
+    infer_person_class_id,
+    set_object_label,
+)
 from src.pipeline.sources import load_uris_from_txt
 from src.utils.platform_utils import get_sink_element
 
 
 class PersonLabelProbe(psm.BatchMetadataOperator):
     """
-    Adds "Person <ID>" text above each tracked person's bounding box.
+    Replaces the default per-object OSD label with "Person <ID>".
 
-    Runs BEFORE nvosdbin so the text is included in the render pass.
+    Runs BEFORE nvosdbin so the built-in object label render uses our text.
     The tracking ID (object_id) comes from nvtracker.
-
-    OSD API notes:
-      - display_meta = batch_meta.acquire_display_meta()  (not psm.DisplayMeta)
-      - text = osd.Text()  then set properties individually
-      - display_text expects bytes: label.encode()
-      - position: x_offset / y_offset  (not x / y)
-      - font color via text.font.color = osd.Color(r, g, b, a)
-      - must call frame_meta.append(display_meta) after adding elements
     """
 
     def __init__(self, person_class_id: int):
@@ -87,8 +82,6 @@ class PersonLabelProbe(psm.BatchMetadataOperator):
 
     def handle_metadata(self, batch_meta):
         for frame_meta in batch_meta.frame_items:   # ITERATOR
-            display_meta = batch_meta.acquire_display_meta()
-
             for obj_meta in frame_meta.object_items:  # ITERATOR
                 if obj_meta.class_id != self._person_class_id:
                     continue
@@ -96,25 +89,7 @@ class PersonLabelProbe(psm.BatchMetadataOperator):
                 # TODO Exercise 4: add confidence
                 # label = f"Person #{obj_meta.object_id}"
                 label = f"(Person {obj_meta.object_id}:{obj_meta.confidence:.0%})"
-
-                box = obj_meta.rect_params
-
-                text = osd.Text()
-                text.display_text = label.encode()
-                text.x_offset = int(box.left)
-                text.y_offset = max(0, int(box.top) - 50)
-                text.font.name = osd.FontFamily.Serif
-                text.font.size = 12
-
-                # TODO Exercise 3: color by ID range
-                # text.font.color = osd.Color(0.0, 1.0, 0.0, 1.0)  # green
-                text.font.color = osd.Color(1.0, 0.0, 0.0, 1.0) \
-                    if obj_meta.object_id > 5 \
-                    else osd.Color(0.0, 1.0, 0.0, 1.0)
-
-                display_meta.add_text(text)
-
-            frame_meta.append(display_meta)
+                set_object_label(obj_meta, label)
 
 
 def compute_grid(n: int) -> tuple[int, int]:
