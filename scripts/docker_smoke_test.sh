@@ -36,7 +36,14 @@ required=(
   models/yolov8/libnvds_infercustomparser_yolov8.so
 )
 for path in "${required[@]}"; do
-  test -e "$path" || { echo "Missing $path"; exit 1; }
+  if [[ ! -e "$path" ]]; then
+    echo "Missing $path"
+    if [[ "$path" == "models/yolov8/yolov8n.onnx" ]]; then
+      echo "Prepare it with:"
+      echo "  ./scripts/prepare_models.sh"
+    fi
+    exit 1
+  fi
   echo "OK $path"
 done
 
@@ -50,22 +57,32 @@ if [[ ! -d "$VIDEO_DIR" ]]; then
 fi
 echo "VIDEO_DIR=$VIDEO_DIR"
 
+X11_SOCKET_DIR="${X11_SOCKET_DIR:-$ROOT_DIR/.docker-x11}"
+mkdir -p "$X11_SOCKET_DIR"
+echo "X11_SOCKET_DIR=$X11_SOCKET_DIR"
+
 echo ""
 echo "== Compose config =="
-VIDEO_DIR="$VIDEO_DIR" docker compose config >/dev/null
+VIDEO_DIR="$VIDEO_DIR" X11_SOCKET_DIR="$X11_SOCKET_DIR" docker compose config >/dev/null
 echo "OK docker compose config"
 
 if [[ "$DO_BUILD" == "1" ]]; then
   echo ""
   echo "== Docker build =="
-  VIDEO_DIR="$VIDEO_DIR" docker compose build
+  VIDEO_DIR="$VIDEO_DIR" X11_SOCKET_DIR="$X11_SOCKET_DIR" docker compose build
 fi
 
 if [[ "$DO_RUN" == "1" ]]; then
   echo ""
   echo "== Container import smoke test =="
-  VIDEO_DIR="$VIDEO_DIR" docker compose run --rm tracker \
-    python3 -c "import pyservicemaker; import yaml; from src.pipeline.model_utils import infer_person_class_id; print('person_class_id=', infer_person_class_id('configs/models/nvinfer_yolov8_people.yml'))"
+  if ! docker run --rm --gpus all --entrypoint bash multi_stream_people_tracker:latest \
+      -lc "python3 -c \"import pyservicemaker; import yaml; from src.pipeline.model_utils import infer_person_class_id; print('person_class_id=', infer_person_class_id('configs/models/nvinfer_yolov8_people.yml'))\""; then
+    echo ""
+    echo "[ERROR] Container GPU smoke test failed."
+    echo "Check NVIDIA Container Toolkit and Docker GPU access:"
+    echo "  docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu24.04 nvidia-smi"
+    exit 1
+  fi
 fi
 
 echo ""

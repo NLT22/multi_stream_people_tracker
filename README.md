@@ -22,6 +22,12 @@ manual DeepStream Python setup and keeps the run command predictable.
 | NGC access | `docker login nvcr.io` may be needed to pull DeepStream |
 | Desktop display | X11 socket is mounted for `nveglglessink` |
 
+Quick GPU runtime check:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu24.04 nvidia-smi
+```
+
 ### One-Time Setup
 
 ```bash
@@ -35,6 +41,21 @@ docker login nvcr.io
 
 # Allow container windows to open on the host X display.
 xhost +local:docker
+
+# Prepare the default YOLOv8 ONNX model if it is not present in the repo.
+./scripts/prepare_models.sh
+```
+
+`prepare_models.sh` uses Docker and internet access to export a dynamic-batch
+YOLOv8n ONNX file from Ultralytics when `models/yolov8/yolov8n.onnx` is
+missing. It writes into `./models`, so Docker must be allowed to bind mount
+this project directory. On Docker Desktop, add the project path under
+Resources -> File Sharing if the script reports a mount/shared-path error.
+
+To run the ReID/Hungarian milestone, also download the ReID tracker model:
+
+```bash
+./scripts/prepare_models.sh --reid
 ```
 
 Prepare videos:
@@ -71,6 +92,10 @@ Expected signs:
 - required model/config files are `OK`
 - `docker compose config` is `OK`
 - with `--all`, container prints `person_class_id= 0`
+
+If `--all` fails at the container import step with a GPU/CDI/runtime error,
+fix NVIDIA Container Toolkit first. The default `docker compose up` command
+also needs working Docker GPU access.
 
 ### Run The Demo
 
@@ -116,6 +141,82 @@ models/reid/resnet50_market1501.etlt_b16_gpu0_fp16.engine
 
 Do not commit `.engine` files. They are GPU/driver/TensorRT specific and are
 ignored by `.gitignore` and `.dockerignore`.
+
+Model source files such as `models/yolov8/yolov8n.onnx` and
+`models/reid/resnet50_market1501.etlt` are also ignored to keep git history
+small. Use `./scripts/prepare_models.sh` after cloning if they are missing.
+
+---
+
+## Current Pipeline Overview
+
+The main multi-camera flow is shown below. GitHub renders this Mermaid diagram
+directly in the README.
+
+```mermaid
+flowchart LR
+    subgraph Inputs["Video Inputs"]
+        C0["Cam 0"]
+        C1["Cam 1"]
+        C2["Cam 2"]
+        C3["Cam 3"]
+    end
+
+    C0 --> MUX
+    C1 --> MUX
+    C2 --> MUX
+    C3 --> MUX
+
+    MUX["nvstreammux<br/>batch multi-camera frames"]
+    DET["nvinfer<br/>YOLOv8 person detector"]
+    TRK["nvtracker<br/>NvDeepSORT + ReID embeddings"]
+    SRC["SourceIdCollectorProbe<br/>(camera_id, local_track_id) -> embedding"]
+    TILER["nvmultistreamtiler<br/>2x2 visualization grid"]
+    REID["CrossCameraGalleryProbe<br/>tracklets + gallery prototypes + Hungarian"]
+    OSD["nvosdbin<br/>draw bbox + GlobalID label"]
+
+    subgraph Outputs["Outputs"]
+        DISPLAY["Display window"]
+        VIDEO["Annotated MP4"]
+    end
+
+    MUX --> DET --> TRK --> SRC --> TILER --> REID --> OSD
+    OSD --> DISPLAY
+    OSD --> VIDEO
+```
+
+- `nvstreammux` batches frames from all camera videos.
+- `nvinfer` runs YOLOv8 person detection from
+  `configs/models/nvinfer_yolov8_people.yml`.
+- `nvtracker` assigns per-camera local track IDs. With
+  `configs/tracker/nvdeepsort_reid.yaml`, it also produces ReID embeddings.
+- `SourceIdCollectorProbe` runs before tiling, where `source_id` is reliable,
+  and stores `(camera_id, local_track_id) -> embedding`.
+- `nvmultistreamtiler` combines all streams into one grid for visualization.
+- `CrossCameraGalleryProbe` links local track IDs into cross-camera Global IDs.
+  The Hungarian variant in `milestones/08_reid_stub_hungarian.py` adds:
+  tracklet embedding averaging, gallery prototypes, and one-to-one assignment
+  so one Global ID cannot appear twice in the same camera frame.
+- `nvosdbin` draws the final labels, for example
+  `Global:3|Cam:1|Person:7`.
+
+Useful ReID commands:
+
+```bash
+python milestones/08_reid_stub_hungarian.py
+
+python milestones/08_reid_stub_hungarian.py \
+  --save-video output/videos/m8_hungarian_tracklet.mp4 \
+  --no-display
+
+python milestones/08_reid_stub_hungarian.py \
+  --debug-similarity \
+  --tracklet-window 12 \
+  --tracklet-min-embeddings 3
+```
+
+Use `--disable-tracklet` or `--allow-duplicate-gid-per-stream` for A/B tests
+against the simpler matching behavior.
 
 ---
 
@@ -307,6 +408,12 @@ xhost +local:docker
 ```
 
 The Compose file mounts `/tmp/.X11-unix` and passes `DISPLAY`.
+
+If your Docker setup cannot share `/tmp/.X11-unix`, override the mount source:
+
+```bash
+X11_SOCKET_DIR=/path/shared/with/docker docker compose up
+```
 
 ### Docker Cannot Find Videos
 

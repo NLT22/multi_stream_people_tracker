@@ -463,7 +463,8 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
             label_by_track = {
                 row["track_id"]: (
-                    f"Global:{row['gid']}|Cam:{row['src']}|Person:{row['track_id']}"
+                    # f"Global:{row['gid']}|Cam:{row['src']}|Person:{row['track_id']}"
+                    f"Global:{row['gid']}|Cam:{row['src']}"
                 )
                 for row in rows
             }

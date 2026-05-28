@@ -19,7 +19,7 @@ services:
 
     volumes:
       # X11 socket for display output
-      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${X11_SOCKET_DIR:-/tmp/.X11-unix}:/tmp/.X11-unix
 
       # Mount your video files here.
       # Usage: VIDEO_DIR=/absolute/path/to/videos docker compose up

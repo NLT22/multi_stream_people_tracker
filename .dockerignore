@@ -1,7 +1,12 @@
 venv/
 dataset/
+output/
+.docker-x11/
 models/**/*.engine
+models/**/*.onnx
+models/**/*.etlt
 models/**/*.static_b1.onnx
+models/**/*.pt
 *.pt
 __pycache__/
 **/__pycache__/
