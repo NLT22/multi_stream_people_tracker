@@ -149,19 +149,12 @@ small. Use `./scripts/prepare_models.sh` after cloning if they are missing.
 
 ## Demo Videos
 
-The demo MP4 files are stored with Git LFS under `docs/videos/`. They are easy
-to preview from GitHub, while normal source code history stays small.
+Demo videos are hosted on YouTube so cloning the repository stays lightweight.
 
 | ReID demo | 12-camera MTMC demo |
 |-----------|---------------------|
-| [![ReID demo](docs/assets/reid_demo_thumb.jpg)](https://media.githubusercontent.com/media/NLT22/multi_stream_people_tracker/main/docs/videos/reid.mp4) | [![12-camera demo](docs/assets/mtmc_12cam_thumb.jpg)](https://media.githubusercontent.com/media/NLT22/multi_stream_people_tracker/main/docs/videos/mtmc_12cam.mp4) |
-| [Open video](https://media.githubusercontent.com/media/NLT22/multi_stream_people_tracker/main/docs/videos/reid.mp4) | [Open video](https://media.githubusercontent.com/media/NLT22/multi_stream_people_tracker/main/docs/videos/mtmc_12cam.mp4) |
-
-To clone without downloading LFS video payloads:
-
-```bash
-GIT_LFS_SKIP_SMUDGE=1 git clone <repo-url>
-```
+| [![ReID demo](https://img.youtube.com/vi/ZMOqdWteNcw/hqdefault.jpg)](https://www.youtube.com/watch?v=ZMOqdWteNcw) | [![12-camera MTMC demo](https://img.youtube.com/vi/W1TMZ4Rz2o8/hqdefault.jpg)](https://www.youtube.com/watch?v=W1TMZ4Rz2o8) |
+| [Watch on YouTube](https://www.youtube.com/watch?v=ZMOqdWteNcw) | [Watch on YouTube](https://www.youtube.com/watch?v=W1TMZ4Rz2o8) |
 
 ---
 
