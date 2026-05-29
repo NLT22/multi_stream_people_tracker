@@ -149,27 +149,18 @@ small. Use `./scripts/prepare_models.sh` after cloning if they are missing.
 
 ## Demo Videos
 
-Do not commit MP4 demo outputs into git. Keep `output/` ignored, upload demo
-videos as GitHub Release assets, then link them here. Release assets are shown
-from GitHub's CDN and do not increase clone size.
+The demo MP4 files are stored with Git LFS under `docs/videos/`. They are easy
+to preview from GitHub, while normal source code history stays small.
 
-Suggested assets:
+| ReID demo | 12-camera MTMC demo |
+|-----------|---------------------|
+| [![ReID demo](docs/assets/reid_demo_thumb.jpg)](docs/videos/reid.mp4) | [![12-camera demo](docs/assets/mtmc_12cam_thumb.jpg)](docs/videos/mtmc_12cam.mp4) |
+| [Open video](docs/videos/reid.mp4) | [Open video](docs/videos/mtmc_12cam.mp4) |
 
-- `output/videos/reid.mp4`
-- `output/videos/mtmc_12cam/*.mp4` or one edited summary MP4
+To clone without downloading LFS video payloads:
 
-After uploading assets to a release, add links like:
-
-```markdown
-[ReID demo](https://github.com/NLT22/multi_stream_people_tracker/releases/download/demo-videos/reid.mp4)
-[12-camera demo](https://github.com/NLT22/multi_stream_people_tracker/releases/download/demo-videos/mtmc_12cam.mp4)
-```
-
-For a nicer README, commit only a small thumbnail image under `docs/assets/`
-and make it clickable:
-
-```markdown
-[![ReID demo](docs/assets/reid_demo_thumb.jpg)](https://github.com/NLT22/multi_stream_people_tracker/releases/download/demo-videos/reid.mp4)
+```bash
+GIT_LFS_SKIP_SMUDGE=1 git clone <repo-url>
 ```
 
 ---
