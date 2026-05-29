@@ -154,8 +154,8 @@ to preview from GitHub, while normal source code history stays small.
 
 | ReID demo | 12-camera MTMC demo |
 |-----------|---------------------|
-| [![ReID demo](docs/assets/reid_demo_thumb.jpg)](docs/videos/reid.mp4) | [![12-camera demo](docs/assets/mtmc_12cam_thumb.jpg)](docs/videos/mtmc_12cam.mp4) |
-| [Open video](docs/videos/reid.mp4) | [Open video](docs/videos/mtmc_12cam.mp4) |
+| [![ReID demo](docs/assets/reid_demo_thumb.jpg)](https://media.githubusercontent.com/media/NLT22/multi_stream_people_tracker/main/docs/videos/reid.mp4) | [![12-camera demo](docs/assets/mtmc_12cam_thumb.jpg)](https://media.githubusercontent.com/media/NLT22/multi_stream_people_tracker/main/docs/videos/mtmc_12cam.mp4) |
+| [Open video](https://media.githubusercontent.com/media/NLT22/multi_stream_people_tracker/main/docs/videos/reid.mp4) | [Open video](https://media.githubusercontent.com/media/NLT22/multi_stream_people_tracker/main/docs/videos/mtmc_12cam.mp4) |
 
 To clone without downloading LFS video payloads:
 
