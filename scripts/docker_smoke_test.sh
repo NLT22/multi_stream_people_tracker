@@ -32,13 +32,15 @@ required=(
   docker-compose.yml
   configs/sources/video_files_docker.txt
   configs/models/nvinfer_yolov8_people.yml
+  configs/tracker/nvdeepsort_reid_swin.yaml
   models/yolov8/yolov8n.onnx
   models/yolov8/libnvds_infercustomparser_yolov8.so
+  models/reid/swin_tiny_market1501_aicity156_featuredim256.onnx
 )
 for path in "${required[@]}"; do
   if [[ ! -e "$path" ]]; then
     echo "Missing $path"
-    if [[ "$path" == "models/yolov8/yolov8n.onnx" ]]; then
+    if [[ "$path" == "models/yolov8/yolov8n.onnx" || "$path" == "models/reid/swin_tiny_market1501_aicity156_featuredim256.onnx" ]]; then
       echo "Prepare it with:"
       echo "  ./scripts/prepare_models.sh"
     fi

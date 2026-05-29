@@ -29,9 +29,9 @@ services:
       # First run rebuilds .engine files; subsequent runs are fast.
       - ./models:/app/models
 
-    # Override to run a different milestone:
+    # Override to run a milestone:
     #   docker compose run --rm tracker python3 milestones/04_people_tracking.py --sources configs/sources/video_files_docker.txt
-    command: python3 milestones/05_multi_stream_tracking.py --sources configs/sources/video_files_docker.txt
+    command: python3 -m src.main --sources configs/sources/video_files_docker.txt
 
     network_mode: host
     stdin_open: true

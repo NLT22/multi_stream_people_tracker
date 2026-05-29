@@ -3,6 +3,7 @@ dataset
 output/
 .docker-x11/
 *__pycache__/
+configs/models/*.runtime_*.yml
 models/**/*.engine
 models/**/*.static_b1.onnx
 models/**/*.onnx

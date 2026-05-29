@@ -4,7 +4,8 @@ DeepStream 9.0 / pyservicemaker learning project for multi-camera people
 detection, tracking, metadata extraction, and a ReID gallery prototype.
 
 Default detector: **YOLOv8n COCO** via `configs/models/nvinfer_yolov8_people.yml`.
-Default tracker: **NvDCF performance** via `configs/tracker/nvdcf_perf.yaml`.
+Default tracker: **NvDeepSORT + Swin-Tiny ReID** via
+`configs/tracker/nvdeepsort_reid_swin.yaml`.
 
 ---
 
@@ -42,21 +43,17 @@ docker login nvcr.io
 # Allow container windows to open on the host X display.
 xhost +local:docker
 
-# Prepare the default YOLOv8 ONNX model if it is not present in the repo.
+# Prepare the default YOLOv8 detector and Swin-Tiny ReID model if missing.
 ./scripts/prepare_models.sh
 ```
 
 `prepare_models.sh` uses Docker and internet access to export a dynamic-batch
 YOLOv8n ONNX file from Ultralytics when `models/yolov8/yolov8n.onnx` is
-missing. It writes into `./models`, so Docker must be allowed to bind mount
-this project directory. On Docker Desktop, add the project path under
-Resources -> File Sharing if the script reports a mount/shared-path error.
-
-To run the ReID/Hungarian milestone, also download the ReID tracker model:
-
-```bash
-./scripts/prepare_models.sh --reid
-```
+missing. It also downloads the Swin-Tiny ReID ONNX used by the default
+NvDeepSORT tracker. It writes into `./models`, so Docker must be allowed to
+bind mount this project directory. On Docker Desktop, add the project path
+under Resources -> File Sharing if the script reports a mount/shared-path
+error.
 
 Prepare videos:
 
@@ -106,7 +103,7 @@ VIDEO_DIR=/absolute/path/to/video/folder docker compose up
 The default Compose command runs:
 
 ```bash
-python3 milestones/05_multi_stream_tracking.py \
+python3 -m src.main \
   --sources configs/sources/video_files_docker.txt
 ```
 
@@ -194,7 +191,7 @@ flowchart LR
   and stores `(camera_id, local_track_id) -> embedding`.
 - `nvmultistreamtiler` combines all streams into one grid for visualization.
 - `CrossCameraGalleryProbe` links local track IDs into cross-camera Global IDs.
-  The Hungarian variant in `milestones/08_reid_stub_hungarian.py` adds:
+  The production entrypoint `python -m src.main` uses:
   tracklet embedding averaging, gallery prototypes, one-to-one assignment,
   ID stickiness, ambiguity rejection, and bounded online Global ID merging.
 - `nvosdbin` draws the final labels, for example
@@ -202,9 +199,9 @@ flowchart LR
 
 ### ReID Stabilization Methods
 
-`milestones/08_reid_stub_hungarian.py` contains the current cross-camera ReID
-prototype. The extra logic is there to handle common failure modes in MTMC
-tracking:
+`src/reid/gallery.py` contains the current cross-camera ReID logic used by
+`python -m src.main`. The extra logic is there to handle common failure modes
+in MTMC tracking:
 
 | Method | Problem it solves | Key controls |
 |--------|-------------------|--------------|
@@ -221,32 +218,32 @@ Useful tuning examples:
 
 ```bash
 # Default ReID/Hungarian run
-python milestones/08_reid_stub_hungarian.py
+python -m src.main
 
 # Debug similarity decisions and merge events
-python milestones/08_reid_stub_hungarian.py --debug-similarity
+python -m src.main --debug-similarity
 
 # Lower CPU load on long videos with many temporary IDs
-python milestones/08_reid_stub_hungarian.py \
+python -m src.main \
   --gallery-max-age 300 \
   --assignment-max-candidates 40 \
   --global-merge-interval 30 \
   --global-merge-max-candidates 20
 
 # A/B test without online ID merge
-python milestones/08_reid_stub_hungarian.py --disable-global-merge
+python -m src.main --disable-global-merge
 ```
 
 Useful ReID commands:
 
 ```bash
-python milestones/08_reid_stub_hungarian.py
+python -m src.main
 
-python milestones/08_reid_stub_hungarian.py \
+python -m src.main \
   --save-video output/videos/m8_hungarian_tracklet.mp4 \
   --no-display
 
-python milestones/08_reid_stub_hungarian.py \
+python -m src.main \
   --debug-similarity \
   --tracklet-window 16 \
   --tracklet-min-embeddings 8
@@ -271,8 +268,8 @@ source venv/bin/activate
 
 nano configs/sources/video_files.txt
 
-python milestones/03_people_detection.py
-python milestones/05_multi_stream_tracking.py
+python -m src.main
+python -m src.main --debug-similarity
 ```
 
 Local prerequisites:
@@ -289,6 +286,12 @@ Local prerequisites:
 ---
 
 ## Learning Path
+
+Use the main app for the complete current system:
+
+```bash
+python -m src.main
+```
 
 Each milestone has visual output unless noted otherwise.
 
@@ -381,9 +384,10 @@ or pass `--tracker-config`.
 | Tracker | Config | Use |
 |---------|--------|-----|
 | IoU | `configs/tracker/iou.yaml` | simplest baseline |
-| NvDCF perf | `configs/tracker/nvdcf_perf.yaml` | default, fast GPU tracker |
+| NvDCF perf | `configs/tracker/nvdcf_perf.yaml` | fast GPU tracker, no ReID embeddings |
 | NvDCF accuracy | `configs/tracker/nvdcf_accuracy.yaml` | better ID stability |
-| NvDeepSORT | `configs/tracker/nvdeepsort_reid.yaml` | ReID experiments |
+| NvDeepSORT ResNet50 | `configs/tracker/nvdeepsort_reid.yaml` | ReID experiments |
+| NvDeepSORT Swin-Tiny | `configs/tracker/nvdeepsort_reid_swin.yaml` | main default ReID tracker |
 
 ---
 
@@ -400,22 +404,33 @@ multi_stream_people_tracker/
 │   │   └── rtsp_cameras.txt
 │   ├── models/
 │   │   ├── nvinfer_yolov8_people.yml
+│   │   ├── nvinfer_yolov11_people.yml
 │   │   ├── nvinfer_trafficcamnet.yml
 │   │   └── nvinfer_peoplenet.yml
 │   ├── tracker/
 │   │   ├── iou.yaml
 │   │   ├── nvdcf_perf.yaml
 │   │   ├── nvdcf_accuracy.yaml
-│   │   └── nvdeepsort_reid.yaml
+│   │   ├── nvdeepsort_reid.yaml
+│   │   └── nvdeepsort_reid_swin.yaml
 │   └── labels/
 ├── models/
 │   ├── yolov8/
+│   ├── yolov11/
 │   ├── trafficcamnet/
 │   ├── peoplenet/
 │   └── reid/
 ├── milestones/
 ├── src/
+│   ├── main.py
+│   ├── pipeline/
+│   │   ├── engine_prep.py
+│   │   ├── recording.py
+│   │   └── sources.py
+│   └── reid/
+│       └── gallery.py
 ├── scripts/
+├── reid_pipeline.py
 ├── Dockerfile
 ├── docker-compose.yml
 ├── LEARNING_NOTES.md
@@ -493,8 +508,11 @@ Do not call `len()` directly; iterate to count.
 
 ### VRAM Pressure
 
+Use smaller tiles or save without display:
+
 ```bash
-python milestones/05_multi_stream_tracking.py --tile-w 640 --tile-h 360
+python -m src.main --tile-w 640 --tile-h 360
+python -m src.main --save-video output/videos/reid.mp4 --no-display
 ```
 
 You can also increase `interval` in the nvinfer config to skip inference frames.

@@ -1,8 +1,11 @@
 # =============================================================================
-# Multi-Stream People Tracker — Master Pipeline Config
+# Multi-Stream People Tracker — Main ReID Pipeline Config
 # =============================================================================
-# This file is the single control panel for the entire pipeline.
-# Edit this file to switch source mode, detection model, and tracker.
+# This file is the default control panel for:
+#
+#   python -m src.main
+#
+# CLI flags can still override these values for quick tests.
 # =============================================================================
 
 # ── Source Mode ──────────────────────────────────────────────────────────────
@@ -47,22 +50,23 @@ detection:
   # config_file: configs/models/nvinfer_peoplenet.yml
 
 # ── Tracker ──────────────────────────────────────────────────────────────────
-# nvtracker assigns a unique integer object_id to each tracked person
-# that persists across frames (unlike detection, which is per-frame only).
+# nvtracker assigns a local object_id per camera. The main ReID gallery then
+# links those local IDs into cross-camera Global IDs.
 #
 # Switch tracker by changing config_file:
 #   nvdcf_perf.yaml     → NvDCF visual tracker, fast (recommended start)
 #   nvdcf_accuracy.yaml → NvDCF tuned for people (tuned from NVIDIA reference
 #                          project deepstream-tracker-3d-multi-view)
 #   iou.yaml            → IoU tracker (CPU, simplest, good for learning)
-#   nvdeepsort_reid.yaml → NvDeepSORT + Re-ID model (required for Milestone 8)
+#   nvdeepsort_reid.yaml → NvDeepSORT + ResNet50 ReID
+#   nvdeepsort_reid_swin.yaml → NvDeepSORT + Swin-Tiny ReID (main default)
 #
 tracker:
   enabled: true
-  config_file: configs/tracker/nvdcf_perf.yaml
+  config_file: configs/tracker/nvdeepsort_reid_swin.yaml
   # config_file: configs/tracker/nvdcf_accuracy.yaml   # better ID stability
   # config_file: configs/tracker/iou.yaml              # simplest, try first
-  # config_file: configs/tracker/nvdeepsort_reid.yaml  # for Milestone 8 ReID
+  # config_file: configs/tracker/nvdeepsort_reid.yaml  # ResNet50 ReID
   tracker_width: 640    # should match nvinfer input width
   tracker_height: 384   # should match nvinfer input height
 
@@ -75,9 +79,25 @@ display:
 
 # ── Performance (tuned for RTX 3050Ti, 4 GB VRAM) ────────────────────────────
 # batch_size: how many frames processed together in one GPU pass.
-#   - Must equal the number of input streams for best throughput.
-#   - Keep ≤ 8 on 4 GB VRAM with FP16.
-#   - The model config also has batch-size; they should match.
+#   - null means auto = number of input streams (recommended).
+#   - Use a fixed value only for benchmarking or engine-cache reuse.
+#   - Keep <= 8 on 4 GB VRAM with FP16.
+#   - src/main.py writes the matching runtime nvinfer config automatically.
 #
-batch_size: 4
+batch_size:
 gpu_id: 0
+
+# ── Runtime Options Used By src.main ─────────────────────────────────────────
+runtime:
+  # Recommended when debugging source-id mismatch or running many streams:
+  # gallery runs before tiling, so camera_id is read directly from DeepStream.
+  pretiler: false
+
+  # Headless benchmark mode. Skips the tiler and implies pretiler in code.
+  no_tiler: false
+
+  # Set to a path to save annotated output, or override with --save-video.
+  # Example: output/videos/reid_demo.mp4
+  save_video:
+  record_bitrate: 8000000
+  no_display: false

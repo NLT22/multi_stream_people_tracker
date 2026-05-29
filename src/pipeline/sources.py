@@ -12,6 +12,9 @@ WHY THIS EXISTS:
 """
 
 import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import List
 
@@ -182,3 +185,79 @@ def load_uris(source_mode: str, source_config_path: str) -> List[str]:
             f"Unknown source_mode: '{source_mode}'. "
             "Choose: video_files | folder_input | rtsp_cameras"
         )
+
+
+def resolve_sources(inputs: List[str]) -> tuple[list[str], bool]:
+    """Turn flexible CLI inputs into a (uris, is_live) pair.
+
+    Accepts, in order of precedence:
+      - a single .txt list file        -> load_uris_from_txt
+      - a single directory             -> load_uris_from_folder (scans videos)
+      - one or more paths / URIs        -> path_to_uri on each
+
+    is_live is True if any URI is an rtsp:// stream (mux/sink need live settings).
+    """
+    if len(inputs) == 1:
+        only = inputs[0]
+        if "://" not in only and Path(only).is_dir():
+            uris = load_uris_from_folder(only)
+        elif only.endswith(".txt") and "://" not in only:
+            uris = load_uris_from_txt(only)
+        else:
+            uris = [path_to_uri(only)]
+    else:
+        uris = [path_to_uri(p) for p in inputs]
+
+    if not uris:
+        raise ValueError(f"No video sources resolved from: {inputs}")
+    is_live = any(u.startswith("rtsp://") for u in uris)
+    return uris, is_live
+
+
+def trim_sources(uris: List[str], seconds: float, start: float = 0.0,
+                 cache_dir: str = "output/_trimmed") -> List[str]:
+    """Pre-cut each file source to `seconds` of footage and return new URIs.
+
+    Uses ffmpeg stream-copy (no re-encode → near-instant). Trimmed clips are
+    cached, so re-running the same trim reuses them instead of cutting again.
+    rtsp:// (live) sources cannot be trimmed and are passed through unchanged.
+    """
+    if not seconds:
+        return uris
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        print("[reid][trim] ffmpeg not found. Install it: sudo apt install -y ffmpeg")
+        sys.exit(1)
+
+    out_dir = Path(cache_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    result = []
+    for uri in uris:
+        if not uri.startswith("file://"):
+            print(f"[reid][trim] skip non-file source (cannot trim): {uri}")
+            result.append(uri)
+            continue
+
+        src = Path(uri[len("file://"):])
+        suffix = src.suffix if src.suffix else ".mp4"
+        out = out_dir / f"{src.stem}_s{int(start)}_t{int(seconds)}{suffix}"
+
+        if out.exists() and out.stat().st_size > 0:
+            print(f"[reid][trim] reuse {out.name}")
+        else:
+            print(f"[reid][trim] {src.name} -> {out.name} "
+                  f"({seconds}s from {start}s)")
+            cmd = [ffmpeg, "-y"]
+            if start > 0:
+                cmd += ["-ss", str(start)]   # fast keyframe seek before -i
+            cmd += ["-i", str(src), "-t", str(seconds),
+                    "-c", "copy", "-loglevel", "error", str(out)]
+            try:
+                subprocess.run(cmd, check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"[reid][trim] ffmpeg failed for {src.name}: {e}")
+                sys.exit(1)
+        result.append("file://" + str(out.resolve()))
+
+    return result

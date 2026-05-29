@@ -8,3 +8,6 @@
 
 # YAML parsing (for pipeline.yaml and tracker configs)
 pyyaml>=6.0
+
+# Vectorized ReID gallery similarity/prototype operations
+numpy>=1.26

@@ -21,21 +21,26 @@ TargetManagement:
   minIouDiff4NewTarget: 0.9
   minTrackerConfidence: 0.4
   probationAge: 2
-  maxShadowTrackingAge: 60
+  maxShadowTrackingAge: 90   # keep occluded tracks alive longer through a cross
   earlyTerminationAge: 1
 
 DataAssociator:
   dataAssociatorType: 0
   associationMatcherType: 1
   checkClassMatch: 1
+  # Use the Kalman-PREDICTED position for association (not last-known). This
+  # keeps the correct ID on a person while they pass behind/through another.
+  usePrediction4Assoc: 1
   thresholdMahalanobis: 12.0
   minMatchingScore4Overall: 0.1
   minMatchingScore4SizeSimilarity: 0.3
   minMatchingScore4Iou: 0.2
-  minMatchingScore4ReidSimilarity: 0.5
+  minMatchingScore4ReidSimilarity: 0.6   # reject weak appearance matches at a cross
+  # When two people overlap, IOU+size are ambiguous → let appearance (ReID)
+  # dominate the association score.
   matchingScoreWeight4SizeSimilarity: 0.7
-  matchingScoreWeight4Iou: 0.5
-  matchingScoreWeight4ReidSimilarity: 0.3
+  matchingScoreWeight4Iou: 0.3
+  matchingScoreWeight4ReidSimilarity: 0.5
   tentativeDetectorConfidence: 0.2
   minMatchingScore4TentativeIou: 0.2
 

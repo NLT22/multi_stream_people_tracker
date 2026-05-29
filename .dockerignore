@@ -2,6 +2,7 @@ venv/
 dataset/
 output/
 .docker-x11/
+configs/models/*.runtime_*.yml
 models/**/*.engine
 models/**/*.onnx
 models/**/*.etlt

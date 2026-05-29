@@ -427,15 +427,15 @@ Useful commands:
 
 ```bash
 # Inspect matching and merge decisions.
-python milestones/08_reid_stub_hungarian.py --debug-similarity
+python -m src.main --debug-similarity
 
 # Lower CPU load on long videos.
-python milestones/08_reid_stub_hungarian.py \
+python -m src.main \
   --gallery-max-age 300 \
   --assignment-max-candidates 40 \
   --global-merge-interval 30 \
   --global-merge-max-candidates 20
 
 # Compare with merge disabled.
-python milestones/08_reid_stub_hungarian.py --disable-global-merge
+python -m src.main --disable-global-merge
 ```

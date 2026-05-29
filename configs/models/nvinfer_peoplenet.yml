@@ -53,7 +53,7 @@ property:
 
   # ── Inference settings ────────────────────────────────────────────────────────
   # batch-size: one frame per stream per inference call.
-  # Must match the number of active streams and pipeline.yaml batch_size.
+  # src/main.py rewrites this in a runtime config to match active streams.
   batch-size: 4
 
   # FP16: half the VRAM of FP32, negligible accuracy loss on RTX 3050Ti.

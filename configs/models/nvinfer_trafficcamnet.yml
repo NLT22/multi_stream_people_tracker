@@ -38,8 +38,8 @@ property:
   infer-dims: 3;544;960
 
   # ── Inference settings ─────────────────────────────────────────────────────
-  # batch-size: how many frames per inference call
-  # Must match pipeline.yaml batch_size AND number of streams
+  # batch-size: how many frames per inference call.
+  # src/main.py rewrites this in a runtime config to match active streams.
   batch-size: 4
 
   # network-mode precision:

@@ -2,33 +2,18 @@
 # Video File Sources
 # =============================================================================
 # List one video source per line.
-# Lines starting with # are ignored (comments).
+# Lines starting with # are ignored.
 #
-# Supported URI formats:
-#   file:///absolute/path/to/video.mp4   ← explicit URI (preferred)
-#   /absolute/path/to/video.mp4          ← absolute path (auto-converted)
+# Supported inputs:
+#   /absolute/path/to/video.mp4
+#   file:///absolute/path/to/video.mp4
+#   rtsp://host/stream
 #
-# Supported formats: .mp4, .mkv, .avi, .h264, .h265, .ts
-#
-# nvurisrcbin handles all formats automatically — no need to specify codec.
-#
-# TIP: Start with a single video for Milestone 1, then add more for Milestone 2+.
-# The pipeline auto-detects the number of sources and adjusts batch_size and
-# tile grid accordingly.
-#
-# =============================================================================
-# TODO: Replace these placeholder paths with your actual video file paths.
+# For local runs, replace the examples below with your own video paths.
+# For Docker runs, use configs/sources/video_files_docker.txt instead.
 # =============================================================================
 
-#/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam1.mp4
-#/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam2.mp4
-#/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam3.mp4
-#/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam4.mp4
-#/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam5.mp4
-#/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam6.mp4
-#/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/Wildtrack/cam7.mp4
-
-/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam001.mp4
-/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam002.mp4
-/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam003.mp4
-/media/trung/3f7e9c07-96cf-42a0-ae84-1b3e0ec38bf2/tracking_deepstream_demo/multi_stream_people_tracker/dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam004.mp4
+# /absolute/path/to/cam1.mp4
+# /absolute/path/to/cam2.mp4
+# /absolute/path/to/cam3.mp4
+# /absolute/path/to/cam4.mp4
