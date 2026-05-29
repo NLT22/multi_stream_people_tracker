@@ -3,7 +3,7 @@
 DeepStream 9.0 / pyservicemaker learning project for multi-camera people
 detection, tracking, metadata extraction, and a ReID gallery prototype.
 
-Default detector: **YOLOv8n COCO** via `configs/models/nvinfer_yolov8_people.yml`.
+Default detector: **YOLO11n COCO** via `configs/models/nvinfer_yolov11_people.yml`.
 Default tracker: **NvDeepSORT + Swin-Tiny ReID** via
 `configs/tracker/nvdeepsort_reid_swin.yaml`.
 
@@ -43,12 +43,12 @@ docker login nvcr.io
 # Allow container windows to open on the host X display.
 xhost +local:docker
 
-# Prepare the default YOLOv8 detector and Swin-Tiny ReID model if missing.
+# Prepare the default YOLO11 detector and Swin-Tiny ReID model if missing.
 ./scripts/prepare_models.sh
 ```
 
 `prepare_models.sh` uses Docker and internet access to export a dynamic-batch
-YOLOv8n ONNX file from Ultralytics when `models/yolov8/yolov8n.onnx` is
+YOLO11n ONNX file from Ultralytics when `models/yolov11/yolo11n.onnx` is
 missing. It also downloads the Swin-Tiny ReID ONNX used by the default
 NvDeepSORT tracker. It writes into `./models`, so Docker must be allowed to
 bind mount this project directory. On Docker Desktop, add the project path
@@ -131,6 +131,7 @@ Examples:
 
 ```text
 models/yolov8/yolov8n.onnx_b4_gpu0_fp16.engine
+models/yolov11/yolo11n.onnx_b4_gpu0_fp16.engine
 models/trafficcamnet/resnet18_trafficcamnet_pruned.onnx_b4_gpu0_fp16.engine
 models/peoplenet/resnet34_peoplenet.onnx_b4_gpu0_fp16.engine
 models/reid/resnet50_market1501.etlt_b16_gpu0_fp16.engine
@@ -139,9 +140,37 @@ models/reid/resnet50_market1501.etlt_b16_gpu0_fp16.engine
 Do not commit `.engine` files. They are GPU/driver/TensorRT specific and are
 ignored by `.gitignore` and `.dockerignore`.
 
-Model source files such as `models/yolov8/yolov8n.onnx` and
+Model source files such as `models/yolov11/yolo11n.onnx`,
+`models/yolov8/yolov8n.onnx`, and
 `models/reid/resnet50_market1501.etlt` are also ignored to keep git history
 small. Use `./scripts/prepare_models.sh` after cloning if they are missing.
+
+---
+
+## Demo Videos
+
+Do not commit MP4 demo outputs into git. Keep `output/` ignored, upload demo
+videos as GitHub Release assets, then link them here. Release assets are shown
+from GitHub's CDN and do not increase clone size.
+
+Suggested assets:
+
+- `output/videos/reid.mp4`
+- `output/videos/mtmc_12cam/*.mp4` or one edited summary MP4
+
+After uploading assets to a release, add links like:
+
+```markdown
+[ReID demo](https://github.com/NLT22/multi_stream_people_tracker/releases/download/demo-videos/reid.mp4)
+[12-camera demo](https://github.com/NLT22/multi_stream_people_tracker/releases/download/demo-videos/mtmc_12cam.mp4)
+```
+
+For a nicer README, commit only a small thumbnail image under `docs/assets/`
+and make it clickable:
+
+```markdown
+[![ReID demo](docs/assets/reid_demo_thumb.jpg)](https://github.com/NLT22/multi_stream_people_tracker/releases/download/demo-videos/reid.mp4)
+```
 
 ---
 
@@ -165,7 +194,7 @@ flowchart LR
     C3 --> MUX
 
     MUX["nvstreammux<br/>batch multi-camera frames"]
-    DET["nvinfer<br/>YOLOv8 person detector"]
+    DET["nvinfer<br/>YOLO11 person detector"]
     TRK["nvtracker<br/>NvDeepSORT + ReID embeddings"]
     SRC["SourceIdCollectorProbe<br/>(camera_id, local_track_id) -> embedding"]
     TILER["nvmultistreamtiler<br/>2x2 visualization grid"]
@@ -183,8 +212,8 @@ flowchart LR
 ```
 
 - `nvstreammux` batches frames from all camera videos.
-- `nvinfer` runs YOLOv8 person detection from
-  `configs/models/nvinfer_yolov8_people.yml`.
+- `nvinfer` runs YOLO11 person detection from
+  `configs/models/nvinfer_yolov11_people.yml`.
 - `nvtracker` assigns per-camera local track IDs. With
   `configs/tracker/nvdeepsort_reid.yaml`, it also produces ReID embeddings.
 - `SourceIdCollectorProbe` runs before tiling, where `source_id` is reliable,
@@ -353,14 +382,23 @@ or pass `--nvinfer-config` to any milestone from 03 onward.
 
 | Model | Config | Person Class | Notes |
 |-------|--------|--------------|-------|
-| YOLOv8n COCO | `configs/models/nvinfer_yolov8_people.yml` | 0 | default, stable baseline, dynamic ONNX, custom parser |
+| YOLO11n COCO | `configs/models/nvinfer_yolov11_people.yml` | 0 | default, dynamic ONNX, reuses YOLOv8 parser |
+| YOLOv8n COCO | `configs/models/nvinfer_yolov8_people.yml` | 0 | stable baseline, dynamic ONNX, custom parser |
 | TrafficCamNet | `configs/models/nvinfer_trafficcamnet.yml` | 2 | bundled-style detector |
 | PeopleNet | `configs/models/nvinfer_peoplenet.yml` | 0 | person-focused TAO detector |
 
 Milestones 04-08 infer the person class id from the selected label file, so
 you do not need to edit Python constants when switching detectors.
 
-YOLOv8 details:
+YOLO11 details:
+
+- ONNX: `models/yolov11/yolo11n.onnx`
+- Parser: `models/yolov8/libnvds_infercustomparser_yolov8.so`
+- Engine: `models/yolov11/yolo11n.onnx_b4_gpu0_fp16.engine`
+- YOLO11 uses the same DeepStream parser path as YOLOv8 because the exported
+  tensor layout is compatible.
+
+YOLOv8 fallback details:
 
 - ONNX: `models/yolov8/yolov8n.onnx`
 - Parser: `models/yolov8/libnvds_infercustomparser_yolov8.so`

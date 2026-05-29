@@ -3,11 +3,11 @@
 # Prepare model files that are intentionally not committed to git.
 #
 # Main demo (`python -m src.main`) requires:
-#   models/yolov8/yolov8n.onnx              (--yolo)
+#   models/yolov11/yolo11n.onnx            (--yolov11)
 #   models/reid/swin_tiny_market1501_aicity156_featuredim256.onnx      (--reid-swin)
 #
 # Usage:
-#   ./scripts/prepare_models.sh                # YOLOv8 + ReID Swin-Tiny (main default)
+#   ./scripts/prepare_models.sh                # YOLO11 + ReID Swin-Tiny (main default)
 #   ./scripts/prepare_models.sh --default      # same as no args
 #   ./scripts/prepare_models.sh --yolo         # YOLOv8 ONNX only
 #   ./scripts/prepare_models.sh --yolov11      # YOLO11n ONNX only
@@ -27,7 +27,7 @@ PREPARE_REID=0
 PREPARE_REID_SWIN=0
 
 if [[ $# -eq 0 ]]; then
-  PREPARE_YOLO=1
+  PREPARE_YOLOV11=1
   PREPARE_REID_SWIN=1
 fi
 
@@ -37,7 +37,7 @@ for arg in "$@"; do
     --yolov11) PREPARE_YOLOV11=1 ;;
     --reid) PREPARE_YOLO=1; PREPARE_REID=1 ;;
     --reid-swin) PREPARE_REID_SWIN=1 ;;
-    --default) PREPARE_YOLO=1; PREPARE_REID_SWIN=1 ;;
+    --default) PREPARE_YOLOV11=1; PREPARE_REID_SWIN=1 ;;
     --all) PREPARE_YOLO=1; PREPARE_YOLOV11=1; PREPARE_REID=1; PREPARE_REID_SWIN=1 ;;
     -h|--help)
       sed -n '1,21p' "$0"
