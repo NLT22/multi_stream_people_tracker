@@ -139,7 +139,8 @@ The default Compose command runs the production entrypoint:
 python3 -m src.main \
   --sources configs/sources/video_files_docker.txt \
   --no-display \
-  --save-video
+  --save-video \
+  --show-trajectories
 ```
 
 Run a different milestone:
@@ -251,8 +252,8 @@ flowchart LR
   The production entrypoint `python -m src.main` uses:
   tracklet embedding averaging, gallery prototypes, one-to-one assignment,
   ID stickiness, ambiguity rejection, and bounded online Global ID merging.
-- `nvosdbin` draws the final `GID:<id>` labels and colors boxes by Global ID.
-  Optional trajectory overlays can be enabled with `--show-trajectories`.
+- `nvosdbin` draws the final `GID:<id>` labels, colors boxes by Global ID, and
+  draws recent trajectory overlays in the default demo.
 
 ### ReID Stabilization Methods
 

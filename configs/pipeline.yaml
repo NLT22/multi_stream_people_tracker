@@ -104,7 +104,7 @@ runtime:
   no_tiler: false
 
   # Draw recent local-track paths as colored OSD lines for tracker debugging.
-  show_trajectories: false
+  show_trajectories: true
   trajectory_history: 96
   trajectory_sample_interval: 20
   trajectory_max_segments: 24

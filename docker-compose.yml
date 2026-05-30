@@ -50,7 +50,7 @@ services:
     #   docker compose run --rm tracker python3 -m src.main --sources dataset/mtmc_4cam/videos --trim-seconds 30 --no-display --save-video
     #   docker compose run --rm tracker python3 -m src.main --sources dataset/mtmc_12cam/videos --no-tiler --no-display --save-video
     #   docker compose run --rm tracker python3 milestones/05_multi_stream_tracking.py --sources configs/sources/video_files_docker.txt
-    command: python3 -m src.main --sources configs/sources/video_files_docker.txt --no-display --save-video
+    command: python3 -m src.main --sources configs/sources/video_files_docker.txt --no-display --save-video --show-trajectories
 
     network_mode: host
     stdin_open: true
