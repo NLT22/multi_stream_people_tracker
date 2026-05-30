@@ -81,38 +81,21 @@ _export_yolo_onnx() {
     exit 1
   }
 
-  mkdir -p "$ROOT_DIR/videos"
+  local video_dir="${VIDEO_DIR:-$ROOT_DIR/dataset/mtmc_4cam/videos}"
+  if [[ ! -d "$video_dir" ]]; then
+    video_dir="$ROOT_DIR/videos"
+    mkdir -p "$video_dir"
+  fi
+
   X11_SOCKET_DIR="${X11_SOCKET_DIR:-$ROOT_DIR/.docker-x11}"
   mkdir -p "$X11_SOCKET_DIR"
-  VIDEO_DIR="${VIDEO_DIR:-$ROOT_DIR/videos}" X11_SOCKET_DIR="$X11_SOCKET_DIR" \
+  VIDEO_DIR="$video_dir" X11_SOCKET_DIR="$X11_SOCKET_DIR" \
     docker compose build tracker
-  VIDEO_DIR="${VIDEO_DIR:-$ROOT_DIR/videos}" X11_SOCKET_DIR="$X11_SOCKET_DIR" \
+  VIDEO_DIR="$video_dir" X11_SOCKET_DIR="$X11_SOCKET_DIR" \
     SUBDIR="$subdir" WEIGHTS="$weights" ONNX_NAME="$onnx_name" \
-    docker compose run --rm --no-deps \
+    docker compose run -T --rm --no-deps \
     -e SUBDIR -e WEIGHTS -e ONNX_NAME tracker \
-    bash -lc "python3 -m pip install --no-cache-dir ultralytics onnx onnxslim && \
-python3 - <<'PY'
-import os
-from pathlib import Path
-from ultralytics import YOLO
-
-subdir, weights, onnx_name = os.environ['SUBDIR'], os.environ['WEIGHTS'], os.environ['ONNX_NAME']
-out_dir = Path('models') / subdir
-out_dir.mkdir(parents=True, exist_ok=True)
-pt = out_dir / weights
-model = YOLO(str(pt) if pt.exists() else weights)
-exported = Path(model.export(
-    format='onnx',
-    imgsz=640,
-    opset=12,
-    dynamic=True,
-    simplify=True,
-))
-target = out_dir / onnx_name
-if exported.resolve() != target.resolve():
-    target.write_bytes(exported.read_bytes())
-print(f'[prepare_models] Exported {target}')
-PY"
+    bash -lc "python3 -m pip install --no-cache-dir ultralytics onnx onnxslim && python3 scripts/export_yolo_onnx.py"
 
   test -f "$onnx" || {
     echo "[ERROR] ONNX export did not create $onnx"
