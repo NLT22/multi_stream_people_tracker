@@ -93,9 +93,12 @@ _export_yolo_onnx() {
     docker compose build tracker
   VIDEO_DIR="$video_dir" X11_SOCKET_DIR="$X11_SOCKET_DIR" \
     SUBDIR="$subdir" WEIGHTS="$weights" ONNX_NAME="$onnx_name" \
-    docker compose run -T --rm --no-deps \
-    -e SUBDIR -e WEIGHTS -e ONNX_NAME tracker \
-    bash -lc "python3 -m pip install --no-cache-dir ultralytics onnx onnxslim && python3 scripts/export_yolo_onnx.py"
+    docker compose run -T --rm --no-deps --entrypoint bash \
+    -e SUBDIR -e WEIGHTS -e ONNX_NAME -e PYTHONUNBUFFERED=1 tracker \
+    -lc "set -euo pipefail; \
+echo '[prepare_models] Container command started'; \
+python3 -m pip install --no-cache-dir --progress-bar off ultralytics onnx onnxslim; \
+python3 -u scripts/export_yolo_onnx.py"
 
   test -f "$onnx" || {
     echo "[ERROR] ONNX export did not create $onnx"
