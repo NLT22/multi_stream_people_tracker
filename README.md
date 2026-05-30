@@ -76,6 +76,8 @@ DATASET_DIR=/absolute/path/to/datasets ./scripts/prepare_dataset.sh
 VIDEO_DIR=/absolute/path/to/datasets/mtmc_4cam/videos docker compose up
 ```
 
+Use `sudo docker compose up` on hosts where Docker still requires sudo.
+
 `prepare_models.sh` uses Docker and internet access to export a dynamic-batch
 YOLO11n ONNX file from Ultralytics when `models/yolov11/yolo11n.onnx` is
 missing. It also downloads ReID models used by NvDCF/NvDeepSORT tracker
@@ -131,6 +133,12 @@ also needs working Docker GPU access.
 
 ```bash
 docker compose up
+```
+
+If `prepare_demo.sh` reported that it used `sudo docker`, run:
+
+```bash
+sudo docker compose up
 ```
 
 The default Compose command runs the production entrypoint:
@@ -225,7 +233,7 @@ flowchart LR
     SRC["SourceIdCollectorProbe<br/>(camera_id, local_track_id) -> embedding"]
     TILER["nvmultistreamtiler<br/>2x2 visualization grid"]
     REID["CrossCameraGalleryProbe<br/>tracklets + prototypes + Hungarian + merge"]
-    OSD["nvosdbin<br/>draw bbox + GlobalID label"]
+    OSD["nvosdbin<br/>draw bbox + GID label + trajectories"]
 
     subgraph Outputs["Outputs"]
         DISPLAY["Display window"]
@@ -271,7 +279,7 @@ in MTMC tracking:
 | Ambiguity rejection | Avoids accepting a match when top-1 and top-2 similarities are too close. | `--match-ambiguity-margin`, `--allow-ambiguous-match` |
 | Online Global ID merge | Fixes stable ID splits, e.g. one camera stays `G4` while the opposite camera becomes `G19`. | `--global-merge-threshold`, `--global-merge-interval` |
 | Bounded candidate search | Prevents lag when many IDs have been created over a long video. | `--gallery-max-age`, `--assignment-max-candidates`, `--global-merge-max-candidates` |
-| Visualization overlay | Makes ID switches easier to inspect without changing tracking decisions. | `--show-trajectories`, `--trajectory-sample-interval`, `--trajectory-history` |
+| Visualization overlay | Makes ID switches easier to inspect without changing tracking decisions. | `--show-trajectories`, `--no-trajectories`, `--trajectory-sample-interval`, `--trajectory-history` |
 
 Useful tuning examples:
 
@@ -294,6 +302,9 @@ python -m src.main --disable-global-merge
 
 # Inspect colored trajectories while keeping the overlay lightweight
 python -m src.main --show-trajectories --trajectory-sample-interval 20
+
+# Disable trajectories for a cleaner benchmark video
+python -m src.main --no-trajectories
 ```
 
 Useful ReID commands:
@@ -505,6 +516,10 @@ multi_stream_people_tracker/
 │       ├── gallery.py
 │       └── visualization.py
 ├── scripts/
+│   ├── prepare_demo.sh
+│   ├── prepare_dataset.sh
+│   ├── prepare_models.sh
+│   └── docker_smoke_test.sh
 ├── reid_pipeline.py        # compatibility wrapper; prefer python -m src.main
 ├── Dockerfile
 ├── docker-compose.yml

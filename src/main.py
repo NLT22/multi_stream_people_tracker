@@ -79,7 +79,7 @@ def _load_defaults(config_path: str) -> dict:
     """Read pipeline.yaml and turn it into CLI defaults for this app."""
     defaults = {
         "sources": ["configs/sources/video_files.txt"],
-        "nvinfer_config": "configs/models/nvinfer_yolov8_people.yml",
+        "nvinfer_config": "configs/models/nvinfer_yolov11_people.yml",
         "tracker_config": "configs/tracker/nvdeepsort_reid_swin.yaml",
         "tile_w": 1280,
         "tile_h": 720,
@@ -91,7 +91,7 @@ def _load_defaults(config_path: str) -> dict:
         "save_video": None,
         "record_bitrate": 8000000,
         "no_display": False,
-        "show_trajectories": False,
+        "show_trajectories": True,
         "trajectory_history": 96,
         "trajectory_sample_interval": 20,
         "trajectory_max_segments": 24,
@@ -152,7 +152,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         force_rebuild_engine: bool = False,
         trim_seconds: float | None = None, trim_start: float = 0.0,
         pretiler: bool = False, no_tiler: bool = False,
-        show_trajectories: bool = False,
+        show_trajectories: bool = True,
         trajectory_history: int = 96,
         trajectory_sample_interval: int = 20,
         trajectory_max_segments: int = 24):
@@ -391,6 +391,9 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--show-trajectories", action="store_true",
                         default=defaults["show_trajectories"],
                         help="Draw recent tracker paths as colored OSD lines")
+    parser.add_argument("--no-trajectories", action="store_false",
+                        dest="show_trajectories",
+                        help="Disable trajectory overlays")
     parser.add_argument("--trajectory-history", type=int,
                         default=defaults["trajectory_history"],
                         help="Max sampled points kept per local track for OSD paths")

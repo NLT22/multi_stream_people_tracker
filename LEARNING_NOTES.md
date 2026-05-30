@@ -104,6 +104,7 @@ property:
 In this project, engines are written next to their source models:
 
 ```text
+models/yolov11/yolo11n.onnx_b4_gpu0_fp16.engine
 models/yolov8/yolov8n.onnx_b4_gpu0_fp16.engine
 models/trafficcamnet/resnet18_trafficcamnet_pruned.onnx_b4_gpu0_fp16.engine
 models/peoplenet/resnet34_peoplenet.onnx_b4_gpu0_fp16.engine
@@ -306,10 +307,11 @@ PSM wheel:   /opt/nvidia/deepstream/deepstream-9.0/service-maker/python/pyservic
 
 ## 14. Person Class IDs
 
-The current default detector is YOLOv8n COCO:
+The current default detector is YOLO11n COCO:
 
 | Model | Config | Person class_id |
 |-------|--------|-----------------|
+| YOLO11n COCO | `configs/models/nvinfer_yolov11_people.yml` | 0 |
 | YOLOv8n COCO | `configs/models/nvinfer_yolov8_people.yml` | 0 |
 | TrafficCamNet | `configs/models/nvinfer_trafficcamnet.yml` | 2 |
 | PeopleNet | `configs/models/nvinfer_peoplenet.yml` | 0 |
@@ -370,8 +372,8 @@ Python Global ID:
 The current M8 Hungarian pipeline:
 
 ```text
-YOLOv8 detector
-  -> NvDeepSORT tracker + ReID embedding
+  YOLO11 detector
+  -> NvDeepSORT + Swin-Tiny tracker/ReID embedding
   -> SourceIdCollectorProbe
   -> Tiler
   -> CrossCameraGalleryProbe
