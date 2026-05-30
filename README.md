@@ -29,6 +29,9 @@ Quick GPU runtime check:
 docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu24.04 nvidia-smi
 ```
 
+If your Docker install requires root, use `sudo docker ...`. The helper scripts
+auto-detect this and switch to `sudo docker` when needed.
+
 ### One-Time Setup
 
 ```bash

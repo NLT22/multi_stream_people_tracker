@@ -20,6 +20,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+source "$ROOT_DIR/scripts/docker_cmd.sh"
 
 PREPARE_YOLO=0
 PREPARE_YOLOV11=0
@@ -69,18 +70,6 @@ _export_yolo_onnx() {
   echo "[prepare_models] Missing ONNX: $onnx"
   echo "[prepare_models] Exporting dynamic-batch ONNX inside the Docker image..."
 
-  command -v docker >/dev/null || {
-    echo "[ERROR] docker is required to export $weights automatically."
-    echo "Install Docker or manually export models/$subdir/$onnx_name with:"
-    echo "  from ultralytics import YOLO"
-    echo "  YOLO('$weights').export(format='onnx', imgsz=640, opset=12, dynamic=True, simplify=True)"
-    exit 1
-  }
-  docker compose version >/dev/null || {
-    echo "[ERROR] docker compose is required."
-    exit 1
-  }
-
   local video_dir="${VIDEO_DIR:-$ROOT_DIR/dataset/mtmc_4cam/videos}"
   if [[ ! -d "$video_dir" ]]; then
     video_dir="$ROOT_DIR/videos"
@@ -90,10 +79,10 @@ _export_yolo_onnx() {
   X11_SOCKET_DIR="${X11_SOCKET_DIR:-$ROOT_DIR/.docker-x11}"
   mkdir -p "$X11_SOCKET_DIR"
   VIDEO_DIR="$video_dir" X11_SOCKET_DIR="$X11_SOCKET_DIR" \
-    docker compose build tracker
+    "${DOCKER[@]}" compose build tracker
   VIDEO_DIR="$video_dir" X11_SOCKET_DIR="$X11_SOCKET_DIR" \
     SUBDIR="$subdir" WEIGHTS="$weights" ONNX_NAME="$onnx_name" \
-    docker compose run -T --rm --no-deps --entrypoint bash \
+    "${DOCKER[@]}" compose run -T --rm --no-deps --entrypoint bash \
     -e SUBDIR -e WEIGHTS -e ONNX_NAME -e PYTHONUNBUFFERED=1 tracker \
     -lc "set -euo pipefail; \
 echo '[prepare_models] Container command started'; \

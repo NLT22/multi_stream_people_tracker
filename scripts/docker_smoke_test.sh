@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+source "$ROOT_DIR/scripts/docker_cmd.sh"
 
 DO_BUILD=0
 DO_RUN=0
@@ -20,8 +21,6 @@ for arg in "$@"; do
 done
 
 echo "== Host checks =="
-command -v docker >/dev/null || { echo "Missing docker"; exit 1; }
-docker compose version >/dev/null || { echo "Missing docker compose"; exit 1; }
 command -v nvidia-smi >/dev/null || { echo "Missing nvidia-smi"; exit 1; }
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
 
@@ -68,24 +67,24 @@ echo "X11_SOCKET_DIR=$X11_SOCKET_DIR"
 
 echo ""
 echo "== Compose config =="
-VIDEO_DIR="$VIDEO_DIR" X11_SOCKET_DIR="$X11_SOCKET_DIR" docker compose config >/dev/null
+VIDEO_DIR="$VIDEO_DIR" X11_SOCKET_DIR="$X11_SOCKET_DIR" "${DOCKER[@]}" compose config >/dev/null
 echo "OK docker compose config"
 
 if [[ "$DO_BUILD" == "1" ]]; then
   echo ""
   echo "== Docker build =="
-  VIDEO_DIR="$VIDEO_DIR" X11_SOCKET_DIR="$X11_SOCKET_DIR" docker compose build
+  VIDEO_DIR="$VIDEO_DIR" X11_SOCKET_DIR="$X11_SOCKET_DIR" "${DOCKER[@]}" compose build
 fi
 
 if [[ "$DO_RUN" == "1" ]]; then
   echo ""
   echo "== Container import smoke test =="
-  if ! docker run --rm --gpus all --entrypoint bash multi_stream_people_tracker:latest \
+  if ! "${DOCKER[@]}" run --rm --gpus all --entrypoint bash multi_stream_people_tracker:latest \
       -lc "python3 -c \"import pyservicemaker; import yaml; from src.pipeline.model_utils import infer_person_class_id; print('person_class_id=', infer_person_class_id('configs/models/nvinfer_yolov11_people.yml'))\""; then
     echo ""
     echo "[ERROR] Container GPU smoke test failed."
     echo "Check NVIDIA Container Toolkit and Docker GPU access:"
-    echo "  docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu24.04 nvidia-smi"
+    echo "  ${DOCKER[*]} run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu24.04 nvidia-smi"
     exit 1
   fi
 fi

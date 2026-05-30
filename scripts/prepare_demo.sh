@@ -32,4 +32,8 @@ done
 
 echo ""
 echo "[prepare_demo] Ready. Run:"
-echo "  docker compose up"
+if [[ "${DOCKER_SUDO:-0}" == "1" ]]; then
+  echo "  sudo docker compose up"
+else
+  echo "  docker compose up"
+fi
