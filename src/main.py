@@ -7,14 +7,14 @@ Links the same physical person across cameras with one stable Global ID, even
 though the per-camera tracker assigns a different local ID in each stream:
 
                  cam0 ──→ track_id=42  ─┐
-                                         ├─ embedding match → Global:1
+                                         ├─ embedding match → GID:1
                  cam1 ──→ track_id=7   ─┘
 
 TWO IDENTITY LAYERS:
-  1. NvDeepSORT tracker (default: configs/tracker/nvdeepsort_reid_swin.yaml,
-     ReID Swin-Tiny; or nvdeepsort_reid.yaml for ResNet50)
-     Runs a Re-ID model per person crop and keeps a stable local ID within a
-     single stream. Falls back to NvDCF/IOU configs (no embeddings) for tests.
+  1. NvDeepSORT tracker (default: configs/tracker/nvdeepsort_reid_swin.yaml)
+     Uses a Swin-Tiny ReID model for local association and exports ReID tensors
+     for the cross-camera gallery. NvDCF accuracy remains useful for A/B tests
+     when local bbox overlap is the main issue.
   2. CrossCameraGalleryProbe (src/reid/gallery.py)
      Reads tracker ReID embeddings and matches each (cam, local_id) against a
      cross-camera gallery to assign a Global ID. Stabilized with:
@@ -26,7 +26,7 @@ TWO IDENTITY LAYERS:
        - bounded candidate search (keep long videos responsive)
 
 PIPELINE TOPOLOGY:
-  [src_0..N] → [mux] → [nvinfer] → [nvtracker/DeepSORT] → [tiler]
+  [src_0..N] → [mux] → [nvinfer] → [nvtracker/DeepSORT+Swin] → [tiler]
                                           │                    │
                                  [SourceIdCollectorProbe] [CrossCameraGalleryProbe]
                                   (pre-tiler: source_id)  (post-tiler: draw labels)
@@ -68,6 +68,7 @@ from src.pipeline.engine_prep import prepare_nvinfer_config
 from src.pipeline.recording import add_recording_branch, compute_grid
 from src.pipeline.sources import resolve_sources, trim_sources
 from src.reid import gallery
+from src.reid.visualization import TrajectoryVisualizer
 from src.utils.platform_utils import get_sink_element
 
 
@@ -83,12 +84,17 @@ def _load_defaults(config_path: str) -> dict:
         "tile_w": 1280,
         "tile_h": 720,
         "batch_size": None,
+        "max_sources": None,
         "gpu_id": 0,
         "pretiler": False,
         "no_tiler": False,
         "save_video": None,
         "record_bitrate": 8000000,
         "no_display": False,
+        "show_trajectories": False,
+        "trajectory_history": 96,
+        "trajectory_sample_interval": 20,
+        "trajectory_max_segments": 24,
     }
 
     path = Path(config_path)
@@ -117,6 +123,8 @@ def _load_defaults(config_path: str) -> dict:
     defaults["tile_w"] = display.get("tile_width", defaults["tile_w"])
     defaults["tile_h"] = display.get("tile_height", defaults["tile_h"])
     defaults["batch_size"] = raw.get("batch_size", defaults["batch_size"])
+    defaults["max_sources"] = runtime.get(
+        "max_sources", defaults["max_sources"])
     defaults["gpu_id"] = raw.get("gpu_id", defaults["gpu_id"])
     defaults["pretiler"] = runtime.get("pretiler", defaults["pretiler"])
     defaults["no_tiler"] = runtime.get("no_tiler", defaults["no_tiler"])
@@ -124,6 +132,14 @@ def _load_defaults(config_path: str) -> dict:
     defaults["record_bitrate"] = runtime.get(
         "record_bitrate", defaults["record_bitrate"])
     defaults["no_display"] = runtime.get("no_display", defaults["no_display"])
+    defaults["show_trajectories"] = runtime.get(
+        "show_trajectories", defaults["show_trajectories"])
+    defaults["trajectory_history"] = runtime.get(
+        "trajectory_history", defaults["trajectory_history"])
+    defaults["trajectory_sample_interval"] = runtime.get(
+        "trajectory_sample_interval", defaults["trajectory_sample_interval"])
+    defaults["trajectory_max_segments"] = runtime.get(
+        "trajectory_max_segments", defaults["trajectory_max_segments"])
     return defaults
 
 
@@ -132,9 +148,14 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         use_hungarian_assignment: bool, enforce_unique_per_stream: bool,
         save_video: str | None, record_bitrate: int, no_display: bool,
         batch_size: int | None = None, gpu_id: int = 0,
+        max_sources: int | None = None,
         force_rebuild_engine: bool = False,
         trim_seconds: float | None = None, trim_start: float = 0.0,
-        pretiler: bool = False, no_tiler: bool = False):
+        pretiler: bool = False, no_tiler: bool = False,
+        show_trajectories: bool = False,
+        trajectory_history: int = 96,
+        trajectory_sample_interval: int = 20,
+        trajectory_max_segments: int = 24):
     # Headless (no tiler) requires the gallery to run before the tiler.
     pretiler = pretiler or no_tiler
     try:
@@ -142,6 +163,19 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     except (FileNotFoundError, ValueError, NotADirectoryError) as e:
         print(f"[ERROR] {e}")
         sys.exit(1)
+
+    if max_sources is not None:
+        if max_sources < 1:
+            print("[ERROR] --max-sources must be >= 1")
+            sys.exit(1)
+        original_count = len(uris)
+        uris = uris[:max_sources]
+        is_live = any(u.startswith("rtsp://") for u in uris)
+        if len(uris) < original_count:
+            print(
+                f"[reid] max_sources={max_sources}: using first "
+                f"{len(uris)}/{original_count} resolved source(s)"
+            )
 
     # Optionally pre-cut each file source to a fixed length before the pipeline.
     if trim_seconds:
@@ -166,6 +200,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     print(f"[reid] debug_similarity={debug_similarity}")
     print(f"[reid] use_hungarian_assignment={use_hungarian_assignment}")
     print(f"[reid] enforce_unique_per_stream={enforce_unique_per_stream}")
+    print(f"[reid] show_trajectories={show_trajectories}")
     print(gallery.config_summary())
     if save_video:
         print(f"[reid] save_video={save_video}")
@@ -203,13 +238,24 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         "gpu-id": gpu_id,
     })
 
+    trajectory_visualizer = None
+    if show_trajectories:
+        trajectory_visualizer = TrajectoryVisualizer(
+            tile_w, tile_h, cols, n,
+            max_points=trajectory_history,
+            sample_interval=trajectory_sample_interval,
+            max_segments_per_track=trajectory_max_segments,
+            pretiler=pretiler,
+        )
+
     gallery_probe = gallery.CrossCameraGalleryProbe(
         id_map, embeddings, person_class_id, tile_w, tile_h, cols, n,
         debug_similarity=debug_similarity,
         use_hungarian_assignment=use_hungarian_assignment,
         enforce_unique_per_stream=enforce_unique_per_stream,
         pretiler=pretiler,
-        extract_embeddings=pretiler)
+        extract_embeddings=pretiler,
+        trajectory_visualizer=trajectory_visualizer)
 
     if pretiler:
         # One pre-tiler probe on the tracker: exact source_id (no geometric
@@ -275,7 +321,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     try:
         pipeline.start()
         print("[reid] Running. Gallery stats print every 60 frames.")
-        print("[reid] Labels show Global:<global_id>.")
+        print("[reid] Labels show GID:<global_id>; bbox color follows GID.")
         if save_video:
             print(f"[reid] Recording annotated video to: {written_path}")
         print("[reid] Press Ctrl+C to stop.")
@@ -302,6 +348,10 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=defaults["batch_size"],
                         help="Inference batch size. Default = number of streams. "
                              "Clamped to be >= stream count.")
+    parser.add_argument("--max-sources", type=int,
+                        default=defaults["max_sources"],
+                        help="Load only the first N resolved sources/videos. "
+                             "Default = use all sources.")
     parser.add_argument("--gpu-id", type=int, default=defaults["gpu_id"],
                         help="GPU device id used across the whole pipeline.")
     parser.add_argument("--pretiler", action="store_true",
@@ -331,12 +381,25 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "configs/models/nvinfer_trafficcamnet.yml")
     parser.add_argument("--tracker-config", default=defaults["tracker_config"],
                         help="Tracker config. Default comes from pipeline.yaml. "
-                             "Alternatives: nvdeepsort_reid.yaml (ResNet50 ReID), "
-                             "nvdcf_perf.yaml (no Re-ID engine)")
+                             "Recommended demo: nvdeepsort_reid_swin.yaml. "
+                             "Alternatives: nvdcf_accuracy.yaml, "
+                             "nvdeepsort_reid.yaml, nvdcf_perf.yaml")
     parser.add_argument("--tile-w", type=int, default=defaults["tile_w"])
     parser.add_argument("--tile-h", type=int, default=defaults["tile_h"])
     parser.add_argument("--debug-similarity", action="store_true",
                         help="Print max cosine similarity for every new track")
+    parser.add_argument("--show-trajectories", action="store_true",
+                        default=defaults["show_trajectories"],
+                        help="Draw recent tracker paths as colored OSD lines")
+    parser.add_argument("--trajectory-history", type=int,
+                        default=defaults["trajectory_history"],
+                        help="Max sampled points kept per local track for OSD paths")
+    parser.add_argument("--trajectory-sample-interval", type=int,
+                        default=defaults["trajectory_sample_interval"],
+                        help="Append one trajectory point per local track every N batches")
+    parser.add_argument("--trajectory-max-segments", type=int,
+                        default=defaults["trajectory_max_segments"],
+                        help="Max recent line segments drawn per visible local track")
     parser.add_argument("--gallery-max-age", type=int,
                         default=gallery.GALLERY_MAX_AGE,
                         help="Drop inactive Global IDs after this many batches")
@@ -383,6 +446,15 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--disable-tracklet", action="store_true",
                         help="Use only current-frame embeddings, without local "
                              "tracklet averaging")
+    parser.add_argument("--tracklet-embedding-interval", type=int,
+                        default=gallery.TRACKLET_EMBEDDING_INTERVAL,
+                        help="Store one ReID embedding per local track every N "
+                             "batches after warmup. Larger values reduce noisy "
+                             "appearance drift.")
+    parser.add_argument("--disable-embedding-quality-gate",
+                        action="store_true",
+                        help="Allow border/overlap/small/aspect-ratio-poor crops "
+                             "to update tracklets and the Global ID gallery.")
     parser.add_argument("--tracklet-window", type=int,
                         default=gallery.TRACKLET_MAX_EMBEDDINGS,
                         help="Number of recent embeddings kept per (camera, track)")
@@ -430,9 +502,14 @@ def main(argv: list[str] | None = None) -> None:
         args.tile_w, args.tile_h, args.debug_similarity, use_hungarian,
         enforce_unique, args.save_video, args.record_bitrate, args.no_display,
         batch_size=args.batch_size, gpu_id=args.gpu_id,
+        max_sources=args.max_sources,
         force_rebuild_engine=args.force_rebuild_engine,
         trim_seconds=args.trim_seconds, trim_start=args.trim_start,
-        pretiler=args.pretiler, no_tiler=args.no_tiler)
+        pretiler=args.pretiler, no_tiler=args.no_tiler,
+        show_trajectories=args.show_trajectories,
+        trajectory_history=args.trajectory_history,
+        trajectory_sample_interval=args.trajectory_sample_interval,
+        trajectory_max_segments=args.trajectory_max_segments)
 
 
 if __name__ == "__main__":

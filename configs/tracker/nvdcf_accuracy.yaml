@@ -6,13 +6,9 @@
 #   deepstream-tracker-3d-multi-view/config_templates/config_tracker_2d.yml
 #
 # Key differences vs nvdcf_perf.yaml:
-#   - Higher maxShadowTrackingAge (150 vs 30): keeps lost IDs longer for
-#     re-association after occlusion
-#   - Trajectory-based re-association: matches tracklets by motion prediction
-#     so IDs survive brief disappearances (walking behind a pillar, etc.)
-#   - Stricter state estimator (stateEstimatorType 1 = KF, vs 0 = simple)
-#   - Heavier visual features (featureImgSizeLevel 5 vs 3) = better accuracy,
-#     higher GPU cost; reduce to 3 if FPS drops below acceptable level
+#   - Longer maxShadowTrackingAge keeps lost IDs alive for re-association.
+#   - Native NvMultiObjectTracker ReAssoc uses tracklet trajectory + ReID.
+#   - Heavier visual features improve local-ID stability under bbox overlap.
 #
 # USE WHEN: You need stable person IDs across occlusions and re-entries
 #           within the same camera view. For cross-camera matching, see M8.
@@ -26,7 +22,7 @@ BaseConfig:
   # Minimum detection confidence to accept a new track.
   # 0.027 matches the reference project's threshold for PeopleNet detections.
   # Raise to 0.3–0.4 if too many false positive tracks appear.
-  minDetectorConfidence: 0.027
+  minDetectorConfidence: 0.18
 
 TargetManagement:
   enableBboxUnClipping: 1
@@ -35,18 +31,18 @@ TargetManagement:
 
   # Minimum IOU difference a new detection must have vs existing tracks.
   # Higher = less likely to create a duplicate track for the same person.
-  minIouDiff4NewTarget: 0.227
+  minIouDiff4NewTarget: 0.55
 
   # Minimum tracker confidence to keep a track alive (0–1).
-  minTrackerConfidence: 0.696
+  minTrackerConfidence: 0.45
 
   # Frames before a tentative track is confirmed as real.
-  probationAge: 1
+  probationAge: 4
 
   # Frames a lost track is kept before its ID is deleted.
-  # 150 = ~5 seconds at 30fps. Longer window → IDs survive longer occlusions.
-  # TODO: Reduce to 60 if too many zombie tracks appear in your scene.
-  maxShadowTrackingAge: 150
+  # 180 = ~6 seconds at 30fps. Longer window → IDs survive longer occlusions.
+  # Reduce to 90 if too many zombie tracks appear in your scene.
+  maxShadowTrackingAge: 180
 
   earlyTerminationAge: 1
 
@@ -56,8 +52,11 @@ TrajectoryManagement:
   enableReAssoc: 1
 
   # Minimum score to accept a tracklet re-association match.
-  minMatchingScore4Overall: 0.935
-  minTrackletMatchingScore: 0.294
+  minMatchingScore4Overall: 0.75
+  minTrackletMatchingScore: 0.40
+  minMatchingScore4ReidSimilarity: 0.45
+  matchingScoreWeight4TrackletSimilarity: 0.75
+  matchingScoreWeight4ReidSimilarity: 0.45
 
   # Trajectory projection: predict where a lost person will reappear.
   minTrajectoryLength4Projection: 34
@@ -73,23 +72,26 @@ TrajectoryManagement:
   trajectoryProjectionProcessNoiseScale: 0.0100
   trajectoryProjectionMeasurementNoiseScale: 100
   trackletSpacialSearchRegionScale: 0.0100
+  # Match the Python gallery's sampled tracklet cadence closely enough that
+  # cross-camera Global ID has fresh views, without extracting every frame.
+  reidExtractionInterval: 5
 
 DataAssociator:
   dataAssociatorType: 0
   associationMatcherType: 1
-  checkClassMatch: 0
+  checkClassMatch: 1
 
-  minMatchingScore4Overall: 0.667
-  minMatchingScore4SizeSimilarity: 0.672
-  minMatchingScore4Iou: 0.139
-  minMatchingScore4VisualSimilarity: 0.052
+  minMatchingScore4Overall: 0.35
+  minMatchingScore4SizeSimilarity: 0.45
+  minMatchingScore4Iou: 0.10
+  minMatchingScore4VisualSimilarity: 0.62
 
-  matchingScoreWeight4SizeSimilarity: 0.105
-  matchingScoreWeight4Iou: 0.784
-  matchingScoreWeight4VisualSimilarity: 0.929
+  matchingScoreWeight4VisualSimilarity: 0.85
+  matchingScoreWeight4SizeSimilarity: 0.20
+  matchingScoreWeight4Iou: 0.20
 
-  tentativeDetectorConfidence: 0.702
-  minMatchingScore4TentativeIou: 0.177
+  tentativeDetectorConfidence: 0.30
+  minMatchingScore4TentativeIou: 0.35
 
 StateEstimator:
   # stateEstimatorType 1 = Kalman Filter (more accurate velocity estimate).
@@ -98,6 +100,7 @@ StateEstimator:
 
   # Kalman filter noise parameters (tuned by reference project for people).
   processNoiseVar4Loc: 6497.75
+  processNoiseVar4Size: 1541.86
   processNoiseVar4Vel: 8035.86
   measurementNoiseVar4Detector: 100.0
   measurementNoiseVar4Tracker: 883.58
@@ -118,6 +121,33 @@ VisualTracker:
   # plane influence for standing people.
   featureFocusOffsetFactor_y: -0.105
 
-  filterLr: 0.025
-  filterChannelWeightsLr: 0.095
+  filterLr: 0.015
+  filterChannelWeightsLr: 0.050
   gaussianSigma: 0.450
+
+ReID:
+  # REASSOC only: NvDCF keeps its visual tracker, while ReID is used by the
+  # native trajectory re-association module after a target is temporarily lost.
+  # outputReidTensor below exports the same ReID feature so Python can do
+  # cross-camera Global ID assignment on top of stable local NvDCF tracks.
+  reidType: 2
+
+  batchSize: 16
+  workspaceSize: 1000
+  reidFeatureSize: 256
+  reidHistorySize: 100
+  inferDims: [3, 256, 128]
+  networkMode: 1
+
+  inputOrder: 0
+  colorFormat: 0
+  offsets: [123.6750, 116.2800, 103.5300]
+  netScaleFactor: 0.01735207
+  keepAspc: 1
+  useVPICropScaler: 1
+  addFeatureNormalization: 1
+  outputReidTensor: 1
+
+  tltEncodedModel: "models/reid/resnet50_market1501.etlt"
+  tltModelKey: "nvidia_tao"
+  modelEngineFile: "models/reid/resnet50_market1501.etlt_b16_gpu0_fp16.engine"

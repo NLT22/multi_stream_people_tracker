@@ -49,15 +49,8 @@ def load_uris_from_txt(txt_path: str) -> List[str]:
     - Empty lines → skipped
     - Local paths are converted to file:// URIs automatically
 
-    TODO (Milestone 2): Call this from your pipeline script after implementing it.
+    This is used by the main app and milestones for fixed camera/file lists.
     """
-    # TODO: Implement this function
-    #   1. Open txt_path for reading
-    #   2. For each line: strip whitespace, skip if empty or starts with "#"
-    #   3. Convert to URI with path_to_uri()
-    #   4. Append to a list and return it
-    #
-    # Starter code:
     uris = []
     p = Path(txt_path)
     if not p.exists():
@@ -82,16 +75,8 @@ def load_uris_from_folder(folder_path: str, extensions=None, max_files: int = 0,
     """
     Scan a folder and return file:// URIs for all matching video files.
 
-    TODO (Milestone 2 extension): Activate this by setting
-         source_mode: folder_input in pipeline.yaml.
+    Used for quick experiments where a directory represents one camera set.
     """
-    # TODO: Implement folder scanning
-    #   1. Use Path(folder_path).glob() or rglob() to find files
-    #   2. Filter by extension (case-insensitive)
-    #   3. Sort by name or mtime
-    #   4. Apply max_files limit if > 0
-    #   5. Convert each path to file:// URI
-    #
     if extensions is None:
         extensions = _VIDEO_EXTENSIONS
 
@@ -121,7 +106,6 @@ def load_uris_from_rtsp_txt(txt_path: str) -> List[str]:
     Read RTSP URLs from a text file, one URL per line.
     Comments (#) and blank lines are skipped.
 
-    TODO (future milestone): Activate by setting source_mode: rtsp_cameras.
     Note: RTSP sources need live-source=1 on nvstreammux and sync=0 on sink.
     """
     uris = []

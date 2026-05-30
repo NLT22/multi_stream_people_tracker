@@ -23,15 +23,22 @@
 # =============================================================================
 
 BaseConfig:
-  minDetectorConfidence: 0.2
+  minDetectorConfidence: 0.3
 
 TargetManagement:
   preserveStreamUpdateOrder: 0
-  maxTargetsPerStream: 50
-  minIouDiff4NewTarget: 0.9
-  minTrackerConfidence: 0.4
-  probationAge: 2
-  maxShadowTrackingAge: 120   # keep occluded tracks alive longer through a cross
+  maxTargetsPerStream: 80
+  # Lower than 0.9 so a detection heavily overlapping an existing track is not
+  # immediately born as a duplicate target during bbox jitter/crossing.
+  minIouDiff4NewTarget: 0.65
+  # Keep weak tracks alive instead of dropping them too eagerly; DeepSORT will
+  # use Kalman prediction + ReID association while in shadow state.
+  minTrackerConfidence: 0.35
+  # Late activation: avoid confirming one-frame duplicate tracks.
+  probationAge: 5
+  # ~6s at 30 FPS: lets DeepStream keep/recover the same local ID through short
+  # exits, occlusions, and detector misses before Python sees a new local track.
+  maxShadowTrackingAge: 180
   earlyTerminationAge: 1
 
 DataAssociator:
@@ -41,18 +48,18 @@ DataAssociator:
   # Use the Kalman-PREDICTED position for association (not last-known). This
   # keeps the correct ID on a person while they pass behind/through another.
   usePrediction4Assoc: 1
-  thresholdMahalanobis: 9.0
-  minMatchingScore4Overall: 0.1
-  minMatchingScore4SizeSimilarity: 0.3
-  minMatchingScore4Iou: 0.2
-  minMatchingScore4ReidSimilarity: 0.6   # reject weak appearance matches at a cross
+  thresholdMahalanobis: 8.0
+  minMatchingScore4Overall: 0.28
+  minMatchingScore4SizeSimilarity: 0.35
+  minMatchingScore4Iou: 0.10
+  minMatchingScore4ReidSimilarity: 0.78  # precision-first: reject weak appearance matches
   # When two people overlap, IOU+size are ambiguous → let appearance (ReID)
   # dominate the association score.
-  matchingScoreWeight4SizeSimilarity: 0.7
-  matchingScoreWeight4Iou: 0.3
-  matchingScoreWeight4ReidSimilarity: 0.6
-  tentativeDetectorConfidence: 0.2
-  minMatchingScore4TentativeIou: 0.2
+  matchingScoreWeight4SizeSimilarity: 0.20
+  matchingScoreWeight4Iou: 0.10
+  matchingScoreWeight4ReidSimilarity: 1.00
+  tentativeDetectorConfidence: 0.35
+  minMatchingScore4TentativeIou: 0.35
 
 StateEstimator:
   stateEstimatorType: 2

@@ -26,6 +26,7 @@ from src.pipeline.model_utils import (
     infer_source_id_from_tiled_box,
     set_object_label,
 )
+from src.reid.visualization import style_object_by_id
 
 
 # =============================================================================
@@ -35,7 +36,7 @@ from src.pipeline.model_utils import (
 # Match threshold:
 #   Higher -> fewer false matches, but more ID splits.
 #   Lower  -> easier to reconnect the same person, but more merge risk.
-SIMILARITY_THRESHOLD = 0.7
+SIMILARITY_THRESHOLD = 0.68
 
 # Gallery memory:
 #   Gallery stores known Global IDs after a local track disappears.
@@ -47,13 +48,13 @@ GALLERY_MAX_AGE = 1800
 #   Each Global ID can keep multiple appearance vectors for different views.
 #   More prototypes improve view coverage but increase matching cost.
 #   Set to 0 to disable multi-prototype mode and keep one vector per Global ID.
-GALLERY_MAX_PROTOTYPES = 12
+GALLERY_MAX_PROTOTYPES = 24
 
 # Prototype admission:
 #   Add a new prototype when the current embedding is visually different enough.
 #   Higher -> compact gallery, less noise.
 #   Lower  -> more view coverage, more chance of storing bad crops.
-PROTOTYPE_ADD_THRESHOLD = 0.8
+PROTOTYPE_ADD_THRESHOLD = 0.72
 
 # Assignment:
 #   Hungarian solves one-to-one assignment for new local tracks within a stream.
@@ -71,14 +72,14 @@ ENFORCE_UNIQUE_GLOBAL_PER_STREAM = True
 #   unless the new candidate is clearly better than the current one.
 #   This prevents labels from bouncing between two visually similar IDs.
 ENABLE_ID_STICKINESS = True
-ID_SWITCH_MARGIN = 0.1
+ID_SWITCH_MARGIN = 0.12
 
 # Ambiguous match rejection:
 #   For a new/released local track, accept an existing Global ID only when the
 #   best match beats the runner-up by this margin. If G14=0.64 and G8=0.62,
 #   create/keep a separate ID instead of randomly bouncing between them.
 ENABLE_AMBIGUOUS_MATCH_REJECTION = True
-MATCH_AMBIGUITY_MARGIN = 0.05
+MATCH_AMBIGUITY_MARGIN = 0.06
 
 # Global-ID merge:
 #   A cross-view track may first become a new Global ID because the opposite
@@ -86,16 +87,34 @@ MATCH_AMBIGUITY_MARGIN = 0.05
 #   duplicate ID into the best older Global ID if the match is strong and does
 #   not create two copies of one Global ID in the same stream frame.
 ENABLE_GLOBAL_ID_MERGE = True
-GLOBAL_ID_MERGE_THRESHOLD = 0.8
-GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS = 8
-GLOBAL_ID_MERGE_MARGIN = 0.05
-GLOBAL_ID_MERGE_INTERVAL = 10
-GLOBAL_ID_MERGE_MAX_CANDIDATES = 40
+GLOBAL_ID_MERGE_THRESHOLD = 0.76
+GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS = 6
+GLOBAL_ID_MERGE_MARGIN = 0.04
+GLOBAL_ID_MERGE_INTERVAL = 5
+GLOBAL_ID_MERGE_MAX_CANDIDATES = 80
 
 # Tracklet embedding:
 #   Tracklet mode averages recent embeddings for each (camera, local_track_id).
 #   This is more stable than matching on a single noisy frame crop.
 USE_TRACKLET_EMBEDDING = True
+
+# Tracklet sampling:
+#   Do not store every frame embedding. DeepStream's native ReID tracker has a
+#   similar reidExtractionInterval knob; sampling lowers cost and avoids letting
+#   long runs of back-view / partial crops overwrite a clean appearance.
+TRACKLET_EMBEDDING_INTERVAL = 5
+
+# Embedding quality gate:
+#   A bad crop can be useful for drawing the current bbox, but it should not
+#   create/update long-term identity memory. Keep the current GID if known, and
+#   wait for a cleaner crop before matching a brand-new local track.
+ENABLE_EMBEDDING_QUALITY_GATE = True
+REID_EDGE_MARGIN_RATIO = 0.02
+REID_MIN_BBOX_HEIGHT_RATIO = 0.04
+REID_MIN_BBOX_AREA_RATIO = 0.0008
+REID_MIN_BBOX_ASPECT_RATIO = 0.12
+REID_MAX_BBOX_ASPECT_RATIO = 0.95
+REID_MAX_OVERLAP_IOU_FOR_UPDATE = 0.25
 
 # Tracklet memory:
 #   Drop inactive local tracklets after this many batches.
@@ -286,9 +305,10 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
                 batch_persons += 1
 
                 # Try to extract Re-ID embedding from tracker metadata.
-                # NvDeepSORT exposes this via obj_meta.obj_reid_items in
-                # pyservicemaker. If not available (e.g. NvDCF tracker),
-                # embedding stays empty.
+                # NvDeepSORT and NvDCF+ReAssoc can expose this when their ReID
+                # config has outputReidTensor: 1. If the selected tracker does
+                # not export embeddings, the Python global gallery falls back
+                # to GID:?/new IDs because it has no appearance evidence.
                 embedding, obj_reid_count, obj_tensor_count, reason = (
                     self._extract_embedding(obj_meta))
                 batch_obj_reids += obj_reid_count
@@ -397,7 +417,8 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                  use_hungarian_assignment: bool = True,
                  enforce_unique_per_stream: bool = True,
                  pretiler: bool = False,
-                 extract_embeddings: bool = False):
+                 extract_embeddings: bool = False,
+                 trajectory_visualizer=None):
         super().__init__()
         self._id_map = id_map
         self._embeddings = embeddings
@@ -420,6 +441,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         self._debug_similarity = debug_similarity
         self._use_hungarian_assignment = use_hungarian_assignment
         self._enforce_unique_per_stream = enforce_unique_per_stream
+        self._trajectory_visualizer = trajectory_visualizer
 
     def handle_metadata(self, batch_meta):
         try:
@@ -474,27 +496,50 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                         self._cols, self._num_sources)
                     embedding = self._embeddings.get((src, oid), [])
                 track_key = (src, oid)
-                tracklet = self._update_tracklet(
-                    track_key, src, oid, embedding)
-                match_embedding = self._tracklet_embedding(
-                    tracklet, fallback=embedding)
-                previous_gid = self._track_to_gid.get(track_key)
-                if previous_gid is None:
-                    previous_gid = tracklet.get("gid")
-                if previous_gid not in self._gallery:
-                    previous_gid = None
-                gid = previous_gid
-
                 rows.append({
                     "src": src,
                     "track_id": oid,
                     "track_key": track_key,
-                    "embedding": match_embedding,
+                    "rect": self._local_rect(obj_meta.rect_params, src, frame_meta),
+                    "embedding": [],
                     "raw_embedding": embedding,
-                    "tracklet_len": len(tracklet["embeddings"]),
-                    "gid": gid,
-                    "previous_gid": previous_gid,
+                    "tracklet_len": 0,
+                    "gid": None,
+                    "previous_gid": None,
                 })
+
+            self._annotate_embedding_quality(rows)
+            for row in rows:
+                tracklet = self._update_tracklet(
+                    row["track_key"], row["src"], row["track_id"],
+                    row["raw_embedding"], row["embedding_quality_ok"])
+                row["tracklet_len"] = len(tracklet["embeddings"])
+                row["update_gallery"] = tracklet.get("sampled_this_frame", False)
+                match_embedding = self._tracklet_embedding(
+                    tracklet,
+                    # Matching is allowed to be softer than memory update:
+                    # a border/back-view/overlap crop may still be enough to
+                    # match an existing cross-camera GID, but it must not be
+                    # stored into the long-term gallery unless it passes the
+                    # stricter quality gate.
+                    fallback=row["raw_embedding"],
+                )
+                previous_gid = self._track_to_gid.get(row["track_key"])
+                if previous_gid is None:
+                    previous_gid = tracklet.get("gid")
+                if previous_gid not in self._gallery:
+                    previous_gid = None
+                row["previous_gid"] = previous_gid
+                row["gid"] = previous_gid
+                row["embedding"] = match_embedding
+                row["allow_new_gid"] = row["embedding_quality_ok"]
+                # Known tracks keep their GID through low-quality frames, but
+                # low-quality new tracks may only match existing IDs. They wait
+                # for a cleaner crop before creating a brand-new Global ID.
+                row["defer_assignment"] = (
+                    previous_gid is None
+                    and (not match_embedding)
+                )
 
             if self._use_hungarian_assignment:
                 if self._enforce_unique_per_stream:
@@ -505,10 +550,16 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
             for row in rows:
                 gid = row["gid"]
-                self._track_to_gid[row["track_key"]] = gid
-                self._tracklets[row["track_key"]]["gid"] = gid
-                if row.get("gallery_updated") is not True:
-                    self._update_gallery(gid, row["embedding"], row["src"])
+                if gid is not None:
+                    self._track_to_gid[row["track_key"]] = gid
+                    self._tracklets[row["track_key"]]["gid"] = gid
+                    if row.get("gallery_updated") is not True:
+                        self._update_gallery(
+                            gid,
+                            row["raw_embedding"]
+                            if row.get("update_gallery") else [],
+                            row["src"],
+                        )
 
             if (
                 ENABLE_GLOBAL_ID_MERGE
@@ -516,17 +567,32 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             ):
                 self._merge_duplicate_global_ids(rows, log)
 
-            label_by_track = {
-                row["track_id"]: (
-                    # f"Global:{row['gid']}|Cam:{row['src']}|Person:{row['track_id']}"
-                    f"GID:{row['gid']}"
-                )
+            row_by_key = {
+                (row["src"], row["track_id"]): row
                 for row in rows
             }
             for obj_meta in frame_meta.object_items:
-                label = label_by_track.get(obj_meta.object_id)
-                if label is not None:
-                    set_object_label(obj_meta, label)
+                if obj_meta.class_id != self._person_class_id:
+                    continue
+                if self._pretiler:
+                    src = frame_meta.source_id
+                else:
+                    src = infer_source_id_from_tiled_box(
+                        obj_meta.rect_params, self._tile_w, self._tile_h,
+                        self._cols, self._num_sources)
+                row = row_by_key.get((src, obj_meta.object_id))
+                if row is None:
+                    continue
+                label = (
+                    f"GID:{row['gid'] if row['gid'] is not None else '?'} "
+                    # f"LID:{row['track_id']}"
+                )
+                set_object_label(obj_meta, label)
+                style_object_by_id(obj_meta, row["gid"])
+
+            if self._trajectory_visualizer is not None:
+                self._trajectory_visualizer.update_and_draw(
+                    batch_meta, frame_meta, rows, self._frame_count)
 
         # Age gallery once per batch
         for v in self._gallery.values():
@@ -621,13 +687,28 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
     def _assign_new_tracks_greedy(self, rows: list[dict], log: bool) -> None:
         for row in rows:
-            if row["gid"] is None:
-                row["gid"] = self._find_or_create(
-                    row["embedding"], row["src"], row["track_id"], log,
-                    row["tracklet_len"], row.get("previous_gid"))
+            if row["gid"] is None and not row.get("defer_assignment"):
+                if row.get("allow_new_gid"):
+                    row["gid"] = self._find_or_create(
+                        row["embedding"], row["src"], row["track_id"], log,
+                        row["tracklet_len"], row.get("previous_gid"))
+                else:
+                    ranked = self._rank_gallery(row["embedding"])
+                    best_gid = ranked[0][0] if ranked else -1
+                    allowed, _ = self._is_gid_match_allowed(
+                        row["embedding"], best_gid, row.get("previous_gid"),
+                        ranked)
+                    if allowed:
+                        row["gid"] = best_gid
+                    else:
+                        continue
                 # Greedy fallback: once a new track is assigned, later
                 # detections in the same tiled frame can match it.
-                self._update_gallery(row["gid"], row["embedding"], row["src"])
+                self._update_gallery(
+                    row["gid"],
+                    row["raw_embedding"] if row.get("update_gallery") else [],
+                    row["src"],
+                )
                 row["gallery_updated"] = True
 
     def _assign_new_tracks_with_hungarian(self, rows: list[dict],
@@ -645,10 +726,11 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         occupied_by_src: dict[int, set[int]] = {}
         for row in rows:
             src = row["src"]
-            if row["gid"] is None:
+            if row["gid"] is None and not row.get("defer_assignment"):
                 rows_by_src.setdefault(src, []).append(row)
             else:
-                occupied_by_src.setdefault(src, set()).add(row["gid"])
+                if row["gid"] is not None:
+                    occupied_by_src.setdefault(src, set()).add(row["gid"])
 
         for src, new_rows in rows_by_src.items():
             occupied = occupied_by_src.setdefault(src, set())
@@ -694,6 +776,34 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     status = "MATCH"
                     reason = "hungarian"
                 else:
+                    if not row.get("allow_new_gid"):
+                        row["gid"] = None
+                        score = 0.0
+                        status = "DEFER"
+                        reason = row.get(
+                            "embedding_quality_reason",
+                            "low_quality_new_track",
+                        )
+                        if self._debug_similarity:
+                            ranked = [
+                                (gid, self._score_gid(gid, row["embedding"]))
+                                for gid in existing_gids
+                            ]
+                            ranked.sort(key=lambda item: item[1], reverse=True)
+                            top = ", ".join(
+                                f"G{gid}={s:.3f}" for gid, s in ranked[:DEBUG_TOP_K]
+                            ) or "none"
+                            print(
+                                f"  [Re-ID Hungarian] Cam{src}#{row['track_id']} "
+                                f"assigned=None score={score:.3f} "
+                                f"threshold={SIMILARITY_THRESHOLD:.3f} "
+                                f"tracklet_len={row['tracklet_len']} "
+                                f"quality={row.get('embedding_quality_reason')} "
+                                f"status={status} reason={reason} "
+                                f"top{DEBUG_TOP_K}=[{top}]"
+                            )
+                        continue
+
                     gid = self._allocate_new_gid()
                     self._gallery[gid] = self._new_gallery_entry()
                     row["gid"] = gid
@@ -721,8 +831,13 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     )
 
             for row in new_rows:
-                self._update_gallery(row["gid"], row["embedding"], row["src"])
-                row["gallery_updated"] = True
+                if row["gid"] is not None:
+                    self._update_gallery(
+                        row["gid"],
+                        row["raw_embedding"] if row.get("update_gallery") else [],
+                        row["src"],
+                    )
+                    row["gallery_updated"] = True
 
     def _merge_duplicate_global_ids(self, rows: list[dict], log: bool) -> None:
         """Merge stable duplicate Global IDs created by difficult cross views."""
@@ -838,23 +953,145 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         if len(target_prototypes) > GALLERY_MAX_PROTOTYPES:
             del target_prototypes[:-GALLERY_MAX_PROTOTYPES]
 
+    def _local_rect(self, rect_params, src: int, frame_meta) -> dict:
+        """Return bbox coordinates in source-local/tile-local space."""
+        left = float(rect_params.left)
+        top = float(rect_params.top)
+        width = float(rect_params.width)
+        height = float(rect_params.height)
+
+        if self._pretiler:
+            frame_w, frame_h = self._frame_size(frame_meta)
+        else:
+            col = src % max(1, self._cols)
+            row = src // max(1, self._cols)
+            left -= col * self._tile_w
+            top -= row * self._tile_h
+            frame_w, frame_h = float(self._tile_w), float(self._tile_h)
+
+        return {
+            "left": left,
+            "top": top,
+            "width": width,
+            "height": height,
+            "frame_w": frame_w,
+            "frame_h": frame_h,
+        }
+
+    @staticmethod
+    def _frame_size(frame_meta) -> tuple[float, float]:
+        """Best-effort frame size for pre-tiler quality checks."""
+        width_names = ("source_frame_width", "frame_width", "source_width", "width")
+        height_names = ("source_frame_height", "frame_height", "source_height", "height")
+        width = next(
+            (float(getattr(frame_meta, name)) for name in width_names
+             if hasattr(frame_meta, name) and getattr(frame_meta, name)),
+            1920.0,
+        )
+        height = next(
+            (float(getattr(frame_meta, name)) for name in height_names
+             if hasattr(frame_meta, name) and getattr(frame_meta, name)),
+            1080.0,
+        )
+        return width, height
+
+    def _annotate_embedding_quality(self, rows: list[dict]) -> None:
+        for row in rows:
+            ok, reason = self._embedding_quality(row, rows)
+            row["embedding_quality_ok"] = ok
+            row["embedding_quality_reason"] = reason
+
+    def _embedding_quality(self, row: dict,
+                           rows: list[dict]) -> tuple[bool, str]:
+        if not row["raw_embedding"]:
+            return False, "no_embedding"
+        if not ENABLE_EMBEDDING_QUALITY_GATE:
+            return True, "disabled"
+
+        rect = row["rect"]
+        frame_w = max(1.0, rect["frame_w"])
+        frame_h = max(1.0, rect["frame_h"])
+        left = rect["left"]
+        top = rect["top"]
+        width = max(0.0, rect["width"])
+        height = max(0.0, rect["height"])
+        right = left + width
+        bottom = top + height
+
+        margin_x = frame_w * REID_EDGE_MARGIN_RATIO
+        margin_y = frame_h * REID_EDGE_MARGIN_RATIO
+        if (
+            left <= margin_x
+            or top <= margin_y
+            or right >= frame_w - margin_x
+            or bottom >= frame_h - margin_y
+        ):
+            return False, "edge_crop"
+
+        if height / frame_h < REID_MIN_BBOX_HEIGHT_RATIO:
+            return False, "small_height"
+        if (width * height) / (frame_w * frame_h) < REID_MIN_BBOX_AREA_RATIO:
+            return False, "small_area"
+
+        aspect = width / height if height > 0.0 else 999.0
+        if aspect < REID_MIN_BBOX_ASPECT_RATIO:
+            return False, "thin_crop"
+        if aspect > REID_MAX_BBOX_ASPECT_RATIO:
+            return False, "wide_or_merged_crop"
+
+        max_iou = 0.0
+        for other in rows:
+            if other is row or other["src"] != row["src"]:
+                continue
+            max_iou = max(max_iou, self._rect_iou(rect, other["rect"]))
+        if max_iou > REID_MAX_OVERLAP_IOU_FOR_UPDATE:
+            return False, f"overlap_iou={max_iou:.2f}"
+
+        return True, "ok"
+
+    @staticmethod
+    def _rect_iou(a: dict, b: dict) -> float:
+        ax1, ay1 = a["left"], a["top"]
+        ax2, ay2 = ax1 + a["width"], ay1 + a["height"]
+        bx1, by1 = b["left"], b["top"]
+        bx2, by2 = bx1 + b["width"], by1 + b["height"]
+        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+        iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
+        inter = iw * ih
+        area_a = max(0.0, a["width"]) * max(0.0, a["height"])
+        area_b = max(0.0, b["width"]) * max(0.0, b["height"])
+        denom = area_a + area_b - inter
+        return inter / denom if denom > 0.0 else 0.0
+
     def _update_tracklet(self, track_key: tuple, src: int, track_id: int,
-                         embedding: list[float]) -> dict:
+                         embedding: list[float],
+                         quality_ok: bool = True) -> dict:
         tracklet = self._tracklets.setdefault(track_key, {
             "src": src,
             "track_id": track_id,
             "embeddings": [],
             "age": 0,
             "gid": self._track_to_gid.get(track_key),
+            "last_embedding_frame": -TRACKLET_EMBEDDING_INTERVAL,
         })
         tracklet["age"] = 0
         tracklet["src"] = src
         tracklet["track_id"] = track_id
-        if embedding:
+        should_sample = self._should_sample_tracklet_embedding(tracklet)
+        tracklet["sampled_this_frame"] = bool(embedding and quality_ok and should_sample)
+        if tracklet["sampled_this_frame"]:
             tracklet["embeddings"].append(embedding)
+            tracklet["last_embedding_frame"] = self._frame_count
             if len(tracklet["embeddings"]) > TRACKLET_MAX_EMBEDDINGS:
                 del tracklet["embeddings"][:-TRACKLET_MAX_EMBEDDINGS]
         return tracklet
+
+    def _should_sample_tracklet_embedding(self, tracklet: dict) -> bool:
+        if len(tracklet["embeddings"]) < TRACKLET_MIN_EMBEDDINGS_FOR_MATCH:
+            return True
+        interval = max(1, TRACKLET_EMBEDDING_INTERVAL)
+        return self._frame_count - tracklet.get("last_embedding_frame", -interval) >= interval
 
     @staticmethod
     def _tracklet_embedding(tracklet: dict,
@@ -1023,6 +1260,7 @@ def configure_from_args(args) -> None:
     global GLOBAL_ID_MERGE_INTERVAL, GLOBAL_ID_MERGE_MAX_CANDIDATES
     global USE_TRACKLET_EMBEDDING, TRACKLET_MAX_EMBEDDINGS
     global TRACKLET_MIN_EMBEDDINGS_FOR_MATCH, TRACKLET_MAX_AGE
+    global TRACKLET_EMBEDDING_INTERVAL, ENABLE_EMBEDDING_QUALITY_GATE
 
     GALLERY_MAX_AGE = max(1, args.gallery_max_age)
     GLOBAL_ASSIGNMENT_MAX_CANDIDATES = max(1, args.assignment_max_candidates)
@@ -1038,6 +1276,8 @@ def configure_from_args(args) -> None:
     GLOBAL_ID_MERGE_INTERVAL = max(1, args.global_merge_interval)
     GLOBAL_ID_MERGE_MAX_CANDIDATES = max(1, args.global_merge_max_candidates)
     USE_TRACKLET_EMBEDDING = not args.disable_tracklet
+    TRACKLET_EMBEDDING_INTERVAL = max(1, args.tracklet_embedding_interval)
+    ENABLE_EMBEDDING_QUALITY_GATE = not args.disable_embedding_quality_gate
     TRACKLET_MAX_EMBEDDINGS = max(1, args.tracklet_window)
     TRACKLET_MIN_EMBEDDINGS_FOR_MATCH = max(1, args.tracklet_min_embeddings)
     TRACKLET_MAX_AGE = max(1, args.tracklet_max_age)
@@ -1062,5 +1302,9 @@ def config_summary() -> str:
         (f"[reid] tracklet_embedding={USE_TRACKLET_EMBEDDING} "
          f"window={TRACKLET_MAX_EMBEDDINGS} "
          f"min_embeddings={TRACKLET_MIN_EMBEDDINGS_FOR_MATCH} "
+         f"sample_interval={TRACKLET_EMBEDDING_INTERVAL} "
          f"max_age={TRACKLET_MAX_AGE}"),
+        (f"[reid] embedding_quality_gate={ENABLE_EMBEDDING_QUALITY_GATE} "
+         f"edge_margin={REID_EDGE_MARGIN_RATIO} "
+         f"max_overlap_iou={REID_MAX_OVERLAP_IOU_FOR_UPDATE}"),
     ])

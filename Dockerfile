@@ -19,11 +19,12 @@ RUN PSMAKER_WHL="$(find /opt/nvidia/deepstream -path '*/service-maker/python/pys
 
 # Copy project source. Docker Compose mounts ./models over /app/models so
 # TensorRT engines built in the container persist next to their source model.
-COPY configs/   configs/
-COPY src/       src/
-COPY milestones/ milestones/
-COPY models/    models/
-COPY scripts/   scripts/
+COPY configs/       configs/
+COPY src/           src/
+COPY milestones/    milestones/
+COPY models/        models/
+COPY scripts/       scripts/
 
-# Main demo entrypoint. Docker Compose overrides only the source list.
-CMD ["python3", "-m", "src.main"]
+# Default entrypoint: run the full ReID pipeline.
+# Docker Compose overrides the sources list via command:.
+CMD ["python3", "-m", "src.main", "--sources", "configs/sources/video_files_docker.txt"]

@@ -21,7 +21,7 @@ manual DeepStream Python setup and keeps the run command predictable.
 | NVIDIA driver | 590+ recommended for DeepStream 9.0 |
 | Docker | with NVIDIA Container Toolkit |
 | NGC access | `docker login nvcr.io` may be needed to pull DeepStream |
-| Desktop display | X11 socket is mounted for `nveglglessink` |
+| Desktop display | optional; default Docker run is headless and saves video |
 
 Quick GPU runtime check:
 
@@ -43,44 +43,74 @@ docker login nvcr.io
 # Allow container windows to open on the host X display.
 xhost +local:docker
 
-# Prepare the default YOLO11 detector and Swin-Tiny ReID model if missing.
-./scripts/prepare_models.sh
+# Download the dataset, prepare models, and run a lightweight smoke check.
+./scripts/prepare_demo.sh
+```
+
+For the stricter setup check that also builds the image and runs a container
+import test:
+
+```bash
+./scripts/prepare_demo.sh --all
+```
+
+`prepare_dataset.sh` downloads NVIDIA's
+`deepstream-tracker-3d-multi-view/assets/datasets.zip` and extracts the default
+demo dataset into:
+
+```text
+dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam001.mp4
+dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam002.mp4
+dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam003.mp4
+dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam004.mp4
+```
+
+If the dataset is already stored outside the repo, keep git lightweight and
+point the script or Docker at that folder instead:
+
+```bash
+DATASET_DIR=/absolute/path/to/datasets ./scripts/prepare_dataset.sh
+VIDEO_DIR=/absolute/path/to/datasets/mtmc_4cam/videos docker compose up
 ```
 
 `prepare_models.sh` uses Docker and internet access to export a dynamic-batch
 YOLO11n ONNX file from Ultralytics when `models/yolov11/yolo11n.onnx` is
-missing. It also downloads the Swin-Tiny ReID ONNX used by the default
-NvDeepSORT tracker. It writes into `./models`, so Docker must be allowed to
+missing. It also downloads ReID models used by NvDCF/NvDeepSORT tracker
+experiments. It writes into `./models`, so Docker must be allowed to
 bind mount this project directory. On Docker Desktop, add the project path
 under Resources -> File Sharing if the script reports a mount/shared-path
 error.
 
-Prepare videos:
+The setup script is just a convenience wrapper. You can also run the steps
+manually:
 
 ```bash
-# Put or point videos in one host folder, then edit the Docker source list.
-nano configs/sources/video_files_docker.txt
+./scripts/prepare_dataset.sh
+./scripts/prepare_models.sh
+./scripts/docker_smoke_test.sh
 ```
 
-Inside `configs/sources/video_files_docker.txt`, paths must use `/videos/...`:
+The default Docker source list already targets the 4-camera dataset. Inside
+`configs/sources/video_files_docker.txt`, paths use `/videos/...` because
+Compose mounts `VIDEO_DIR` there:
 
 ```text
-/videos/cam1.mp4
-/videos/cam2.mp4
-/videos/cam3.mp4
-/videos/cam4.mp4
+/videos/Warehouse_Synthetic_Cam001.mp4
+/videos/Warehouse_Synthetic_Cam002.mp4
+/videos/Warehouse_Synthetic_Cam003.mp4
+/videos/Warehouse_Synthetic_Cam004.mp4
 ```
 
 ### Smoke Test
 
 ```bash
-VIDEO_DIR=/absolute/path/to/video/folder ./scripts/docker_smoke_test.sh
+./scripts/docker_smoke_test.sh
 ```
 
 For build plus container import test:
 
 ```bash
-VIDEO_DIR=/absolute/path/to/video/folder ./scripts/docker_smoke_test.sh --all
+./scripts/docker_smoke_test.sh --all
 ```
 
 Expected signs:
@@ -97,22 +127,30 @@ also needs working Docker GPU access.
 ### Run The Demo
 
 ```bash
-VIDEO_DIR=/absolute/path/to/video/folder docker compose up
+docker compose up
 ```
 
-The default Compose command runs:
+The default Compose command runs the production entrypoint:
 
 ```bash
 python3 -m src.main \
-  --sources configs/sources/video_files_docker.txt
+  --sources configs/sources/video_files_docker.txt \
+  --no-display \
+  --save-video
 ```
 
 Run a different milestone:
 
 ```bash
-VIDEO_DIR=/absolute/path/to/video/folder docker compose run --rm tracker \
+docker compose run --rm tracker \
   python3 milestones/03_people_detection.py \
   --sources configs/sources/video_files_docker.txt
+```
+
+Run against an external dataset location:
+
+```bash
+VIDEO_DIR=/absolute/path/to/datasets/mtmc_4cam/videos docker compose up
 ```
 
 Restore X11 policy when done:
@@ -179,7 +217,7 @@ flowchart LR
 
     MUX["nvstreammux<br/>batch multi-camera frames"]
     DET["nvinfer<br/>YOLO11 person detector"]
-    TRK["nvtracker<br/>NvDeepSORT + ReID embeddings"]
+    TRK["nvtracker<br/>NvDeepSORT + Swin-Tiny ReID embeddings"]
     SRC["SourceIdCollectorProbe<br/>(camera_id, local_track_id) -> embedding"]
     TILER["nvmultistreamtiler<br/>2x2 visualization grid"]
     REID["CrossCameraGalleryProbe<br/>tracklets + prototypes + Hungarian + merge"]
@@ -198,8 +236,11 @@ flowchart LR
 - `nvstreammux` batches frames from all camera videos.
 - `nvinfer` runs YOLO11 person detection from
   `configs/models/nvinfer_yolov11_people.yml`.
-- `nvtracker` assigns per-camera local track IDs. With
-  `configs/tracker/nvdeepsort_reid.yaml`, it also produces ReID embeddings.
+- `nvtracker` assigns per-camera local track IDs. The default
+  `configs/tracker/nvdeepsort_reid_swin.yaml` uses a Swin-Tiny ReID model so
+  the Python gallery receives stronger appearance embeddings for cross-camera
+  Global ID. `configs/tracker/nvdcf_accuracy.yaml` remains useful for A/B tests
+  when local overlap/bbox stability is the main issue.
 - `SourceIdCollectorProbe` runs before tiling, where `source_id` is reliable,
   and stores `(camera_id, local_track_id) -> embedding`.
 - `nvmultistreamtiler` combines all streams into one grid for visualization.
@@ -207,8 +248,8 @@ flowchart LR
   The production entrypoint `python -m src.main` uses:
   tracklet embedding averaging, gallery prototypes, one-to-one assignment,
   ID stickiness, ambiguity rejection, and bounded online Global ID merging.
-- `nvosdbin` draws the final labels, for example
-  `Global:3`.
+- `nvosdbin` draws the final `GID:<id>` labels and colors boxes by Global ID.
+  Optional trajectory overlays can be enabled with `--show-trajectories`.
 
 ### ReID Stabilization Methods
 
@@ -226,6 +267,7 @@ in MTMC tracking:
 | Ambiguity rejection | Avoids accepting a match when top-1 and top-2 similarities are too close. | `--match-ambiguity-margin`, `--allow-ambiguous-match` |
 | Online Global ID merge | Fixes stable ID splits, e.g. one camera stays `G4` while the opposite camera becomes `G19`. | `--global-merge-threshold`, `--global-merge-interval` |
 | Bounded candidate search | Prevents lag when many IDs have been created over a long video. | `--gallery-max-age`, `--assignment-max-candidates`, `--global-merge-max-candidates` |
+| Visualization overlay | Makes ID switches easier to inspect without changing tracking decisions. | `--show-trajectories`, `--trajectory-sample-interval`, `--trajectory-history` |
 
 Useful tuning examples:
 
@@ -245,6 +287,9 @@ python -m src.main \
 
 # A/B test without online ID merge
 python -m src.main --disable-global-merge
+
+# Inspect colored trajectories while keeping the overlay lightweight
+python -m src.main --show-trajectories --trajectory-sample-interval 20
 ```
 
 Useful ReID commands:
@@ -312,7 +357,7 @@ Each milestone has visual output unless noted otherwise.
 |---|--------|--------|------|
 | 1 | `01_single_video_display.py` | Single video | `nvurisrcbin` + `nvstreammux` + sink |
 | 2 | `02_multi_video_tiled.py` | Tiled videos | `nvmultistreamtiler` |
-| 3 | `03_people_detection.py` | YOLOv8 boxes | `nvinfer` + `nvosdbin` |
+| 3 | `03_people_detection.py` | YOLO person boxes | `nvinfer` + `nvosdbin` |
 | 4 | `04_people_tracking.py` | Track IDs | `nvtracker` + label probe |
 | 5 | `05_multi_stream_tracking.py` | Full tiled tracker | multi-stream tracking |
 | 6 | `06_batching_deep_dive.py` | Batch logs | mux/batch inspection |
@@ -407,9 +452,9 @@ or pass `--tracker-config`.
 |---------|--------|-----|
 | IoU | `configs/tracker/iou.yaml` | simplest baseline |
 | NvDCF perf | `configs/tracker/nvdcf_perf.yaml` | fast GPU tracker, no ReID embeddings |
-| NvDCF accuracy | `configs/tracker/nvdcf_accuracy.yaml` | better ID stability |
+| NvDCF accuracy | `configs/tracker/nvdcf_accuracy.yaml` | local visual tracking + ReID tensor export A/B test |
 | NvDeepSORT ResNet50 | `configs/tracker/nvdeepsort_reid.yaml` | ReID experiments |
-| NvDeepSORT Swin-Tiny | `configs/tracker/nvdeepsort_reid_swin.yaml` | main default ReID tracker |
+| NvDeepSORT Swin-Tiny | `configs/tracker/nvdeepsort_reid_swin.yaml` | default MTMC demo |
 
 ---
 
@@ -446,13 +491,17 @@ multi_stream_people_tracker/
 ├── src/
 │   ├── main.py
 │   ├── pipeline/
+│   │   ├── builder.py
 │   │   ├── engine_prep.py
+│   │   ├── model_utils.py
+│   │   ├── probes.py
 │   │   ├── recording.py
 │   │   └── sources.py
 │   └── reid/
-│       └── gallery.py
+│       ├── gallery.py
+│       └── visualization.py
 ├── scripts/
-├── reid_pipeline.py
+├── reid_pipeline.py        # compatibility wrapper; prefer python -m src.main
 ├── Dockerfile
 ├── docker-compose.yml
 ├── LEARNING_NOTES.md
@@ -475,14 +524,14 @@ Use username `$oauthtoken` and an NGC API key as password.
 
 ### Docker Window Does Not Open
 
-Check:
+The default Docker command uses `--no-display` and saves an annotated video.
+For an interactive display, uncomment the `DISPLAY` environment variable and
+X11 socket mount in `docker-compose.yml`, then check:
 
 ```bash
 echo $DISPLAY
 xhost +local:docker
 ```
-
-The Compose file mounts `/tmp/.X11-unix` and passes `DISPLAY`.
 
 If your Docker setup cannot share `/tmp/.X11-unix`, override the mount source:
 
@@ -498,14 +547,14 @@ Make sure host `VIDEO_DIR` points to the folder containing the files listed in
 Example:
 
 ```bash
-VIDEO_DIR=/home/user/videos docker compose up
+VIDEO_DIR=/home/user/datasets/mtmc_4cam/videos docker compose up
 ```
 
 with:
 
 ```text
-/videos/cam1.mp4
-/videos/cam2.mp4
+/videos/Warehouse_Synthetic_Cam001.mp4
+/videos/Warehouse_Synthetic_Cam002.mp4
 ```
 
 ### First Run Is Slow

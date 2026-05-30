@@ -2,6 +2,7 @@ venv/
 dataset/
 output/
 .docker-x11/
+.cache/
 configs/models/*.runtime_*.yml
 models/**/*.engine
 models/**/*.onnx
@@ -12,4 +13,9 @@ models/**/*.pt
 __pycache__/
 **/__pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
 .git/

@@ -13,7 +13,7 @@
 # For Docker runs, use configs/sources/video_files_docker.txt instead.
 # =============================================================================
 
-# /absolute/path/to/cam1.mp4
-# /absolute/path/to/cam2.mp4
-# /absolute/path/to/cam3.mp4
-# /absolute/path/to/cam4.mp4
+dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam001.mp4
+dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam002.mp4
+dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam003.mp4
+dataset/mtmc_4cam/videos/Warehouse_Synthetic_Cam004.mp4

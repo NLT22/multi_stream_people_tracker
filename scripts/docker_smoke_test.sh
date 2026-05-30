@@ -51,10 +51,13 @@ done
 
 echo ""
 echo "== Video mount =="
-VIDEO_DIR="${VIDEO_DIR:-$ROOT_DIR/videos}"
+VIDEO_DIR="${VIDEO_DIR:-$ROOT_DIR/dataset/mtmc_4cam/videos}"
 if [[ ! -d "$VIDEO_DIR" ]]; then
   echo "VIDEO_DIR does not exist: $VIDEO_DIR"
-  echo "Set it with: VIDEO_DIR=/absolute/path/to/videos $0 --all"
+  echo "Prepare the default dataset with:"
+  echo "  ./scripts/prepare_dataset.sh"
+  echo "Or set it with:"
+  echo "  VIDEO_DIR=/absolute/path/to/videos $0 --all"
   exit 1
 fi
 echo "VIDEO_DIR=$VIDEO_DIR"

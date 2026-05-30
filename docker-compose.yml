@@ -14,24 +14,43 @@ services:
               capabilities: [gpu, video, compute, utility]
 
     environment:
-      - DISPLAY=${DISPLAY}
       - NVIDIA_DRIVER_CAPABILITIES=video,compute,utility,graphics
+      # Uncomment when running with display:
+      # - DISPLAY=${DISPLAY}
 
     volumes:
-      # X11 socket for display output
-      - ${X11_SOCKET_DIR:-/tmp/.X11-unix}:/tmp/.X11-unix
+      # Source/config bind mounts for development. Edits on the host are visible
+      # immediately inside the container; rebuild only when dependencies change.
+      - ./configs:/app/configs
+      - ./src:/app/src
+      - ./milestones:/app/milestones
+      - ./scripts:/app/scripts
 
-      # Mount your video files here.
-      # Usage: VIDEO_DIR=/absolute/path/to/videos docker compose up
-      - ${VIDEO_DIR:-./videos}:/videos:ro
-
-      # Models are writable so TensorRT engines are built next to each model.
-      # First run rebuilds .engine files; subsequent runs are fast.
+      # Models are writable so TensorRT engines persist next to each model.
+      # First run builds .engine files (~1-3 min); subsequent runs reuse them.
       - ./models:/app/models
 
-    # Override to run a milestone:
-    #   docker compose run --rm tracker python3 milestones/04_people_tracking.py --sources configs/sources/video_files_docker.txt
-    command: python3 -m src.main --sources configs/sources/video_files_docker.txt
+      # Videos are mounted at /videos for reproducible Docker source paths.
+      # Usage: VIDEO_DIR=/absolute/path/to/videos docker compose up
+      - ${VIDEO_DIR:-./dataset/mtmc_4cam/videos}:/videos:ro
+
+      # Dataset (read-only): mtmc_4cam / mtmc_12cam / Wildtrack videos
+      - ./dataset:/app/dataset:ro
+
+      # Output (videos, trimmed clips) persists on the host.
+      - ./output:/app/output
+
+      # X11 socket — only needed when displaying a window (not --no-display).
+      # Uncomment and set X11_SOCKET_DIR when running with a display:
+      #   X11_SOCKET_DIR=/tmp/.X11-unix docker compose run --rm tracker python3 -m src.main
+      # - ${X11_SOCKET_DIR:-/tmp/.X11-unix}:/tmp/.X11-unix
+
+    # Default: run the pipeline on the docker source list (edit video_files_docker.txt first).
+    # Common overrides:
+    #   docker compose run --rm tracker python3 -m src.main --sources dataset/mtmc_4cam/videos --trim-seconds 30 --no-display --save-video
+    #   docker compose run --rm tracker python3 -m src.main --sources dataset/mtmc_12cam/videos --no-tiler --no-display --save-video
+    #   docker compose run --rm tracker python3 milestones/05_multi_stream_tracking.py --sources configs/sources/video_files_docker.txt
+    command: python3 -m src.main --sources configs/sources/video_files_docker.txt --no-display --save-video
 
     network_mode: host
     stdin_open: true

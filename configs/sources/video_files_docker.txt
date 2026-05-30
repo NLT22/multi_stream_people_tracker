@@ -1,18 +1,14 @@
 # =============================================================================
 # Video sources for Docker container
 # =============================================================================
-# Videos are mounted to /videos inside the container.
-# Edit docker-compose.yml to point the volume to your actual video folder,
-# then list the files below using /videos/<filename>.
+# docker-compose.yml mounts VIDEO_DIR here:
 #
-# Example (4-camera warehouse set):
-# /videos/cam1.mp4
-# /videos/cam2.mp4
-# /videos/cam3.mp4
-# /videos/cam4.mp4
+#   ${VIDEO_DIR:-./dataset/mtmc_4cam/videos}:/videos:ro
+#
+# Use container paths below. Do not use host paths such as /media/trung/... here.
 # =============================================================================
 
-/videos/cam1.mp4
-/videos/cam2.mp4
-/videos/cam3.mp4
-/videos/cam4.mp4
+/videos/Warehouse_Synthetic_Cam001.mp4
+/videos/Warehouse_Synthetic_Cam002.mp4
+/videos/Warehouse_Synthetic_Cam003.mp4
+/videos/Warehouse_Synthetic_Cam004.mp4
