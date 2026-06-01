@@ -15,6 +15,7 @@ __pycache__/
 .ruff_cache/
 .DS_Store
 configs/models/*.runtime_*.yml
+TODO_NEXT.md
 configs/models/*_iv[0-9]*.yml
 models/**/*.engine
 models/**/*.static_b1.onnx
