@@ -11,3 +11,15 @@ pyyaml>=6.0
 
 # Vectorized ReID gallery similarity/prototype operations
 numpy>=1.26
+
+# MTA dataset loading + offline evaluation (src/dataset/, src/eval/)
+pandas>=2.0
+motmetrics>=1.4
+trackeval>=0.1
+
+# YOLO model training + ONNX export (scripts/train_yolo_mta.py, scripts/export_yolo_onnx.py)
+# Not needed for inference-only deployment (DeepStream uses TRT engine directly)
+ultralytics>=8.0.0
+
+# scipy: used by offline metrics (linear_sum_assignment for global IDF1)
+scipy>=1.11

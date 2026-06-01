@@ -1,15 +1,17 @@
 /*
  * Custom bounding box parser for YOLOv8 / YOLOv11 pre-NMS output.
  *
- * DeepStream calls this parser once per frame. The output tensor slice passed
- * here has shape [84, 8400]:
- *   - dim 0: 84 = 4 (cx,cy,w,h) + 80 class scores
- *   - dim 1: 8400 anchor predictions
+ * Supports any number of classes (nc). The output tensor shape is [4+nc, 8400]:
+ *   - dim 0: 4+nc  (4 bbox coords + nc class scores)
+ *   - dim 1: 8400  anchor predictions
  *
- * The tensor is laid out in [84, 8400] order (transposed from the typical
- * [8400, 84] that you see in PyTorch). Reading element [feat][anchor]:
- *   feat 0..3  → cx, cy, w, h  (normalised 0..1 relative to model input size)
- *   feat 4..83 → class scores  (already sigmoid — Ultralytics applies it inside the ONNX graph)
+ * Works for both COCO-pretrained (nc=80 → [84,8400]) and fine-tuned
+ * single-class models (nc=1 → [5,8400]).  num_classes is inferred from
+ * the actual tensor dims at runtime.
+ *
+ * Reading element [feat][anchor]:
+ *   feat 0..3      → cx, cy, w, h  (pixel coords in model input space)
+ *   feat 4..4+nc-1 → class scores  (sigmoid already applied by Ultralytics ONNX export)
  */
 
 #include <algorithm>
@@ -21,7 +23,6 @@
 
 #include "nvdsinfer_custom_impl.h"
 
-static const int NUM_CLASSES = 80;
 static const int NUM_ANCHORS = 8400;
 static const int BBOX_DIM    = 4;
 
@@ -55,14 +56,17 @@ extern "C" bool NvDsInferParseYoloV8(
         return false;
     }
 
-    // Validate dims: expect [84, 8400]
+    // Validate dims: expect [4+nc, 8400] for any nc >= 1
     const auto& dims = output_layer->inferDims;
-    if (dims.numDims < 2 || dims.d[0] != (NUM_CLASSES + BBOX_DIM) || dims.d[1] != NUM_ANCHORS) {
+    if (dims.numDims < 2 || dims.d[0] <= BBOX_DIM || dims.d[1] != NUM_ANCHORS) {
         std::cerr << "[YoloV8 parser] ERROR: unexpected output dims ["
                   << dims.d[0] << ", " << dims.d[1] << "]. "
-                  << "Expected [" << (NUM_CLASSES + BBOX_DIM) << ", " << NUM_ANCHORS << "]." << std::endl;
+                  << "Expected [4+nc, " << NUM_ANCHORS << "] with nc>=1." << std::endl;
         return false;
     }
+
+    // Infer num_classes from actual tensor dims (supports nc=1..N)
+    const int NUM_CLASSES = dims.d[0] - BBOX_DIM;
 
     const float* data = static_cast<const float*>(output_layer->buffer);
     const float net_w = static_cast<float>(networkInfo.width);

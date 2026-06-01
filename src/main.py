@@ -66,6 +66,10 @@ from src.pipeline.model_utils import (
 )
 from src.pipeline.engine_prep import prepare_nvinfer_config
 from src.pipeline.recording import add_recording_branch, compute_grid
+from src.dataset.mta import MtaDataset
+from src.dataset.wildtrack import WildtrackDataset
+from src.eval.export import PredictionExporter
+from src.eval.gt_overlay import GtOverlayProbe
 from src.pipeline.sources import resolve_sources, trim_sources
 from src.reid import gallery
 from src.reid.visualization import TrajectoryVisualizer
@@ -95,6 +99,26 @@ def _load_defaults(config_path: str) -> dict:
         "trajectory_history": 96,
         "trajectory_sample_interval": 20,
         "trajectory_max_segments": 24,
+        # ReID/gallery tuning — mirrors gallery.py module defaults
+        "similarity_threshold":              gallery.SIMILARITY_THRESHOLD,
+        "gallery_max_age":                   gallery.GALLERY_MAX_AGE,
+        "assignment_max_candidates":         gallery.GLOBAL_ASSIGNMENT_MAX_CANDIDATES,
+        "disable_id_stickiness":             not gallery.ENABLE_ID_STICKINESS,
+        "id_switch_margin":                  gallery.ID_SWITCH_MARGIN,
+        "allow_ambiguous_match":             not gallery.ENABLE_AMBIGUOUS_MATCH_REJECTION,
+        "match_ambiguity_margin":            gallery.MATCH_AMBIGUITY_MARGIN,
+        "disable_global_merge":              not gallery.ENABLE_GLOBAL_ID_MERGE,
+        "global_merge_threshold":            gallery.GLOBAL_ID_MERGE_THRESHOLD,
+        "global_merge_min_embeddings":       gallery.GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS,
+        "global_merge_margin":              gallery.GLOBAL_ID_MERGE_MARGIN,
+        "global_merge_interval":             gallery.GLOBAL_ID_MERGE_INTERVAL,
+        "global_merge_max_candidates":       gallery.GLOBAL_ID_MERGE_MAX_CANDIDATES,
+        "disable_tracklet":                  not gallery.USE_TRACKLET_EMBEDDING,
+        "tracklet_embedding_interval":       gallery.TRACKLET_EMBEDDING_INTERVAL,
+        "disable_embedding_quality_gate":    not gallery.ENABLE_EMBEDDING_QUALITY_GATE,
+        "tracklet_window":                   gallery.TRACKLET_MAX_EMBEDDINGS,
+        "tracklet_min_embeddings":           gallery.TRACKLET_MIN_EMBEDDINGS_FOR_MATCH,
+        "tracklet_max_age":                  gallery.TRACKLET_MAX_AGE,
     }
 
     path = Path(config_path)
@@ -140,6 +164,40 @@ def _load_defaults(config_path: str) -> dict:
         "trajectory_sample_interval", defaults["trajectory_sample_interval"])
     defaults["trajectory_max_segments"] = runtime.get(
         "trajectory_max_segments", defaults["trajectory_max_segments"])
+
+    # reid: section — all keys map directly to their defaults dict counterpart
+    reid = raw.get("reid", {}) or {}
+    _bool = lambda v: bool(v)
+    for key, yaml_key in [
+        ("similarity_threshold",           "similarity_threshold"),
+        ("gallery_max_age",                "gallery_max_age"),
+        ("assignment_max_candidates",      "assignment_max_candidates"),
+        ("id_switch_margin",               "id_switch_margin"),
+        ("match_ambiguity_margin",         "match_ambiguity_margin"),
+        ("global_merge_threshold",         "global_merge_threshold"),
+        ("global_merge_min_embeddings",    "global_merge_min_embeddings"),
+        ("global_merge_margin",            "global_merge_margin"),
+        ("global_merge_interval",          "global_merge_interval"),
+        ("global_merge_max_candidates",    "global_merge_max_candidates"),
+        ("tracklet_embedding_interval",    "tracklet_embedding_interval"),
+        ("tracklet_window",                "tracklet_window"),
+        ("tracklet_min_embeddings",        "tracklet_min_embeddings"),
+        ("tracklet_max_age",               "tracklet_max_age"),
+    ]:
+        if yaml_key in reid:
+            defaults[key] = reid[yaml_key]
+    # Boolean toggles stored as positive flags in YAML for readability
+    if "id_stickiness" in reid:
+        defaults["disable_id_stickiness"] = not reid["id_stickiness"]
+    if "ambiguous_match_rejection" in reid:
+        defaults["allow_ambiguous_match"] = not reid["ambiguous_match_rejection"]
+    if "global_merge" in reid:
+        defaults["disable_global_merge"] = not reid["global_merge"]
+    if "tracklet_embedding" in reid:
+        defaults["disable_tracklet"] = not reid["tracklet_embedding"]
+    if "embedding_quality_gate" in reid:
+        defaults["disable_embedding_quality_gate"] = not reid["embedding_quality_gate"]
+
     return defaults
 
 
@@ -155,8 +213,18 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         show_trajectories: bool = True,
         trajectory_history: int = 96,
         trajectory_sample_interval: int = 20,
-        trajectory_max_segments: int = 24):
-    # Headless (no tiler) requires the gallery to run before the tiler.
+        trajectory_max_segments: int = 24,
+        export_predictions: str | None = None,
+        gt_by_cam: dict | None = None,
+        gt_snap_frames: int | None = None,
+        no_sync: bool = False):
+    # pretiler=True guarantees exact source_id and frame_number — no geometric
+    # guessing from tile coordinates.  Force it whenever:
+    #   - --no-tiler: tiler absent, only pre-tiler position makes sense
+    #   - --export-predictions: predictions must have exact cam_id + frame_no
+    #   - --show-gt: GT overlay reads per-source frame_number pre-tiler
+    if export_predictions or gt_by_cam:
+        pretiler = True
     pretiler = pretiler or no_tiler
     try:
         uris, is_live = resolve_sources(sources)
@@ -204,9 +272,13 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     print(gallery.config_summary())
     if save_video:
         print(f"[reid] save_video={save_video}")
+    if export_predictions:
+        print(f"[reid] export_predictions={export_predictions}")
 
     id_map: dict[int, int] = {}
     embeddings: dict[tuple, list] = {}  # (source_id, object_id) → embedding vector
+
+    exporter = PredictionExporter(export_predictions) if export_predictions else None
 
     pipeline = psm.Pipeline("reid-pipeline")
 
@@ -248,6 +320,11 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
             pretiler=pretiler,
         )
 
+    # frame_numbers: shared dict source_id → frame_number, filled by
+    # SourceIdCollectorProbe (pre-tiler) and read by CrossCameraGalleryProbe
+    # (post-tiler) so the exporter records the correct per-source frame index.
+    frame_numbers: dict = {}
+
     gallery_probe = gallery.CrossCameraGalleryProbe(
         id_map, embeddings, person_class_id, tile_w, tile_h, cols, n,
         debug_similarity=debug_similarity,
@@ -255,7 +332,9 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         enforce_unique_per_stream=enforce_unique_per_stream,
         pretiler=pretiler,
         extract_embeddings=pretiler,
-        trajectory_visualizer=trajectory_visualizer)
+        trajectory_visualizer=trajectory_visualizer,
+        exporter=exporter,
+        frame_numbers=frame_numbers if not pretiler else None)
 
     if pretiler:
         # One pre-tiler probe on the tracker: exact source_id (no geometric
@@ -268,8 +347,15 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         pipeline.attach("tracker", psm.Probe(
             "src_collector",
             gallery.SourceIdCollectorProbe(
-                id_map, embeddings, person_class_id, debug=debug_similarity),
+                id_map, embeddings, person_class_id, debug=debug_similarity,
+                frame_numbers=frame_numbers),
         ))
+
+    if gt_by_cam:
+        pipeline.attach("tracker", psm.Probe(
+            "gt_overlay", GtOverlayProbe(gt_by_cam, snap_frames=gt_snap_frames)))
+        print(f"[reid] GT overlay enabled for {len(gt_by_cam)} camera(s) "
+              f"(green boxes = ground truth)")
 
     if not no_tiler:
         pipeline.add("nvmultistreamtiler", "tiler", {
@@ -295,8 +381,9 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         pipeline.link("tracker", "tiler")
         pipeline.link("tiler", "osd")
 
-    # Live (RTSP) renders as-fast-as-arrives (sync=0); files play at source rate.
-    sink_sync = 0 if is_live else 1
+    # sync=0: render as-fast-as-possible (no timestamp throttling).
+    # Use for RTSP, high-fps sources (MTA=41fps), or slow GPUs.
+    sink_sync = 0 if (is_live or no_sync) else 1
 
     if save_video and not no_display:
         pipeline.add("tee", "output_tee")
@@ -314,6 +401,10 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         written_path = add_recording_branch(
             pipeline, "osd", save_video, record_bitrate,
             canvas_w=total_w, canvas_h=total_h, gpu_id=gpu_id)
+    elif no_display:
+        # Headless: drop frames as fast as possible, no window opened.
+        pipeline.add("fakesink", "sink", {"sync": 0, "async": 0})
+        pipeline.link("osd", "sink")
     else:
         pipeline.add(get_sink_element(), "sink", {"sync": sink_sync, "qos": 0})
         pipeline.link("osd", "sink")
@@ -332,6 +423,9 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         print(f"[reid] Total unique global IDs assigned: {total_gids}")
     finally:
         pipeline.stop()
+        if exporter is not None:
+            exporter.close()
+            print(f"[reid] Predictions exported to: {export_predictions}")
 
 
 def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
@@ -478,6 +572,27 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--no-display", action="store_true",
                         default=defaults["no_display"],
                         help="Only valid with --save-video: record without opening a window")
+    parser.add_argument("--no-sync", action="store_true",
+                        help="Disable sink clock sync (sync=0). Prevents buffer drops on "
+                             "high-fps sources like MTA (41fps) or slow GPUs. "
+                             "Video plays as fast as the pipeline processes.")
+    parser.add_argument("--mta-dataset", default=None, metavar="PATH",
+                        help="Path to an MTA split folder (e.g. dataset/mta/MTA_ext_short/test). "
+                             "Auto-loads all cam_*.mp4 files as sources, overriding --sources.")
+    parser.add_argument("--export-predictions", default=None, metavar="DIR",
+                        help="Write per-camera prediction CSVs to this directory "
+                             "for offline evaluation with src.eval.metrics.")
+    parser.add_argument("--show-gt", action="store_true",
+                        help="Overlay ground-truth boxes (green) on the display. "
+                             "Requires --mta-dataset or --wildtrack-dataset.")
+    parser.add_argument("--wildtrack-dataset", default=None, metavar="PATH",
+                        help="Path to the Wildtrack root folder "
+                             "(e.g. dataset/Wildtrack). "
+                             "Auto-loads cam1.mp4…cam7.mp4 as sources, "
+                             "overriding --sources. Incompatible with --mta-dataset.")
+    parser.add_argument("--wildtrack-minutes", type=float, default=None,
+                        help="Limit Wildtrack playback/GT to this many minutes "
+                             "(max: ~3.3 min = full annotated range).")
     return parser
 
 
@@ -501,7 +616,48 @@ def main(argv: list[str] | None = None) -> None:
     use_hungarian = (
         gallery.USE_HUNGARIAN_ASSIGNMENT and not args.disable_hungarian
     )
-    run(args.sources, args.nvinfer_config, args.tracker_config,
+
+    sources = args.sources
+    gt_by_cam = None
+    gt_snap_frames = None   # None = exact frame lookup (MTA); int = snap window (Wildtrack)
+    if args.mta_dataset and args.wildtrack_dataset:
+        print("[ERROR] --mta-dataset and --wildtrack-dataset are mutually exclusive.")
+        sys.exit(1)
+
+    if args.mta_dataset:
+        try:
+            _mta_path = Path(args.mta_dataset)
+            mta = MtaDataset(str(_mta_path.parent), split=_mta_path.name)
+            sources = mta.get_video_uris()
+            print(f"[reid] MTA dataset: {args.mta_dataset} → {len(sources)} camera(s)")
+            if args.show_gt:
+                gt_by_cam = mta.load_all_gt()
+                print(f"[reid] Loading GT annotations for {len(gt_by_cam)} camera(s)")
+        except FileNotFoundError as e:
+            print(f"[ERROR] {e}")
+            sys.exit(1)
+    elif args.wildtrack_dataset:
+        try:
+            wt = WildtrackDataset(args.wildtrack_dataset)
+            sources = wt.get_video_uris()
+            print(f"[reid] Wildtrack dataset: {args.wildtrack_dataset} "
+                  f"→ {len(sources)} camera(s)")
+            if args.show_gt:
+                max_sec = (args.wildtrack_minutes * 60.0
+                           if args.wildtrack_minutes is not None else None)
+                gt_by_cam = wt.load_all_gt(max_seconds=max_sec)
+                # Wildtrack: annotations every ~30 video frames; snap to nearest slot
+                from src.dataset.wildtrack import FRAMES_PER_ANN
+                gt_snap_frames = round(FRAMES_PER_ANN)
+                print(f"[reid] Loading Wildtrack GT for {len(gt_by_cam)} camera(s) "
+                      f"(annotated: {wt.annotated_duration_seconds:.0f}s)")
+        except FileNotFoundError as e:
+            print(f"[ERROR] {e}")
+            sys.exit(1)
+    elif args.show_gt:
+        print("[WARNING] --show-gt requires --mta-dataset or --wildtrack-dataset; ignoring.")
+
+    run(sources, args.nvinfer_config, args.tracker_config,
         args.tile_w, args.tile_h, args.debug_similarity, use_hungarian,
         enforce_unique, args.save_video, args.record_bitrate, args.no_display,
         batch_size=args.batch_size, gpu_id=args.gpu_id,
@@ -512,7 +668,11 @@ def main(argv: list[str] | None = None) -> None:
         show_trajectories=args.show_trajectories,
         trajectory_history=args.trajectory_history,
         trajectory_sample_interval=args.trajectory_sample_interval,
-        trajectory_max_segments=args.trajectory_max_segments)
+        trajectory_max_segments=args.trajectory_max_segments,
+        export_predictions=args.export_predictions,
+        gt_by_cam=gt_by_cam,
+        gt_snap_frames=gt_snap_frames,
+        no_sync=args.no_sync)
 
 
 if __name__ == "__main__":

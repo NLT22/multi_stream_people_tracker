@@ -441,3 +441,174 @@ python -m src.main \
 # Compare with merge disabled.
 python -m src.main --disable-global-merge
 ```
+
+---
+
+## 17. source_id Validity — Pre-tiler vs Post-tiler
+
+`frame_meta.source_id` is only reliable **before** the tiler. After the tiler,
+all streams are merged into one canvas and `source_id` no longer maps cleanly
+to a camera.
+
+```
+tracker (pre-tiler) → source_id EXACT ✅
+tiler
+tiler output (post-tiler) → source_id needs to be inferred from tile position ⚠️
+```
+
+The project handles this with two probes:
+
+- **`SourceIdCollectorProbe`** — attached to `tracker` (pre-tiler). Reads exact
+  `source_id` and `frame_number`, stores `(cam_id, frame_number) → embedding`
+  in shared dicts.
+- **`CrossCameraGalleryProbe`** — attached to `tiler` (post-tiler). For display,
+  infers `source_id` from tile geometry. For export (`--export-predictions`) or
+  GT overlay (`--show-gt`), the pipeline automatically switches to **pretiler
+  mode** so camera_id and frame_number in CSVs are always exact.
+
+```python
+# Pretiler mode is forced automatically when needed:
+if export_predictions or gt_by_cam:
+    pretiler = True   # both probes merge onto tracker, source_id exact
+```
+
+**Rule:** Never read `frame_meta.source_id` post-tiler for anything that will
+be stored or compared against ground truth.
+
+---
+
+## 18. Dataset Loaders
+
+### MTA (`src/dataset/mta.py`)
+
+6-camera GTA V synthetic dataset, 41fps, `person_id` consistent across cameras.
+
+GT format: `frame_no_cam, person_id, x_top_left_BB, y_top_left_BB,
+x_bottom_right_BB, y_bottom_right_BB`
+
+```python
+from src.dataset.mta import MtaDataset
+mta = MtaDataset("dataset/mta/MTA_ext_short", split="test")
+uris = mta.get_video_uris()           # file:// URIs for pipeline
+df   = mta.load_gt(cam_id=0)          # frame, person_id, left, top, width, height
+all_gt = mta.load_all_gt()            # {cam_id: DataFrame}
+```
+
+### Wildtrack (`src/dataset/wildtrack.py`)
+
+7 outdoor cameras, ~60fps, 2fps GT annotations (every 0.5s).
+Annotation files: `annotations_positions/00000000.json` … `00001995.json`
+
+```python
+from src.dataset.wildtrack import WildtrackDataset
+wt = WildtrackDataset("dataset/Wildtrack")
+uris = wt.get_video_uris()
+df   = wt.load_gt(cam_id=0, max_seconds=60.0)
+```
+
+Annotation → video frame mapping: `ann_idx × (60fps / 2fps) ≈ ann_idx × 29.97`
+
+GT probes for Wildtrack use **floor** (not round) to snap pipeline
+`frame_number` to the most-recent annotation slot, so boxes never appear ahead
+of the person.
+
+---
+
+## 19. Difficulty Filter for MTA Evaluation
+
+MTA is a GTA V simulation — it annotates every person even when they are a few
+pixels wide or mostly off-screen. ~76% of GT boxes have `width < 32px` in the
+1920×1080 source, which is only ~10px at YOLO's 640px input and impossible to
+detect.
+
+Default filter applied by both `mta_to_yolo.py` (training) and
+`src.eval.metrics` (evaluation):
+
+| Filter | Value | Reason |
+|--------|-------|--------|
+| `min_height` | 60px | ≈20px at 640px input — minimum YOLO can detect |
+| `min_width` | 20px | Removes slivers |
+| `min_visibility` | 30% | Removes persons mostly outside the frame |
+
+```bash
+# Evaluate with default filter (recommended)
+python -m src.eval.metrics --gt-dir ... --pred-dir ...
+
+# Raw GT (no filter) — shows true dataset noise
+python -m src.eval.metrics --gt-dir ... --pred-dir ... --no-filter
+
+# Stricter filter
+python -m src.eval.metrics --gt-dir ... --pred-dir ... --min-height 80
+```
+
+Always apply the same filter to training data and evaluation data so the two
+distributions align.
+
+---
+
+## 20. Pipeline Presets (`--config`)
+
+Gallery tuning constants are dataset-specific. Instead of passing many CLI
+flags, use a preset YAML with a `reid:` section:
+
+```yaml
+# configs/pipeline_mta.yaml
+reid:
+  similarity_threshold: 0.68
+  gallery_max_age: 2500          # longer for 6-cam inter-camera gaps
+  global_merge_threshold: 0.74   # slightly more aggressive than mtmc4cam
+  global_merge_min_embeddings: 5 # 41fps builds embeddings faster
+  tracklet_window: 10
+  tracklet_max_age: 2500
+  tracklet_embedding_interval: 8 # 41fps → effective 5fps sampling
+```
+
+CLI flags still override preset values:
+
+```bash
+python -m src.main \
+    --config configs/pipeline_mta.yaml \
+    --mta-dataset dataset/mta/MTA_ext_short/test \
+    --global-merge-threshold 0.70   # overrides preset
+```
+
+Keep one preset per dataset. Never edit the default `pipeline.yaml` for
+dataset-specific tuning — that would break the mtmc_4cam reference.
+
+---
+
+## 21. Throughput Bottleneck Analysis
+
+Benchmark results on RTX 3050Ti 4GB (yolo11n + NvDeepSORT Swin-Tiny):
+
+| Cameras | FPS/cam | FPS total | VRAM | GPU% |
+|---------|---------|-----------|------|------|
+| 1 | 222 | 222 | 534MB | 88% |
+| 2 | 62 | 125 | 660MB | 89% |
+| 4 | 15 | 62 | 907MB | 91% |
+| 6 | 6.5 | 39 | 1156MB | 89% |
+
+**VRAM is not the bottleneck** — 23% used at 4 cameras (907/4096MB).
+GPU% stays ~90% regardless of camera count.
+
+**Real bottleneck: Swin-Tiny ReID inference** in nvtracker.
+Each frame, nvtracker sends all tracked crops through the ReID model in batches
+of 16. At 6 cameras × 80 targets = 480 crops → 30 ReID batches per frame.
+These run serially, blocking the tracker output.
+
+Scaling is super-linear: 1→2 cameras drops efficiency by 64%, not 50%.
+
+**Mitigation:** Use `interval` in nvinfer config to skip inference frames.
+The tracker still runs every frame, so tracking remains smooth.
+
+```bash
+# Benchmark different frame-skip levels
+python scripts/benchmark_throughput.py \
+    --source dataset/Wildtrack/cam1.mp4 \
+    --cam-counts 1 2 4 6 8 \
+    --inference-intervals 0 1 2 4 \
+    --duration 30 --target-fps 10
+```
+
+`interval=2` (infer every 3rd frame) roughly doubles FPS at 1 camera
+(220→415 FPS) while reducing GPU load from 94% → 69%.

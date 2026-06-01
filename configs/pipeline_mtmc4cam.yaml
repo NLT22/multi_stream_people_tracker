@@ -1,0 +1,65 @@
+# =============================================================================
+# Pipeline preset — mtmc_4cam dataset
+# Tuned for the indoor 4-camera synthetic MTMC scenario.
+#
+# Usage:
+#   python -m src.main --config configs/pipeline_mtmc4cam.yaml \
+#       --sources dataset/mtmc_4cam/videos
+# =============================================================================
+
+source_mode: folder_input
+source_configs:
+  folder_input: configs/sources/folder_input.yaml
+
+detection:
+  config_file: configs/models/nvinfer_yolov11_people.yml
+
+tracker:
+  config_file: configs/tracker/nvdeepsort_reid_swin.yaml
+
+display:
+  tile_width:  1280
+  tile_height: 720
+
+gpu_id: 0
+
+runtime:
+  show_trajectories: true
+  trajectory_history: 96
+  trajectory_sample_interval: 20
+  trajectory_max_segments: 24
+
+# ── ReID / Gallery tuning ─────────────────────────────────────────────────────
+# These are the values tuned for mtmc_4cam.
+# Change only this section when experimenting; leave other presets untouched.
+reid:
+  # Matching
+  similarity_threshold: 0.68       # min cosine sim to accept a gallery match
+  assignment_max_candidates: 80    # gallery candidates per stream per frame
+
+  # ID stability
+  id_stickiness: true
+  id_switch_margin: 0.12           # new match must beat current by this margin
+  ambiguous_match_rejection: true
+  match_ambiguity_margin: 0.06     # reject if top-2 gap < this
+
+  # Global ID merge (repair cross-view splits)
+  global_merge: true
+  global_merge_threshold: 0.76
+  global_merge_min_embeddings: 6
+  global_merge_margin: 0.04
+  global_merge_interval: 5
+  global_merge_max_candidates: 80
+
+  # Tracklet embedding
+  tracklet_embedding: true
+  tracklet_embedding_interval: 5
+  tracklet_window: 8               # max embeddings averaged per tracklet
+  tracklet_min_embeddings: 3       # min before matching allowed
+  tracklet_max_age: 1800           # frames before inactive tracklet dropped
+
+  # Gallery
+  gallery_max_age: 1800
+
+  # Quality gate (skip edge/occluded crops)
+  embedding_quality_gate: true

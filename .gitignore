@@ -1,6 +1,9 @@
 venv
-dataset
+dataset/
 output/
+# src/dataset/ is source code — not ignored despite "dataset/" above
+!src/dataset/
+runs/
 .docker-x11/
 .cache/
 __pycache__/
@@ -12,6 +15,7 @@ __pycache__/
 .ruff_cache/
 .DS_Store
 configs/models/*.runtime_*.yml
+configs/models/*_iv[0-9]*.yml
 models/**/*.engine
 models/**/*.static_b1.onnx
 models/**/*.onnx

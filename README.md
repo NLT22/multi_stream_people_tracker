@@ -230,7 +230,7 @@ flowchart LR
     MUX["nvstreammux<br/>batch multi-camera frames"]
     DET["nvinfer<br/>YOLO11 person detector"]
     TRK["nvtracker<br/>NvDeepSORT + Swin-Tiny ReID embeddings"]
-    SRC["SourceIdCollectorProbe<br/>(camera_id, local_track_id) -> embedding"]
+    SRC["SourceIdCollectorProbe<br/>(camera_id, frame_no) exact — pre-tiler"]
     TILER["nvmultistreamtiler<br/>2x2 visualization grid"]
     REID["CrossCameraGalleryProbe<br/>tracklets + prototypes + Hungarian + merge"]
     OSD["nvosdbin<br/>draw bbox + GID label + trajectories"]
@@ -238,93 +238,45 @@ flowchart LR
     subgraph Outputs["Outputs"]
         DISPLAY["Display window"]
         VIDEO["Annotated MP4"]
+        CSV["Predictions CSV"]
     end
 
     MUX --> DET --> TRK --> SRC --> TILER --> REID --> OSD
     OSD --> DISPLAY
     OSD --> VIDEO
+    REID --> CSV
 ```
 
 - `nvstreammux` batches frames from all camera videos.
-- `nvinfer` runs YOLO11 person detection from
-  `configs/models/nvinfer_yolov11_people.yml`.
-- `nvtracker` assigns per-camera local track IDs. The default
-  `configs/tracker/nvdeepsort_reid_swin.yaml` uses a Swin-Tiny ReID model so
-  the Python gallery receives stronger appearance embeddings for cross-camera
-  Global ID. `configs/tracker/nvdcf_accuracy.yaml` remains useful for A/B tests
-  when local overlap/bbox stability is the main issue.
-- `SourceIdCollectorProbe` runs before tiling, where `source_id` is reliable,
-  and stores `(camera_id, local_track_id) -> embedding`.
+- `nvinfer` runs YOLO11 person detection.
+- `nvtracker` assigns per-camera local track IDs and exports Swin-Tiny ReID
+  embeddings for cross-camera matching.
+- `SourceIdCollectorProbe` runs **pre-tiler** (where `source_id` is exact) and
+  collects `(camera_id, frame_number) → embedding` into shared dicts for the
+  gallery probe.
 - `nvmultistreamtiler` combines all streams into one grid for visualization.
 - `CrossCameraGalleryProbe` links local track IDs into cross-camera Global IDs.
-  The production entrypoint `python -m src.main` uses:
-  tracklet embedding averaging, gallery prototypes, one-to-one assignment,
-  ID stickiness, ambiguity rejection, and bounded online Global ID merging.
+  When `--export-predictions` or `--show-gt` is used, the gallery automatically
+  runs in **pretiler mode** so `camera_id` and `frame_number` in exported CSVs
+  are always exact (no geometric guessing from tile coordinates).
 - `nvosdbin` draws the final `GID:<id>` labels, colors boxes by Global ID, and
-  draws recent trajectory overlays in the default demo.
+  draws recent trajectory overlays.
 
 ### ReID Stabilization Methods
 
-`src/reid/gallery.py` contains the current cross-camera ReID logic used by
-`python -m src.main`. The extra logic is there to handle common failure modes
-in MTMC tracking:
+`src/reid/gallery.py` contains the cross-camera ReID logic. Each method
+addresses a specific failure mode in MTMC tracking:
 
 | Method | Problem it solves | Key controls |
 |--------|-------------------|--------------|
-| Tracklet embedding | Single-frame ReID crops are noisy, especially during occlusion or bbox jitter. | `--tracklet-window`, `--tracklet-min-embeddings` |
-| Gallery prototypes | One person can look different from front/back/side cameras. Multiple vectors preserve different views. | `GALLERY_MAX_PROTOTYPES`, `PROTOTYPE_ADD_THRESHOLD` |
-| Hungarian assignment | Multiple new tracks in one camera can otherwise choose the same Global ID. | `--disable-hungarian`, `--assignment-max-candidates` |
-| Duplicate guard | A Global ID should not appear twice in the same stream at the same time. | `--allow-duplicate-gid-per-stream` |
-| ID stickiness | Prevents labels from bouncing between two similar Global IDs, e.g. `G14 <-> G8`. | `--id-switch-margin`, `--disable-id-stickiness` |
-| Ambiguity rejection | Avoids accepting a match when top-1 and top-2 similarities are too close. | `--match-ambiguity-margin`, `--allow-ambiguous-match` |
-| Online Global ID merge | Fixes stable ID splits, e.g. one camera stays `G4` while the opposite camera becomes `G19`. | `--global-merge-threshold`, `--global-merge-interval` |
-| Bounded candidate search | Prevents lag when many IDs have been created over a long video. | `--gallery-max-age`, `--assignment-max-candidates`, `--global-merge-max-candidates` |
-| Visualization overlay | Makes ID switches easier to inspect without changing tracking decisions. | `--show-trajectories`, `--no-trajectories`, `--trajectory-sample-interval`, `--trajectory-history` |
-
-Useful tuning examples:
-
-```bash
-# Default ReID/Hungarian run
-python -m src.main
-
-# Debug similarity decisions and merge events
-python -m src.main --debug-similarity
-
-# Lower CPU load on long videos with many temporary IDs
-python -m src.main \
-  --gallery-max-age 300 \
-  --assignment-max-candidates 40 \
-  --global-merge-interval 30 \
-  --global-merge-max-candidates 20
-
-# A/B test without online ID merge
-python -m src.main --disable-global-merge
-
-# Inspect colored trajectories while keeping the overlay lightweight
-python -m src.main --show-trajectories --trajectory-sample-interval 20
-
-# Disable trajectories for a cleaner benchmark video
-python -m src.main --no-trajectories
-```
-
-Useful ReID commands:
-
-```bash
-python -m src.main
-
-python -m src.main \
-  --save-video output/videos/m8_hungarian_tracklet.mp4 \
-  --no-display
-
-python -m src.main \
-  --debug-similarity \
-  --tracklet-window 16 \
-  --tracklet-min-embeddings 8
-```
-
-Use `--disable-tracklet`, `--disable-id-stickiness`,
-`--allow-ambiguous-match`, `--disable-global-merge`, or
-`--allow-duplicate-gid-per-stream` for A/B tests against simpler behavior.
+| Tracklet embedding | Single-frame ReID crops are noisy during occlusion or bbox jitter. | `tracklet_window`, `tracklet_min_embeddings` |
+| Gallery prototypes | One person looks different from front/back/side cameras. | `GALLERY_MAX_PROTOTYPES`, `PROTOTYPE_ADD_THRESHOLD` |
+| Hungarian assignment | Multiple new tracks in one camera can choose the same Global ID. | `assignment_max_candidates` |
+| Duplicate guard | A Global ID should not appear twice in the same stream. | `--allow-duplicate-gid-per-stream` |
+| ID stickiness | Prevents labels bouncing between two similar Global IDs. | `id_switch_margin` |
+| Ambiguity rejection | Avoids accepting a match when top-1 and top-2 are too close. | `match_ambiguity_margin` |
+| Online Global ID merge | Fixes stable ID splits across cameras. | `global_merge_threshold`, `global_merge_interval` |
+| Bounded candidate search | Prevents lag on long videos with many IDs. | `gallery_max_age`, `assignment_max_candidates` |
 
 ---
 
@@ -334,15 +286,13 @@ Use this path if DeepStream 9.0 is installed directly on the host.
 
 ```bash
 cd multi_stream_people_tracker
-
 chmod +x setup_venv.sh
 ./setup_venv.sh
 source venv/bin/activate
 
+# Edit source list, then run
 nano configs/sources/video_files.txt
-
 python -m src.main
-python -m src.main --debug-similarity
 ```
 
 Local prerequisites:
@@ -355,6 +305,424 @@ Local prerequisites:
 | DeepStream | 9.0 |
 | Python | 3.12 |
 | TensorRT | 10.14 |
+
+---
+
+## Pipeline Presets
+
+The `--config` flag selects a YAML preset that sets sources, model, and all
+ReID/gallery tuning for a specific dataset. CLI flags still override any value.
+
+| Preset | Dataset | Notes |
+|--------|---------|-------|
+| `configs/pipeline.yaml` | mtmc_4cam (default) | Indoor 4-cam synthetic warehouse |
+| `configs/pipeline_mtmc4cam.yaml` | mtmc_4cam | Explicit preset, same tuning |
+| `configs/pipeline_mta.yaml` | MTA (6-cam, 41fps, GTA V) | Tuned for crowded outdoor |
+
+```bash
+# mtmc_4cam — default
+python -m src.main --sources dataset/mtmc_4cam/videos
+
+# MTA dataset — uses fine-tuned detector + gallery tuned for 6 cameras
+python -m src.main \
+    --config configs/pipeline_mta.yaml \
+    --mta-dataset dataset/mta/MTA_ext_short/test \
+    --no-sync
+
+# Override one gallery param without creating a new preset
+python -m src.main \
+    --config configs/pipeline_mta.yaml \
+    --mta-dataset dataset/mta/MTA_ext_short/test \
+    --global-merge-threshold 0.70
+```
+
+### Gallery Tuning in YAML
+
+Every ReID/gallery parameter can be set in the `reid:` section of a preset.
+Boolean flags use positive names (`id_stickiness: true` rather than
+`disable_id_stickiness: false`) for readability.
+
+```yaml
+reid:
+  similarity_threshold: 0.68
+  gallery_max_age: 1800
+  id_stickiness: true
+  id_switch_margin: 0.12
+  ambiguous_match_rejection: true
+  match_ambiguity_margin: 0.06
+  global_merge: true
+  global_merge_threshold: 0.76
+  global_merge_min_embeddings: 6
+  global_merge_margin: 0.04
+  global_merge_interval: 5
+  global_merge_max_candidates: 80
+  tracklet_embedding: true
+  tracklet_embedding_interval: 5
+  tracklet_window: 8
+  tracklet_min_embeddings: 3
+  tracklet_max_age: 1800
+  embedding_quality_gate: true
+```
+
+---
+
+## Dataset Support
+
+### mtmc_4cam / mtmc_12cam
+
+Indoor synthetic warehouse, NVIDIA reference dataset.
+
+```bash
+python -m src.main --sources dataset/mtmc_4cam/videos
+python -m src.main --sources dataset/mtmc_12cam/videos
+```
+
+### Wildtrack
+
+7 outdoor cameras, ~60fps, 200s annotated, real pedestrians.
+
+```bash
+# GT-only demo (no inference)
+python -m src.eval.wildtrack_gt_demo \
+    --wildtrack-dataset dataset/Wildtrack \
+    --trim-seconds 60
+
+# Full pipeline with GT overlay
+python -m src.main \
+    --wildtrack-dataset dataset/Wildtrack \
+    --show-gt --wildtrack-minutes 3 --no-sync
+```
+
+### MTA (MTA_ext_short)
+
+6 cameras, 41fps, GTA V synthetic, full person_id across cameras.
+
+```bash
+# GT-only demo
+python -m src.eval.gt_demo \
+    --mta-dataset dataset/mta/MTA_ext_short/test \
+    --save-video output/videos/mta_gt.mp4
+
+# Full pipeline, headless, export predictions for offline eval
+python -m src.main \
+    --config configs/pipeline_mta.yaml \
+    --mta-dataset dataset/mta/MTA_ext_short/test \
+    --export-predictions output/eval/mta_run1 \
+    --no-sync --no-display
+```
+
+---
+
+## Training a Custom Detector on MTA
+
+```bash
+# Step 1 — Convert MTA annotations to YOLO format (~10 min)
+# Applies difficulty filter (min_height=60px, min_visibility=30%)
+# matching the eval filter so training and evaluation distributions align.
+python scripts/mta_to_yolo.py \
+    --mta-root dataset/mta/MTA_ext_short \
+    --output-dir dataset/mta_yolo \
+    --sample-rate 5
+
+# Step 2 — Fine-tune YOLO11n (~hours depending on GPU)
+python scripts/train_yolo_mta.py \
+    --data dataset/mta_yolo/dataset.yaml \
+    --epochs 50 --batch 16
+
+# Step 3 — Export predictions then compute metrics
+python -m src.main \
+    --config configs/pipeline_mta.yaml \
+    --mta-dataset dataset/mta/MTA_ext_short/test \
+    --export-predictions output/eval/mta_finetuned \
+    --no-sync --no-display
+
+python -m src.eval.metrics \
+    --gt-dir dataset/mta/MTA_ext_short/test \
+    --pred-dir output/eval/mta_finetuned
+```
+
+The difficulty filter (`--min-height 60 --min-width 20 --min-visibility 0.3`)
+is applied by default in both `mta_to_yolo.py` and `src.eval.metrics` to
+exclude boxes too small to detect at YOLO's 640px input. Pass `--no-filter` to
+either script to evaluate on raw GT.
+
+---
+
+## Offline Evaluation
+
+`src/eval/metrics.py` computes MOTA, IDF1, and HOTA from exported predictions.
+
+```bash
+python -m src.eval.metrics \
+    --gt-dir dataset/mta/MTA_ext_short/test \
+    --pred-dir output/eval/mta_finetuned
+
+# Disable difficulty filter to see raw numbers
+python -m src.eval.metrics \
+    --gt-dir dataset/mta/MTA_ext_short/test \
+    --pred-dir output/eval/mta_finetuned \
+    --no-filter
+
+# Stricter size filter
+python -m src.eval.metrics \
+    --gt-dir dataset/mta/MTA_ext_short/test \
+    --pred-dir output/eval/mta_finetuned \
+    --min-height 80
+```
+
+| Metric | Scope | Library |
+|--------|-------|---------|
+| MOTA, MOTP, IDS, IDF1 | Per-camera | motmetrics |
+| IDF1 | Global cross-camera (`global_id` vs `person_id`) | motmetrics |
+| HOTA, DetA, AssA | Per-camera | trackeval |
+
+---
+
+## Throughput Benchmark
+
+`scripts/benchmark_throughput.py` measures sustainable FPS at different stream
+counts and inference intervals.
+
+```bash
+# Basic sweep — 1 to 12 cameras, stop when below 10 FPS/cam
+python scripts/benchmark_throughput.py \
+    --source dataset/Wildtrack/cam1.mp4 \
+    --cam-counts 1 2 4 6 8 10 12 \
+    --duration 30 --warmup 8 \
+    --target-fps 10 \
+    --stop-on-fail
+
+# Compare inference intervals (frame-skip trade-off)
+python scripts/benchmark_throughput.py \
+    --source dataset/mta/MTA_ext_short/test/cam_0/cam_0.mp4 \
+    --cam-counts 1 2 4 6 8 \
+    --nvinfer-config configs/models/nvinfer_yolov11_mta.yml \
+    --inference-intervals 0 1 2 4 \
+    --duration 30 --target-fps 10 --stop-on-fail
+```
+
+`--inference-intervals 0 1 2 4` runs four sweeps:
+- `0` = inference every frame
+- `1` = every 2 frames, tracker fills gaps
+- `2` = every 3 frames (~2× FPS at 1-cam)
+- `4` = every 5 frames (~3-4× FPS, accuracy trade-off)
+
+Results include per-run VRAM usage, GPU utilization, temperature, and power.
+
+---
+
+## Source Configuration
+
+Default source mode is `video_files`.
+
+```yaml
+source_mode: video_files
+
+source_configs:
+  video_files:  configs/sources/video_files.txt
+  folder_input: configs/sources/folder_input.yaml
+  rtsp_cameras: configs/sources/rtsp_cameras.txt
+```
+
+Source files:
+
+- Local host run: edit `configs/sources/video_files.txt`
+- Docker run: edit `configs/sources/video_files_docker.txt`
+- Folder scan: edit `configs/sources/folder_input.yaml`
+- RTSP cameras: edit `configs/sources/rtsp_cameras.txt`
+
+---
+
+## Detection Models
+
+Switch model by changing `detection.config_file` in a preset YAML,
+or pass `--nvinfer-config`.
+
+| Model | Config | Person Class | Notes |
+|-------|--------|--------------|-------|
+| YOLO11n COCO | `configs/models/nvinfer_yolov11_people.yml` | 0 | default |
+| YOLO11n MTA | `configs/models/nvinfer_yolov11_mta.yml` | 0 | fine-tuned on MTA, nc=1 |
+| YOLOv8n COCO | `configs/models/nvinfer_yolov8_people.yml` | 0 | stable baseline |
+| TrafficCamNet | `configs/models/nvinfer_trafficcamnet.yml` | 2 | bundled-style detector |
+| PeopleNet | `configs/models/nvinfer_peoplenet.yml` | 0 | person-focused TAO detector |
+
+The custom parser (`models/yolov8/libnvds_infercustomparser_yolov8.so`) handles
+any number of classes dynamically — it works for both nc=80 (COCO) and nc=1
+(MTA fine-tuned) without recompilation.
+
+PeopleNet download:
+
+```bash
+bash scripts/download_peoplenet.sh
+```
+
+---
+
+## Trackers
+
+Switch tracker by changing `tracker.config_file` in a preset YAML,
+or pass `--tracker-config`.
+
+| Tracker | Config | Use |
+|---------|--------|-----|
+| IoU | `configs/tracker/iou.yaml` | simplest baseline |
+| NvDCF perf | `configs/tracker/nvdcf_perf.yaml` | fast GPU tracker, no ReID embeddings |
+| NvDCF accuracy | `configs/tracker/nvdcf_accuracy.yaml` | local visual tracking + ReID tensor export |
+| NvDeepSORT ResNet50 | `configs/tracker/nvdeepsort_reid.yaml` | ReID experiments |
+| NvDeepSORT Swin-Tiny | `configs/tracker/nvdeepsort_reid_swin.yaml` | default MTMC demo |
+
+---
+
+## Project Layout
+
+```text
+multi_stream_people_tracker/
+├── configs/
+│   ├── pipeline.yaml                  # default preset (mtmc_4cam)
+│   ├── pipeline_mtmc4cam.yaml         # explicit mtmc_4cam preset
+│   ├── pipeline_mta.yaml              # MTA dataset preset
+│   ├── sources/
+│   ├── models/
+│   │   ├── nvinfer_yolov11_people.yml
+│   │   ├── nvinfer_yolov11_mta.yml    # fine-tuned detector, nc=1
+│   │   ├── nvinfer_yolov8_people.yml
+│   │   ├── nvinfer_trafficcamnet.yml
+│   │   └── nvinfer_peoplenet.yml
+│   ├── tracker/
+│   └── labels/
+├── dataset/
+│   ├── mtmc_4cam/
+│   ├── mtmc_12cam/
+│   ├── Wildtrack/
+│   └── mta/
+├── models/
+│   ├── yolov8/                        # ONNX + custom parser .so
+│   ├── yolov11/                       # ONNX (COCO + MTA fine-tuned)
+│   └── reid/
+├── milestones/
+├── scripts/
+│   ├── mta_to_yolo.py                 # MTA → YOLO dataset conversion
+│   ├── train_yolo_mta.py              # YOLO11n fine-tuning on MTA
+│   ├── benchmark_throughput.py        # FPS vs camera count benchmark
+│   ├── prepare_demo.sh
+│   ├── prepare_dataset.sh
+│   ├── prepare_models.sh
+│   └── docker_smoke_test.sh
+├── src/
+│   ├── main.py
+│   ├── dataset/
+│   │   ├── mta.py                     # MTA dataset loader
+│   │   └── wildtrack.py               # Wildtrack dataset loader
+│   ├── eval/
+│   │   ├── export.py                  # prediction CSV exporter
+│   │   ├── metrics.py                 # MOTA / IDF1 / HOTA offline eval
+│   │   ├── gt_demo.py                 # MTA GT-only demo pipeline
+│   │   ├── gt_overlay.py              # GT bbox overlay probe
+│   │   └── wildtrack_gt_demo.py       # Wildtrack GT-only demo pipeline
+│   ├── pipeline/
+│   │   ├── builder.py
+│   │   ├── engine_prep.py
+│   │   ├── model_utils.py
+│   │   ├── probes.py
+│   │   ├── recording.py
+│   │   └── sources.py
+│   └── reid/
+│       ├── gallery.py
+│       └── visualization.py
+├── output/
+│   ├── videos/
+│   ├── eval/                          # exported prediction CSVs
+│   └── benchmark/                     # throughput benchmark CSVs
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── LEARNING_NOTES.md
+└── README.md
+```
+
+---
+
+## Troubleshooting
+
+### Docker Cannot Pull DeepStream
+
+```bash
+docker login nvcr.io
+```
+
+Use username `$oauthtoken` and an NGC API key as password.
+
+### Docker Window Does Not Open
+
+The default Docker command uses `--no-display` and saves an annotated video.
+For an interactive display, uncomment the `DISPLAY` environment variable and
+X11 socket mount in `docker-compose.yml`, then check:
+
+```bash
+echo $DISPLAY
+xhost +local:docker
+```
+
+### Docker Cannot Find Videos
+
+```bash
+VIDEO_DIR=/home/user/datasets/mtmc_4cam/videos docker compose up
+```
+
+### First Run Is Slow
+
+TensorRT is building `.engine` files. Subsequent runs are fast (~1-3 min on
+RTX 3050Ti for YOLO11n).
+
+### `ModuleNotFoundError: pyservicemaker`
+
+```bash
+source venv/bin/activate
+./setup_venv.sh
+```
+
+### Buffer Drop Warnings (MTA / high-fps sources)
+
+MTA videos run at 41fps. Use `--no-sync` to prevent the sink from trying to
+render at source timestamp rate:
+
+```bash
+python -m src.main --config configs/pipeline_mta.yaml \
+    --mta-dataset dataset/mta/MTA_ext_short/test --no-sync
+```
+
+### Metadata Iterator Error
+
+`frame_meta.object_items` and `batch_meta.frame_items` are iterators.
+Do not call `len()` directly; iterate to count.
+
+### VRAM Pressure
+
+```bash
+# Smaller tiles
+python -m src.main --tile-w 640 --tile-h 360
+
+# Headless (no display)
+python -m src.main --save-video output/videos/reid.mp4 --no-display
+
+# Skip inference frames (2× FPS with slight accuracy trade-off)
+# Add to nvinfer config:  interval: 2
+# Or use benchmark to find the right interval:
+python scripts/benchmark_throughput.py --source ... --inference-intervals 0 1 2 4
+```
+
+---
+
+## DeepStream 9.0 Paths
+
+```text
+Base:        /opt/nvidia/deepstream/deepstream-9.0/
+Tracker lib: /opt/nvidia/deepstream/deepstream-9.0/lib/libnvds_nvmultiobjecttracker.so
+PSM wheel:   /opt/nvidia/deepstream/deepstream-9.0/service-maker/python/pyservicemaker*.whl
+```
+
+Config file paths inside nvinfer YAML are relative to the config file's
+directory, not the shell working directory.
 
 ---
 
@@ -394,228 +762,3 @@ python milestones/07_metadata_extraction.py --save-json
 python milestones/08_reid_stub.py
 python milestones/08_reid_stub.py --tracker-config configs/tracker/nvdcf_perf.yaml
 ```
-
----
-
-## Source Configuration
-
-Default source mode is `video_files`.
-
-```yaml
-source_mode: video_files
-
-source_configs:
-  video_files:  configs/sources/video_files.txt
-  folder_input: configs/sources/folder_input.yaml
-  rtsp_cameras: configs/sources/rtsp_cameras.txt
-```
-
-Source files:
-
-- Local host run: edit `configs/sources/video_files.txt`
-- Docker run: edit `configs/sources/video_files_docker.txt`
-- Folder scan: edit `configs/sources/folder_input.yaml`
-- RTSP cameras: edit `configs/sources/rtsp_cameras.txt`
-
----
-
-## Detection Models
-
-Switch model by changing `detection.config_file` in `configs/pipeline.yaml`,
-or pass `--nvinfer-config` to any milestone from 03 onward.
-
-| Model | Config | Person Class | Notes |
-|-------|--------|--------------|-------|
-| YOLO11n COCO | `configs/models/nvinfer_yolov11_people.yml` | 0 | default, dynamic ONNX, reuses YOLOv8 parser |
-| YOLOv8n COCO | `configs/models/nvinfer_yolov8_people.yml` | 0 | stable baseline, dynamic ONNX, custom parser |
-| TrafficCamNet | `configs/models/nvinfer_trafficcamnet.yml` | 2 | bundled-style detector |
-| PeopleNet | `configs/models/nvinfer_peoplenet.yml` | 0 | person-focused TAO detector |
-
-Milestones 04-08 infer the person class id from the selected label file, so
-you do not need to edit Python constants when switching detectors.
-
-YOLO11 details:
-
-- ONNX: `models/yolov11/yolo11n.onnx`
-- Parser: `models/yolov8/libnvds_infercustomparser_yolov8.so`
-- Engine: `models/yolov11/yolo11n.onnx_b4_gpu0_fp16.engine`
-- YOLO11 uses the same DeepStream parser path as YOLOv8 because the exported
-  tensor layout is compatible.
-
-YOLOv8 fallback details:
-
-- ONNX: `models/yolov8/yolov8n.onnx`
-- Parser: `models/yolov8/libnvds_infercustomparser_yolov8.so`
-- Engine: `models/yolov8/yolov8n.onnx_b4_gpu0_fp16.engine`
-- The ONNX must be exported with dynamic batch. Static batch-1 exports only
-  produce detections for one frame in a DeepStream batch.
-
-PeopleNet download:
-
-```bash
-bash scripts/download_peoplenet.sh
-```
-
----
-
-## Trackers
-
-Switch tracker by changing `tracker.config_file` in `configs/pipeline.yaml`,
-or pass `--tracker-config`.
-
-| Tracker | Config | Use |
-|---------|--------|-----|
-| IoU | `configs/tracker/iou.yaml` | simplest baseline |
-| NvDCF perf | `configs/tracker/nvdcf_perf.yaml` | fast GPU tracker, no ReID embeddings |
-| NvDCF accuracy | `configs/tracker/nvdcf_accuracy.yaml` | local visual tracking + ReID tensor export A/B test |
-| NvDeepSORT ResNet50 | `configs/tracker/nvdeepsort_reid.yaml` | ReID experiments |
-| NvDeepSORT Swin-Tiny | `configs/tracker/nvdeepsort_reid_swin.yaml` | default MTMC demo |
-
----
-
-## Project Layout
-
-```text
-multi_stream_people_tracker/
-├── configs/
-│   ├── pipeline.yaml
-│   ├── sources/
-│   │   ├── video_files.txt
-│   │   ├── video_files_docker.txt
-│   │   ├── folder_input.yaml
-│   │   └── rtsp_cameras.txt
-│   ├── models/
-│   │   ├── nvinfer_yolov8_people.yml
-│   │   ├── nvinfer_yolov11_people.yml
-│   │   ├── nvinfer_trafficcamnet.yml
-│   │   └── nvinfer_peoplenet.yml
-│   ├── tracker/
-│   │   ├── iou.yaml
-│   │   ├── nvdcf_perf.yaml
-│   │   ├── nvdcf_accuracy.yaml
-│   │   ├── nvdeepsort_reid.yaml
-│   │   └── nvdeepsort_reid_swin.yaml
-│   └── labels/
-├── models/
-│   ├── yolov8/
-│   ├── yolov11/
-│   ├── trafficcamnet/
-│   ├── peoplenet/
-│   └── reid/
-├── milestones/
-├── src/
-│   ├── main.py
-│   ├── pipeline/
-│   │   ├── builder.py
-│   │   ├── engine_prep.py
-│   │   ├── model_utils.py
-│   │   ├── probes.py
-│   │   ├── recording.py
-│   │   └── sources.py
-│   └── reid/
-│       ├── gallery.py
-│       └── visualization.py
-├── scripts/
-│   ├── prepare_demo.sh
-│   ├── prepare_dataset.sh
-│   ├── prepare_models.sh
-│   └── docker_smoke_test.sh
-├── reid_pipeline.py        # compatibility wrapper; prefer python -m src.main
-├── Dockerfile
-├── docker-compose.yml
-├── LEARNING_NOTES.md
-└── README.md
-```
-
----
-
-## Troubleshooting
-
-### Docker Cannot Pull DeepStream
-
-Run:
-
-```bash
-docker login nvcr.io
-```
-
-Use username `$oauthtoken` and an NGC API key as password.
-
-### Docker Window Does Not Open
-
-The default Docker command uses `--no-display` and saves an annotated video.
-For an interactive display, uncomment the `DISPLAY` environment variable and
-X11 socket mount in `docker-compose.yml`, then check:
-
-```bash
-echo $DISPLAY
-xhost +local:docker
-```
-
-If your Docker setup cannot share `/tmp/.X11-unix`, override the mount source:
-
-```bash
-X11_SOCKET_DIR=/path/shared/with/docker docker compose up
-```
-
-### Docker Cannot Find Videos
-
-Make sure host `VIDEO_DIR` points to the folder containing the files listed in
-`configs/sources/video_files_docker.txt`.
-
-Example:
-
-```bash
-VIDEO_DIR=/home/user/datasets/mtmc_4cam/videos docker compose up
-```
-
-with:
-
-```text
-/videos/Warehouse_Synthetic_Cam001.mp4
-/videos/Warehouse_Synthetic_Cam002.mp4
-```
-
-### First Run Is Slow
-
-TensorRT is building `.engine` files. Subsequent runs are fast.
-
-### `ModuleNotFoundError: pyservicemaker`
-
-For local host runs:
-
-```bash
-source venv/bin/activate
-./setup_venv.sh
-```
-
-Docker installs pyservicemaker inside the image.
-
-### Metadata Iterator Error
-
-`frame_meta.object_items` and `batch_meta.frame_items` are iterators.
-Do not call `len()` directly; iterate to count.
-
-### VRAM Pressure
-
-Use smaller tiles or save without display:
-
-```bash
-python -m src.main --tile-w 640 --tile-h 360
-python -m src.main --save-video output/videos/reid.mp4 --no-display
-```
-
-You can also increase `interval` in the nvinfer config to skip inference frames.
-
----
-
-## DeepStream 9.0 Paths
-
-```text
-Base:        /opt/nvidia/deepstream/deepstream-9.0/
-Tracker lib: /opt/nvidia/deepstream/deepstream-9.0/lib/libnvds_nvmultiobjecttracker.so
-PSM wheel:   /opt/nvidia/deepstream/deepstream-9.0/service-maker/python/pyservicemaker*.whl
-```
-
-Config file paths inside nvinfer YAML are relative to the config file's
-directory, not the shell working directory.

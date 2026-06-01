@@ -31,80 +31,10 @@ from src.reid.visualization import style_object_by_id
 
 # =============================================================================
 # ReID / Global-ID Tuning
+# (ordered: local stream → global)
 # =============================================================================
-#
-# Match threshold:
-#   Higher -> fewer false matches, but more ID splits.
-#   Lower  -> easier to reconnect the same person, but more merge risk.
-SIMILARITY_THRESHOLD = 0.68
 
-# Gallery memory:
-#   Gallery stores known Global IDs after a local track disappears.
-#   Increase age if people leave/re-enter after a long gap.
-#   Decrease age if old identities are reused incorrectly.
-GALLERY_MAX_AGE = 1800
-
-# Gallery prototypes:
-#   Each Global ID can keep multiple appearance vectors for different views.
-#   More prototypes improve view coverage but increase matching cost.
-#   Set to 0 to disable multi-prototype mode and keep one vector per Global ID.
-GALLERY_MAX_PROTOTYPES = 24
-
-# Prototype admission:
-#   Add a new prototype when the current embedding is visually different enough.
-#   Higher -> compact gallery, less noise.
-#   Lower  -> more view coverage, more chance of storing bad crops.
-PROTOTYPE_ADD_THRESHOLD = 0.72
-
-# Assignment:
-#   Hungarian solves one-to-one assignment for new local tracks within a stream.
-#   This prevents multiple people in the same camera from selecting one Global ID.
-USE_HUNGARIAN_ASSIGNMENT = True
-GLOBAL_ASSIGNMENT_MAX_CANDIDATES = 80
-
-# Duplicate guard:
-#   Keeps already-known local tracks from displaying the same Global ID twice in
-#   one stream. Keep this on with Hungarian; disable only for A/B debugging.
-ENFORCE_UNIQUE_GLOBAL_PER_STREAM = True
-
-# ID stickiness:
-#   A local track that already has a Global ID should not switch to another ID
-#   unless the new candidate is clearly better than the current one.
-#   This prevents labels from bouncing between two visually similar IDs.
-ENABLE_ID_STICKINESS = True
-ID_SWITCH_MARGIN = 0.12
-
-# Ambiguous match rejection:
-#   For a new/released local track, accept an existing Global ID only when the
-#   best match beats the runner-up by this margin. If G14=0.64 and G8=0.62,
-#   create/keep a separate ID instead of randomly bouncing between them.
-ENABLE_AMBIGUOUS_MATCH_REJECTION = True
-MATCH_AMBIGUITY_MARGIN = 0.06
-
-# Global-ID merge:
-#   A cross-view track may first become a new Global ID because the opposite
-#   camera crop looks very different. After enough tracklet evidence, merge the
-#   duplicate ID into the best older Global ID if the match is strong and does
-#   not create two copies of one Global ID in the same stream frame.
-ENABLE_GLOBAL_ID_MERGE = True
-GLOBAL_ID_MERGE_THRESHOLD = 0.76
-GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS = 6
-GLOBAL_ID_MERGE_MARGIN = 0.04
-GLOBAL_ID_MERGE_INTERVAL = 5
-GLOBAL_ID_MERGE_MAX_CANDIDATES = 80
-
-# Tracklet embedding:
-#   Tracklet mode averages recent embeddings for each (camera, local_track_id).
-#   This is more stable than matching on a single noisy frame crop.
-USE_TRACKLET_EMBEDDING = True
-
-# Tracklet sampling:
-#   Do not store every frame embedding. DeepStream's native ReID tracker has a
-#   similar reidExtractionInterval knob; sampling lowers cost and avoids letting
-#   long runs of back-view / partial crops overwrite a clean appearance.
-TRACKLET_EMBEDDING_INTERVAL = 5
-
-# Embedding quality gate:
+# --- 1. Embedding quality gate (per-frame crop filter) -----------------------
 #   A bad crop can be useful for drawing the current bbox, but it should not
 #   create/update long-term identity memory. Keep the current GID if known, and
 #   wait for a cleaner crop before matching a brand-new local track.
@@ -116,21 +46,84 @@ REID_MIN_BBOX_ASPECT_RATIO = 0.12
 REID_MAX_BBOX_ASPECT_RATIO = 0.95
 REID_MAX_OVERLAP_IOU_FOR_UPDATE = 0.25
 
-# Tracklet memory:
-#   Drop inactive local tracklets after this many batches.
-TRACKLET_MAX_AGE = 1800
+# --- 2. Tracklet (local per-camera track memory) -----------------------------
+#   Tracklet mode averages recent embeddings for each (camera, local_track_id).
+#   This is more stable than matching on a single noisy frame crop.
+USE_TRACKLET_EMBEDDING = True
 
-# Tracklet smoothing window:
+#   Do not store every frame embedding. DeepStream's native ReID tracker has a
+#   similar reidExtractionInterval knob; sampling lowers cost and avoids letting
+#   long runs of back-view / partial crops overwrite a clean appearance.
+TRACKLET_EMBEDDING_INTERVAL = 5
+
 #   Number of recent embeddings kept per local track.
 #   Larger -> smoother but slower to adapt if tracker switches identity.
 TRACKLET_MAX_EMBEDDINGS = 8
 
-# Tracklet warmup:
 #   Use raw frame embedding until the local tracklet has this many embeddings.
 #   Larger -> more stable first match, but slower cross-camera linking.
 TRACKLET_MIN_EMBEDDINGS_FOR_MATCH = 3
 
-# Debug:
+#   Drop inactive local tracklets after this many batches.
+TRACKLET_MAX_AGE = 1800
+
+# --- 3. Gallery (global identity store) --------------------------------------
+#   Gallery stores known Global IDs after a local track disappears.
+#   Increase age if people leave/re-enter after a long gap.
+#   Decrease age if old identities are reused incorrectly.
+GALLERY_MAX_AGE = 1800
+
+#   Each Global ID can keep multiple appearance vectors for different views.
+#   More prototypes improve view coverage but increase matching cost.
+#   Set to 0 to disable multi-prototype mode and keep one vector per Global ID.
+GALLERY_MAX_PROTOTYPES = 24
+
+#   Add a new prototype when the current embedding is visually different enough.
+#   Higher -> compact gallery, less noise.
+#   Lower  -> more view coverage, more chance of storing bad crops.
+PROTOTYPE_ADD_THRESHOLD = 0.72
+
+# --- 4. Match threshold (local track → global ID similarity) -----------------
+#   Higher -> fewer false matches, but more ID splits.
+#   Lower  -> easier to reconnect the same person, but more merge risk.
+SIMILARITY_THRESHOLD = 0.68
+
+# --- 5. Assignment (local tracks competing for global IDs) -------------------
+#   Hungarian solves one-to-one assignment for new local tracks within a stream.
+#   This prevents multiple people in the same camera from selecting one Global ID.
+USE_HUNGARIAN_ASSIGNMENT = True
+GLOBAL_ASSIGNMENT_MAX_CANDIDATES = 80
+
+#   Keeps already-known local tracks from displaying the same Global ID twice in
+#   one stream. Keep this on with Hungarian; disable only for A/B debugging.
+ENFORCE_UNIQUE_GLOBAL_PER_STREAM = True
+
+# --- 6. ID stickiness & ambiguity guard (stabilize assignments) --------------
+#   A local track that already has a Global ID should not switch to another ID
+#   unless the new candidate is clearly better than the current one.
+#   This prevents labels from bouncing between two visually similar IDs.
+ENABLE_ID_STICKINESS = True
+ID_SWITCH_MARGIN = 0.12
+
+#   For a new/released local track, accept an existing Global ID only when the
+#   best match beats the runner-up by this margin. If G14=0.64 and G8=0.62,
+#   create/keep a separate ID instead of randomly bouncing between them.
+ENABLE_AMBIGUOUS_MATCH_REJECTION = True
+MATCH_AMBIGUITY_MARGIN = 0.06
+
+# --- 7. Global-ID merge (cross-camera duplicate resolution) ------------------
+#   A cross-view track may first become a new Global ID because the opposite
+#   camera crop looks very different. After enough tracklet evidence, merge the
+#   duplicate ID into the best older Global ID if the match is strong and does
+#   not create two copies of one Global ID in the same stream frame.
+ENABLE_GLOBAL_ID_MERGE = True
+GLOBAL_ID_MERGE_THRESHOLD = 0.76
+GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS = 6
+GLOBAL_ID_MERGE_MARGIN = 0.04
+GLOBAL_ID_MERGE_INTERVAL = 5
+GLOBAL_ID_MERGE_MAX_CANDIDATES = 80
+
+# --- 8. Debug ----------------------------------------------------------------
 #   Number of nearest Global IDs printed when --debug-similarity is enabled.
 DEBUG_TOP_K = 3
 
@@ -257,10 +250,11 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
     """
 
     def __init__(self, id_map: dict, embeddings: dict, person_class_id: int,
-                 debug: bool = False):
+                 debug: bool = False, frame_numbers: dict | None = None):
         super().__init__()
         self._id_map = id_map
         self._embeddings = embeddings
+        self._frame_numbers = frame_numbers  # source_id → frame_number (for exporter)
         self._person_class_id = person_class_id
         self._debug = debug
         self._frame_count = 0
@@ -292,9 +286,13 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
         # ever seen would accumulate forever on long/multi-camera videos.
         self._embeddings.clear()
         self._id_map.clear()
+        if self._frame_numbers is not None:
+            self._frame_numbers.clear()
 
         for frame_meta in batch_meta.frame_items:
             src = frame_meta.source_id
+            if self._frame_numbers is not None:
+                self._frame_numbers[src] = frame_meta.frame_number
             frame_tensor_count = self._count_iter(frame_meta.tensor_items)
             batch_frame_tensors += frame_tensor_count
             for obj_meta in frame_meta.object_items:
@@ -418,10 +416,13 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                  enforce_unique_per_stream: bool = True,
                  pretiler: bool = False,
                  extract_embeddings: bool = False,
-                 trajectory_visualizer=None):
+                 trajectory_visualizer=None,
+                 exporter=None,
+                 frame_numbers: dict | None = None):
         super().__init__()
         self._id_map = id_map
         self._embeddings = embeddings
+        self._frame_numbers = frame_numbers  # source_id → frame_number from pre-tiler
         self._person_class_id = person_class_id
         self._tile_w = tile_w
         self._tile_h = tile_h
@@ -442,6 +443,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         self._use_hungarian_assignment = use_hungarian_assignment
         self._enforce_unique_per_stream = enforce_unique_per_stream
         self._trajectory_visualizer = trajectory_visualizer
+        self._exporter = exporter
 
     def handle_metadata(self, batch_meta):
         try:
@@ -589,6 +591,27 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 )
                 set_object_label(obj_meta, label)
                 style_object_by_id(obj_meta, row["gid"])
+
+            if self._exporter is not None:
+                for row in rows:
+                    rect = row["rect"]
+                    src = row["src"]
+                    # In post-tiler mode frame_meta.frame_number is the batch
+                    # counter (same for all sources). Use the per-source frame
+                    # number collected by SourceIdCollectorProbe pre-tiler.
+                    fn = (self._frame_numbers.get(src, 0)
+                          if self._frame_numbers is not None
+                          else frame_meta.frame_number)
+                    self._exporter.record(
+                        frame_no=fn,
+                        cam_id=src,
+                        local_track_id=row["track_id"],
+                        global_id=row["gid"],
+                        left=rect["left"],
+                        top=rect["top"],
+                        width=rect["width"],
+                        height=rect["height"],
+                    )
 
             if self._trajectory_visualizer is not None:
                 self._trajectory_visualizer.update_and_draw(
