@@ -23,3 +23,7 @@ ultralytics>=8.0.0
 
 # scipy: used by offline metrics (linear_sum_assignment for global IDF1)
 scipy>=1.11
+
+# ReID fine-tuning (scripts/finetune_reid_mta.py)
+timm>=1.0
+albumentations>=2.0
