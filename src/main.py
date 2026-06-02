@@ -342,8 +342,10 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         print("[reid] pretiler mode: gallery runs on tracker (no src guessing)")
         pipeline.attach("tracker", psm.Probe("reid_probe", gallery_probe))
     else:
-        # Two-probe path: collect source_id/embeddings pre-tiler (where
-        # source_id is valid), then match post-tiler on tiled coordinates.
+        # Two-probe path: SourceIdCollectorProbe fills id_map pre-tiler
+        # (source_id exact), CrossCameraGalleryProbe reads id_map post-tiler.
+        # source_id is resolved from id_map — no geometric tile guessing.
+        print("[reid] two-probe mode: source_id via id_map (pre-tiler exact)")
         pipeline.attach("tracker", psm.Probe(
             "src_collector",
             gallery.SourceIdCollectorProbe(
@@ -497,6 +499,10 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--trajectory-max-segments", type=int,
                         default=defaults["trajectory_max_segments"],
                         help="Max recent line segments drawn per visible local track")
+    parser.add_argument("--similarity-threshold", type=float,
+                        default=defaults["similarity_threshold"],
+                        help="Min cosine similarity to accept a gallery match "
+                             f"(default: {gallery.SIMILARITY_THRESHOLD})")
     parser.add_argument("--gallery-max-age", type=int,
                         default=gallery.GALLERY_MAX_AGE,
                         help="Drop inactive Global IDs after this many batches")

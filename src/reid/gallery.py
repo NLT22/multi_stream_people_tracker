@@ -484,7 +484,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
                 oid = obj_meta.object_id
                 if self._pretiler:
-                    # Pre-tiler: source_id is exact, no guessing.
+                    # Pre-tiler: source_id is exact.
                     src = frame_meta.source_id
                     if self._extract_embeddings:
                         embedding = SourceIdCollectorProbe._extract_embedding(
@@ -492,10 +492,15 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     else:
                         embedding = self._embeddings.get((src, oid), [])
                 else:
-                    # Post-tiler: recover src from where the bbox landed.
-                    src = infer_source_id_from_tiled_box(
-                        obj_meta.rect_params, self._tile_w, self._tile_h,
-                        self._cols, self._num_sources)
+                    # Post-tiler: look up source_id from SourceIdCollectorProbe's
+                    # id_map (filled pre-tiler where source_id is exact).
+                    # Fall back to geometric guessing only if the object wasn't
+                    # seen by the collector (e.g. appeared between the two probes).
+                    src = self._id_map.get(oid)
+                    if src is None:
+                        src = infer_source_id_from_tiled_box(
+                            obj_meta.rect_params, self._tile_w, self._tile_h,
+                            self._cols, self._num_sources)
                     embedding = self._embeddings.get((src, oid), [])
                 track_key = (src, oid)
                 rows.append({
@@ -579,9 +584,11 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 if self._pretiler:
                     src = frame_meta.source_id
                 else:
-                    src = infer_source_id_from_tiled_box(
-                        obj_meta.rect_params, self._tile_w, self._tile_h,
-                        self._cols, self._num_sources)
+                    src = self._id_map.get(obj_meta.object_id)
+                    if src is None:
+                        src = infer_source_id_from_tiled_box(
+                            obj_meta.rect_params, self._tile_w, self._tile_h,
+                            self._cols, self._num_sources)
                 row = row_by_key.get((src, obj_meta.object_id))
                 if row is None:
                     continue
@@ -1275,6 +1282,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 # =============================================================================
 def configure_from_args(args) -> None:
     """Apply main-app CLI overrides onto this module's tuning globals."""
+    global SIMILARITY_THRESHOLD
     global GALLERY_MAX_AGE, GLOBAL_ASSIGNMENT_MAX_CANDIDATES
     global ENABLE_ID_STICKINESS, ID_SWITCH_MARGIN
     global ENABLE_AMBIGUOUS_MATCH_REJECTION, MATCH_AMBIGUITY_MARGIN
@@ -1285,6 +1293,7 @@ def configure_from_args(args) -> None:
     global TRACKLET_MIN_EMBEDDINGS_FOR_MATCH, TRACKLET_MAX_AGE
     global TRACKLET_EMBEDDING_INTERVAL, ENABLE_EMBEDDING_QUALITY_GATE
 
+    SIMILARITY_THRESHOLD = max(0.0, args.similarity_threshold)
     GALLERY_MAX_AGE = max(1, args.gallery_max_age)
     GLOBAL_ASSIGNMENT_MAX_CANDIDATES = max(1, args.assignment_max_candidates)
     ENABLE_ID_STICKINESS = not args.disable_id_stickiness
