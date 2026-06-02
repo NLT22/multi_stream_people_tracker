@@ -34,6 +34,7 @@ import torch.nn.functional as F
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from torchvision import transforms
+from tqdm import tqdm
 import timm
 
 
@@ -255,7 +256,10 @@ def train_one_epoch(model, loader, optimizer, ce_loss, triplet_loss,
     t0 = time.time()
     optimizer.zero_grad()
 
-    for step, (imgs, pids, cams) in enumerate(loader):
+    pbar = tqdm(loader, desc=f"Epoch {epoch}", unit="batch",
+                dynamic_ncols=True, leave=False)
+
+    for step, (imgs, pids, cams) in enumerate(pbar):
         imgs = imgs.to(device)
         pids = pids.to(device)
         cams = cams.to(device)
@@ -287,6 +291,15 @@ def train_one_epoch(model, loader, optimizer, ce_loss, triplet_loss,
         total_loss += (loss * accum_steps).item()
         n_correct  += (logits.argmax(1) == pids).sum().item()
         n_total    += len(pids)
+
+        # Live stats on progress bar
+        pbar.set_postfix(
+            loss=f"{(total_loss/(step+1)):.3f}",
+            ce=f"{(total_ce/(step+1)):.3f}",
+            acc=f"{n_correct/n_total:.3f}",
+        )
+
+    pbar.close()
 
     n = len(loader)
     return {

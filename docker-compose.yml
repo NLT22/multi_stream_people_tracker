@@ -1,4 +1,28 @@
 services:
+  # ── ReID fine-tune (lightweight PyTorch image, no DeepStream needed) ───────
+  reid_train:
+    image: pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility]
+    working_dir: /app
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./dataset/mta/MTA_reid:/app/dataset/mta/MTA_reid:ro
+      - ./output/reid:/app/output/reid
+    command: >
+      bash -c "pip install timm tqdm albumentations -q &&
+               python scripts/finetune_reid_mta.py
+               --epochs 50 --batch 32 --accum-steps 1
+               --workers 4 --output output/reid"
+    stdin_open: true
+    tty: true
+
+  # ── Main tracker pipeline (DeepStream) ─────────────────────────────────────
   tracker:
     build: .
     image: multi_stream_people_tracker:latest
