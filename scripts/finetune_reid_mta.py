@@ -166,9 +166,9 @@ class SwinTinyReID(nn.Module):
             pretrained=pretrained,
             num_classes=0,
         )
-        # Gradient checkpointing only needed if VRAM < 6GB and batch > 64.
-        # Disabled by default — RTX 3050Ti 4GB fits batch=32 without it.
-        self.backbone.set_grad_checkpointing(enable=False)
+        # Gradient checkpointing: recompute activations during backward pass.
+        # Saves ~40% VRAM at ~20% speed cost. Required for 4GB GPU with pretrained weights.
+        self.backbone.set_grad_checkpointing(enable=True)
         backbone_dim = self.backbone.num_features  # 768
 
         # BNNeck: project to feat_dim, normalize for metric learning
@@ -398,6 +398,9 @@ def main() -> None:
     p.add_argument("--min-w",    type=int, default=MIN_W)
     p.add_argument("--min-h",    type=int, default=MIN_H)
     p.add_argument("--min-imgs-pid", type=int, default=MIN_IMGS_PID)
+    p.add_argument("--early-stop", type=int, default=8,
+                   help="Stop if cross_cam_sim does not improve for this many epochs "
+                        "(default: 8). Set 0 to disable.")
     p.add_argument("--top-k", type=int, default=None,
                    help="Keep only the top-K images ranked by area (largest = "
                         "clearest crops). E.g. --top-k 10000 for fast high-quality run."
@@ -467,7 +470,9 @@ def main() -> None:
     print(f"[train] Loss: CE={args.ce_weight} Triplet={args.tri_weight}"
           f"  FP16={'yes' if scaler else 'no'}  grad_ckpt=yes\n")
 
-    best_sim = -1.0
+    best_sim      = -1.0
+    no_improve    = 0
+    early_stop_n  = args.early_stop
 
     for epoch in range(start_epoch, args.epochs + 1):
         stats = train_one_epoch(
@@ -479,10 +484,14 @@ def main() -> None:
 
         cross_sim = evaluate_cross_cam_sim(model, train_ds, device)
 
+        improved = cross_sim > best_sim
+        no_improve = 0 if improved else no_improve + 1
+
         print(f"Epoch {epoch:3d}/{args.epochs}  "
               f"loss={stats['loss']:.4f}  ce={stats['ce']:.4f}  "
               f"tri={stats['tri']:.4f}  acc={stats['acc']:.3f}  "
               f"cross_cam_sim={cross_sim:.3f}  "
+              f"no_improve={no_improve}/{early_stop_n}  "
               f"({stats['time']:.0f}s)")
 
         # Save checkpoint
@@ -490,10 +499,14 @@ def main() -> None:
                 "cross_cam_sim": cross_sim, "args": vars(args)}
         torch.save(ckpt, out_dir / "last.pth")
 
-        if cross_sim > best_sim:
+        if improved:
             best_sim = cross_sim
             torch.save(ckpt, out_dir / "best.pth")
             print(f"  ✓ New best cross-cam sim: {best_sim:.3f}")
+
+        if early_stop_n > 0 and no_improve >= early_stop_n:
+            print(f"\n[train] Early stop: no improvement for {early_stop_n} epochs.")
+            break
 
     # ── Export best model ────────────────────────────────────────────────────
     print(f"\n[export] Loading best model (cross_cam_sim={best_sim:.3f})")
