@@ -538,8 +538,11 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     previous_gid = None
                 row["previous_gid"] = previous_gid
                 row["gid"] = previous_gid
+                row["had_previous_gid"] = previous_gid is not None
                 row["embedding"] = match_embedding
                 row["allow_new_gid"] = row["embedding_quality_ok"]
+                row["identity_conflict"] = False
+                row["suppress_gallery_update"] = False
                 # Known tracks keep their GID through low-quality frames, but
                 # low-quality new tracks may only match existing IDs. They wait
                 # for a cleaner crop before creating a brand-new Global ID.
@@ -550,7 +553,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
             if self._use_hungarian_assignment:
                 if self._enforce_unique_per_stream:
-                    self._release_duplicate_known_assignments(rows)
+                    self._mark_duplicate_known_conflicts(rows)
                 self._assign_new_tracks_with_hungarian(rows, log)
             else:
                 self._assign_new_tracks_greedy(rows, log)
@@ -560,7 +563,10 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 if gid is not None:
                     self._track_to_gid[row["track_key"]] = gid
                     self._tracklets[row["track_key"]]["gid"] = gid
-                    if row.get("gallery_updated") is not True:
+                    if (
+                        row.get("gallery_updated") is not True
+                        and not row.get("suppress_gallery_update")
+                    ):
                         self._update_gallery(
                             gid,
                             row["raw_embedding"]
@@ -618,6 +624,14 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                         top=rect["top"],
                         width=rect["width"],
                         height=rect["height"],
+                        embedding=(
+                            row["raw_embedding"]
+                            if (
+                                row.get("update_gallery")
+                                and not row.get("suppress_gallery_update")
+                            )
+                            else None
+                        ),
                     )
 
             if self._trajectory_visualizer is not None:
@@ -678,13 +692,30 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                       f"(similarity={best_score:.3f})")
             return best_gid
 
+        # If the track already has a known global ID still alive in the gallery,
+        # keep it rather than minting a new one. This prevents ID explosion when
+        # a track's embedding temporarily dips below threshold (occlusion, blur).
+        if previous_gid is not None and previous_gid in self._gallery:
+            if should_log_similarity:
+                print(f"  [Re-ID] Cam{src}#{track_id} → G#{previous_gid} "
+                      f"(sticky: below threshold but known track)")
+            return previous_gid
+
         # New person
         gid = self._allocate_new_gid()
         self._gallery[gid] = self._new_gallery_entry()
         return gid
 
-    def _release_duplicate_known_assignments(self, rows: list[dict]) -> None:
-        """Move duplicate known same-stream global IDs back to assignment."""
+    def _mark_duplicate_known_conflicts(self, rows: list[dict]) -> None:
+        """Keep known GIDs stable, but avoid learning from same-stream conflicts.
+
+        Earlier versions released the lower-scoring duplicate back to Hungarian
+        assignment. On MTA this turned small embedding-score fluctuations into
+        frame-by-frame GID swaps for otherwise stable local tracks. A local
+        tracker ID that already owns a GID is now treated as authoritative while
+        it remains alive; if two active tracks display the same GID in one
+        camera, only the stronger row may update the long-term gallery.
+        """
         active: dict[tuple[int, int], dict] = {}
         for row in rows:
             gid = row["gid"]
@@ -699,21 +730,39 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
             existing_score = self._score_gid(gid, existing["embedding"])
             row_score = self._score_gid(gid, row["embedding"])
-            if row_score > existing_score:
-                released = existing
+
+            if self._prefer_conflict_gallery_update(
+                row, row_score, existing, existing_score
+            ):
+                suppressed = existing
                 active[key] = row
             else:
-                released = row
+                suppressed = row
 
-            released["gid"] = None
+            active[key]["identity_conflict"] = True
+            suppressed["identity_conflict"] = True
+            suppressed["suppress_gallery_update"] = True
             if self._debug_similarity:
                 print(
-                    f"  [Re-ID Hungarian] Cam{released['src']}#{released['track_id']} "
-                    f"released_duplicate=G{gid} "
+                    f"  [Re-ID conflict] Cam{suppressed['src']}#{suppressed['track_id']} "
+                    f"duplicate_known_gid=G{gid} "
                     f"held_by=Cam{active[key]['src']}#{active[key]['track_id']} "
-                    f"released_score={self._score_gid(gid, released['embedding']):.3f} "
+                    f"suppressed_gallery_update_score={self._score_gid(gid, suppressed['embedding']):.3f} "
                     f"held_score={self._score_gid(gid, active[key]['embedding']):.3f}"
                 )
+
+    @staticmethod
+    def _prefer_conflict_gallery_update(candidate: dict, candidate_score: float,
+                                        incumbent: dict,
+                                        incumbent_score: float) -> bool:
+        """Return True when candidate should be the gallery updater."""
+        candidate_len = candidate.get("tracklet_len", 0)
+        incumbent_len = incumbent.get("tracklet_len", 0)
+        if candidate_len != incumbent_len:
+            return candidate_len > incumbent_len
+        if candidate_score != incumbent_score:
+            return candidate_score > incumbent_score
+        return candidate.get("track_id", 0) < incumbent.get("track_id", 0)
 
     def _assign_new_tracks_greedy(self, rows: list[dict], log: bool) -> None:
         for row in rows:

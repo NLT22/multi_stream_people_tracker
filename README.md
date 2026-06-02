@@ -1,11 +1,22 @@
 # Multi-Stream People Tracker
 
 DeepStream 9.0 / pyservicemaker learning project for multi-camera people
-detection, tracking, metadata extraction, and a ReID gallery prototype.
+detection, tracking, metadata extraction, and cross-camera ReID/MTMC
+association.
 
 Default detector: **YOLO11n COCO** via `configs/models/nvinfer_yolov11_people.yml`.
 Default tracker: **NvDeepSORT + Swin-Tiny ReID** via
 `configs/tracker/nvdeepsort_reid_swin.yaml`.
+
+Best MTA result so far uses YOLO11n fine-tuned on MTA, Swin-Tiny ReID
+fine-tuned on MTA, conservative realtime gallery matching, and delayed
+tracklet-level offline merge:
+
+| Eval setting | Global IDF1 | Pred IDs |
+|--------------|:-----------:|:--------:|
+| MTA default filter (`60x20`, visibility 30%) | 0.5801 | 1,827 |
+| MTA medium strict (`80x30`, visibility 50%) | 0.6522 | 1,291 |
+| MTA very strict (`100x40`, visibility 70%) | 0.7011 | 603 |
 
 ---
 
@@ -232,13 +243,13 @@ flowchart LR
     TRK["nvtracker<br/>NvDeepSORT + Swin-Tiny ReID embeddings"]
     SRC["SourceIdCollectorProbe<br/>(camera_id, frame_no) exact — pre-tiler"]
     TILER["nvmultistreamtiler<br/>2x2 visualization grid"]
-    REID["CrossCameraGalleryProbe<br/>tracklets + prototypes + Hungarian + merge"]
+    REID["CrossCameraGalleryProbe<br/>tracklets + prototypes + conservative assignment"]
     OSD["nvosdbin<br/>draw bbox + GID label + trajectories"]
 
     subgraph Outputs["Outputs"]
         DISPLAY["Display window"]
         VIDEO["Annotated MP4"]
-        CSV["Predictions CSV"]
+        CSV["Predictions CSV<br/>+ tracklet summaries"]
     end
 
     MUX --> DET --> TRK --> SRC --> TILER --> REID --> OSD
@@ -272,11 +283,14 @@ addresses a specific failure mode in MTMC tracking:
 | Tracklet embedding | Single-frame ReID crops are noisy during occlusion or bbox jitter. | `tracklet_window`, `tracklet_min_embeddings` |
 | Gallery prototypes | One person looks different from front/back/side cameras. | `GALLERY_MAX_PROTOTYPES`, `PROTOTYPE_ADD_THRESHOLD` |
 | Hungarian assignment | Multiple new tracks in one camera can choose the same Global ID. | `assignment_max_candidates` |
-| Duplicate guard | A Global ID should not appear twice in the same stream. | `--allow-duplicate-gid-per-stream` |
-| ID stickiness | Prevents labels bouncing between two similar Global IDs. | `id_switch_margin` |
+| Known-track stickiness | Prevents a live local track from being reassigned every frame. | `id_switch_margin` |
+| Duplicate conflict guard | Avoids learning from same-camera duplicate-GID conflicts without forcing ID swaps. | `--allow-duplicate-gid-per-stream` |
 | Ambiguity rejection | Avoids accepting a match when top-1 and top-2 are too close. | `match_ambiguity_margin` |
-| Online Global ID merge | Fixes stable ID splits across cameras. | `global_merge_threshold`, `global_merge_interval` |
+| Offline tracklet merge | Delayed correction for cross-camera ID splits using full-tracklet evidence. | `src.eval.offline_merge` |
 | Bounded candidate search | Prevents lag on long videos with many IDs. | `gallery_max_age`, `assignment_max_candidates` |
+
+Online global merge still exists for experiments, but it is disabled in the MTA
+preset because frame-level merge caused false merges on crowded MTA scenes.
 
 ---
 
@@ -317,13 +331,13 @@ ReID/gallery tuning for a specific dataset. CLI flags still override any value.
 |--------|---------|-------|
 | `configs/pipeline.yaml` | mtmc_4cam (default) | Indoor 4-cam synthetic warehouse |
 | `configs/pipeline_mtmc4cam.yaml` | mtmc_4cam | Explicit preset, same tuning |
-| `configs/pipeline_mta.yaml` | MTA (6-cam, 41fps, GTA V) | Tuned for crowded outdoor |
+| `configs/pipeline_mta.yaml` | MTA (6-cam, 41fps, GTA V) | YOLO11n MTA detector, conservative realtime gallery, online merge off |
 
 ```bash
 # mtmc_4cam — default
 python -m src.main --sources dataset/mtmc_4cam/videos
 
-# MTA dataset — uses fine-tuned detector + gallery tuned for 6 cameras
+# MTA dataset — uses fine-tuned detector and conservative gallery defaults
 python -m src.main \
     --config configs/pipeline_mta.yaml \
     --mta-dataset dataset/mta/MTA_ext_short/test \
@@ -333,7 +347,7 @@ python -m src.main \
 python -m src.main \
     --config configs/pipeline_mta.yaml \
     --mta-dataset dataset/mta/MTA_ext_short/test \
-    --global-merge-threshold 0.70
+    --similarity-threshold 0.70
 ```
 
 ### Gallery Tuning in YAML
@@ -350,7 +364,7 @@ reid:
   id_switch_margin: 0.12
   ambiguous_match_rejection: true
   match_ambiguity_margin: 0.06
-  global_merge: true
+  global_merge: false
   global_merge_threshold: 0.76
   global_merge_min_embeddings: 6
   global_merge_margin: 0.04
@@ -411,6 +425,26 @@ python -m src.main \
     --no-sync --no-display
 ```
 
+For best MTA ReID experiments, override the tracker to the MTA fine-tuned
+Swin-Tiny model and run delayed tracklet merge after export:
+
+```bash
+python -m src.main \
+    --config configs/pipeline_mta.yaml \
+    --mta-dataset dataset/mta/MTA_ext_short/test \
+    --tracker-config configs/tracker/nvdeepsort_reid_swin_mta.yaml \
+    --similarity-threshold 0.68 \
+    --export-predictions output/eval/mta_swin_mta_tracklets \
+    --no-sync --no-display
+
+python -m src.eval.offline_merge \
+    --pred-dir output/eval/mta_swin_mta_tracklets \
+    --out-dir output/eval/mta_swin_mta_offline_merge \
+    --threshold 0.97 \
+    --margin 0.05 \
+    --min-gid-embeddings 12
+```
+
 ---
 
 ## Training a Custom Detector on MTA
@@ -436,9 +470,17 @@ python -m src.main \
     --export-predictions output/eval/mta_finetuned \
     --no-sync --no-display
 
+# Optional — delayed tracklet-level merge for MTMC IDs
+python -m src.eval.offline_merge \
+    --pred-dir output/eval/mta_finetuned \
+    --out-dir output/eval/mta_finetuned_offline_merge \
+    --threshold 0.97 \
+    --margin 0.05 \
+    --min-gid-embeddings 12
+
 python -m src.eval.metrics \
     --gt-dir dataset/mta/MTA_ext_short/test \
-    --pred-dir output/eval/mta_finetuned
+    --pred-dir output/eval/mta_finetuned_offline_merge
 ```
 
 The difficulty filter (`--min-height 60 --min-width 20 --min-visibility 0.3`)
@@ -451,6 +493,8 @@ either script to evaluate on raw GT.
 ## Offline Evaluation
 
 `src/eval/metrics.py` computes MOTA, IDF1, and HOTA from exported predictions.
+`src/eval/offline_merge.py` can remap global IDs from exported tracklet
+embeddings before evaluation.
 
 ```bash
 python -m src.eval.metrics \
@@ -468,6 +512,14 @@ python -m src.eval.metrics \
     --gt-dir dataset/mta/MTA_ext_short/test \
     --pred-dir output/eval/mta_finetuned \
     --min-height 80
+
+# Strict person-quality filter: clearer/full-body people only
+python -m src.eval.metrics \
+    --gt-dir dataset/mta/MTA_ext_short/test \
+    --pred-dir output/eval/mta_finetuned \
+    --min-height 100 \
+    --min-width 40 \
+    --min-visibility 0.7
 ```
 
 | Metric | Scope | Library |
@@ -475,6 +527,14 @@ python -m src.eval.metrics \
 | MOTA, MOTP, IDS, IDF1 | Per-camera | motmetrics |
 | IDF1 | Global cross-camera (`global_id` vs `person_id`) | motmetrics |
 | HOTA, DetA, AssA | Per-camera | trackeval |
+
+MTA evaluation presets used in reports:
+
+| Setting | Filter |
+|---------|--------|
+| Default | `min_height=60`, `min_width=20`, `min_visibility=0.3` |
+| Medium strict | `min_height=80`, `min_width=30`, `min_visibility=0.5` |
+| Very strict | `min_height=100`, `min_width=40`, `min_visibility=0.7` |
 
 ---
 
@@ -570,6 +630,7 @@ or pass `--tracker-config`.
 | NvDCF accuracy | `configs/tracker/nvdcf_accuracy.yaml` | local visual tracking + ReID tensor export |
 | NvDeepSORT ResNet50 | `configs/tracker/nvdeepsort_reid.yaml` | ReID experiments |
 | NvDeepSORT Swin-Tiny | `configs/tracker/nvdeepsort_reid_swin.yaml` | default MTMC demo |
+| NvDeepSORT Swin-Tiny MTA | `configs/tracker/nvdeepsort_reid_swin_mta.yaml` | MTA fine-tuned ReID |
 
 ---
 
@@ -588,7 +649,7 @@ multi_stream_people_tracker/
 │   │   ├── nvinfer_yolov8_people.yml
 │   │   ├── nvinfer_trafficcamnet.yml
 │   │   └── nvinfer_peoplenet.yml
-│   ├── tracker/
+│   ├── tracker/                       # NvDCF / NvDeepSORT / Swin-MTA configs
 │   └── labels/
 ├── dataset/
 │   ├── mtmc_4cam/
@@ -614,8 +675,9 @@ multi_stream_people_tracker/
 │   │   ├── mta.py                     # MTA dataset loader
 │   │   └── wildtrack.py               # Wildtrack dataset loader
 │   ├── eval/
-│   │   ├── export.py                  # prediction CSV exporter
+│   │   ├── export.py                  # prediction CSV + tracklet exporter
 │   │   ├── metrics.py                 # MOTA / IDF1 / HOTA offline eval
+│   │   ├── offline_merge.py           # delayed tracklet-level global-ID merge
 │   │   ├── gt_demo.py                 # MTA GT-only demo pipeline
 │   │   ├── gt_overlay.py              # GT bbox overlay probe
 │   │   └── wildtrack_gt_demo.py       # Wildtrack GT-only demo pipeline
@@ -631,7 +693,7 @@ multi_stream_people_tracker/
 │       └── visualization.py
 ├── output/
 │   ├── videos/
-│   ├── eval/                          # exported prediction CSVs
+│   ├── eval/                          # exported predictions + tracklet summaries
 │   └── benchmark/                     # throughput benchmark CSVs
 ├── Dockerfile
 ├── docker-compose.yml

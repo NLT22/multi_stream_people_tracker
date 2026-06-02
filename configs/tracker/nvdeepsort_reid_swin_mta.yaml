@@ -1,0 +1,68 @@
+# =============================================================================
+# NvDeepSORT Tracker Config — ReID Swin-Tiny fine-tuned on MTA
+# =============================================================================
+# Model: finetune_reid_mta.py output
+#   Input : RGB 256x128 (HxW), output: 256-dim L2-normalised embedding
+#   Trained on MTA_reid (outdoor, 6-camera cross-view)
+#   cross_cam_sim = 0.860 (vs 0.775 with Market-1501 pretrained only)
+#
+# Key differences vs nvdeepsort_reid_swin.yaml (Market-1501 pretrained):
+#   onnxFile/modelEngineFile : points to fine-tuned model in output/reid/
+#   addFeatureNormalization  : 0  (model already L2-normalises in forward pass)
+#   preprocessing            : same (ImageNet mean/std via netScaleFactor+offsets)
+# =============================================================================
+
+BaseConfig:
+  minDetectorConfidence: 0.3
+
+TargetManagement:
+  preserveStreamUpdateOrder: 0
+  maxTargetsPerStream: 80
+  minIouDiff4NewTarget: 0.65
+  minTrackerConfidence: 0.35
+  probationAge: 5
+  maxShadowTrackingAge: 180
+  earlyTerminationAge: 1
+
+DataAssociator:
+  dataAssociatorType: 0
+  associationMatcherType: 1
+  checkClassMatch: 1
+  usePrediction4Assoc: 1
+  thresholdMahalanobis: 8.0
+  minMatchingScore4Overall: 0.28
+  minMatchingScore4SizeSimilarity: 0.35
+  minMatchingScore4Iou: 0.10
+  minMatchingScore4ReidSimilarity: 0.40
+  matchingScoreWeight4SizeSimilarity: 0.20
+  matchingScoreWeight4Iou: 0.10
+  matchingScoreWeight4ReidSimilarity: 1.00
+  tentativeDetectorConfidence: 0.35
+  minMatchingScore4TentativeIou: 0.35
+
+StateEstimator:
+  stateEstimatorType: 2
+  noiseWeightVar4Loc: 0.05
+  noiseWeightVar4Vel: 0.004
+  useAspectRatio: 1
+
+ReID:
+  reidType: 1
+
+  batchSize: 16
+  workspaceSize: 1000
+  reidFeatureSize: 256
+  reidHistorySize: 100
+  inferDims: [3, 256, 128]
+  networkMode: 1            # fp16
+
+  inputOrder: 0             # NCHW
+  colorFormat: 0            # RGB
+  offsets: [127.5, 127.5, 127.5]
+  netScaleFactor: 0.0078431373
+  keepAspc: 1
+  addFeatureNormalization: 0   # model already L2-normalises output
+  outputReidTensor: 1
+
+  onnxFile: "output/reid_v2/swin_tiny_mta_reid.onnx"
+  modelEngineFile: ""          # leave empty → DeepStream builds TRT engine on first run

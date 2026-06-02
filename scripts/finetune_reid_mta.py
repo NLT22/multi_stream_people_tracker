@@ -43,8 +43,8 @@ import timm
 # ---------------------------------------------------------------------------
 
 REID_DIR      = Path("dataset/mta/MTA_reid")
-MIN_W         = 25      # filter: min crop width  (pixels)
-MIN_H         = 50      # filter: min crop height (pixels)
+MIN_W         = 40      # filter: min crop width  (pixels) — ~10% of GT, keeps only detectable persons
+MIN_H         = 100     # filter: min crop height (pixels)
 MIN_IMGS_PID  = 4       # filter: person must have >= this many images after size filter
 INPUT_H       = 256     # model input height (nvtracker expects 256x128)
 INPUT_W       = 128     # model input width
@@ -142,6 +142,50 @@ class MtaReidDataset(Dataset):
             weights.append(n_cams / cam_counts[cam])
         return weights
 
+    def get_pid_indices(self) -> dict[int, list[int]]:
+        """Map pid_idx → list of sample indices (for PK sampler)."""
+        pid_to_idxs: dict[int, list[int]] = {}
+        for i, (_, pid_idx, _) in enumerate(self.samples):
+            pid_to_idxs.setdefault(pid_idx, []).append(i)
+        return pid_to_idxs
+
+
+# ---------------------------------------------------------------------------
+# P×K Sampler
+# ---------------------------------------------------------------------------
+
+class PKSampler(torch.utils.data.Sampler):
+    """Sample P persons × K images per batch.
+
+    Each iteration yields indices for exactly one batch of size P*K,
+    guaranteeing at least K images per person for hard triplet mining.
+    Persons with fewer than K images are sampled with replacement.
+    """
+
+    def __init__(self, dataset: MtaReidDataset, p: int, k: int) -> None:
+        self.pid_to_idxs = dataset.get_pid_indices()
+        self.pids = list(self.pid_to_idxs.keys())
+        self.p = p
+        self.k = k
+        # Number of batches per epoch: cover all persons at least once
+        self.num_batches = max(1, len(self.pids) // p)
+
+    def __len__(self) -> int:
+        return self.num_batches * self.p * self.k
+
+    def __iter__(self):
+        indices = []
+        for _ in range(self.num_batches):
+            batch_pids = random.sample(self.pids, min(self.p, len(self.pids)))
+            for pid in batch_pids:
+                pool = self.pid_to_idxs[pid]
+                if len(pool) >= self.k:
+                    chosen = random.sample(pool, self.k)
+                else:
+                    chosen = random.choices(pool, k=self.k)
+                indices.extend(chosen)
+        return iter(indices)
+
 
 # ---------------------------------------------------------------------------
 # Model
@@ -166,9 +210,8 @@ class SwinTinyReID(nn.Module):
             pretrained=pretrained,
             num_classes=0,
         )
-        # Gradient checkpointing: recompute activations during backward pass.
-        # Saves ~40% VRAM at ~20% speed cost. Required for 4GB GPU with pretrained weights.
-        self.backbone.set_grad_checkpointing(enable=True)
+        # Gradient checkpointing OFF by default (RTX 3050Ti has headroom at batch≤32).
+        # Enable with --grad-ckpt if OOM.
         backbone_dim = self.backbone.num_features  # 768
 
         # BNNeck: project to feat_dim, normalize for metric learning
@@ -409,6 +452,14 @@ def main() -> None:
     p.add_argument("--tri-weight",   type=float, default=1.0)
     p.add_argument("--workers",  type=int, default=4)
     p.add_argument("--no-pretrained", action="store_true")
+    p.add_argument("--grad-ckpt", action="store_true",
+                   help="Enable gradient checkpointing (saves ~400MB VRAM, ~20% slower). "
+                        "Only needed if OOM at default batch=32.")
+    p.add_argument("--pk-p", type=int, default=32,
+                   help="P×K sampler: number of persons per batch (default 32).")
+    p.add_argument("--pk-k", type=int, default=4,
+                   help="P×K sampler: images per person per batch (default 4 → batch=128)."
+                        " Use --batch to override total batch size instead.")
     p.add_argument("--resume",   default=None, metavar="CKPT")
     args = p.parse_args()
 
@@ -424,9 +475,9 @@ def main() -> None:
         min_imgs_per_pid=args.min_imgs_pid,
         top_k=args.top_k,
     )
-    weights  = train_ds.make_weights_for_balanced_cameras()
-    sampler  = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-    loader   = DataLoader(train_ds, batch_size=args.batch, sampler=sampler,
+    pk_sampler = PKSampler(train_ds, p=args.pk_p, k=args.pk_k)
+    batch_size = args.pk_p * args.pk_k  # natural batch = P*K
+    loader   = DataLoader(train_ds, batch_size=batch_size, sampler=pk_sampler,
                           num_workers=args.workers, pin_memory=True, drop_last=True)
 
     # ── Model ────────────────────────────────────────────────────────────────
@@ -435,6 +486,11 @@ def main() -> None:
         feat_dim=FEAT_DIM,
         pretrained=not args.no_pretrained,
     ).to(device)
+    if args.grad_ckpt:
+        model.backbone.set_grad_checkpointing(enable=True)
+        print("[train] Gradient checkpointing: ENABLED (slower, saves VRAM)")
+    else:
+        print("[train] Gradient checkpointing: DISABLED (faster)")
 
     start_epoch = 1
     if args.resume:
@@ -459,16 +515,16 @@ def main() -> None:
 
     # Mixed precision scaler (FP16) — saves ~40% VRAM
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
-    eff_batch = args.batch * args.accum_steps
 
     print(f"\n[train] device={device}  persons={train_ds.num_classes}"
           f"  samples={len(train_ds)}")
-    print(f"[train] batch={args.batch}  accum={args.accum_steps}"
-          f"  effective_batch={eff_batch}  epochs={args.epochs}")
+    print(f"[train] PK sampler: P={args.pk_p} K={args.pk_k}"
+          f"  batch={batch_size}  accum={args.accum_steps}"
+          f"  effective_batch={batch_size * args.accum_steps}  epochs={args.epochs}")
     print(f"[train] Filter: min_w={args.min_w} min_h={args.min_h}"
           f"  min_imgs_pid={args.min_imgs_pid}")
     print(f"[train] Loss: CE={args.ce_weight} Triplet={args.tri_weight}"
-          f"  FP16={'yes' if scaler else 'no'}  grad_ckpt=yes\n")
+          f"  FP16={'yes' if scaler else 'no'}\n")
 
     best_sim      = -1.0
     no_improve    = 0

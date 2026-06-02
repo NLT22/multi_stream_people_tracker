@@ -504,69 +504,74 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                         help="Min cosine similarity to accept a gallery match "
                              f"(default: {gallery.SIMILARITY_THRESHOLD})")
     parser.add_argument("--gallery-max-age", type=int,
-                        default=gallery.GALLERY_MAX_AGE,
+                        default=defaults["gallery_max_age"],
                         help="Drop inactive Global IDs after this many batches")
     parser.add_argument("--disable-hungarian", action="store_true",
                         help="Use greedy gallery matching instead of per-stream "
                              "Hungarian assignment")
     parser.add_argument("--assignment-max-candidates", type=int,
-                        default=gallery.GLOBAL_ASSIGNMENT_MAX_CANDIDATES,
+                        default=defaults["assignment_max_candidates"],
                         help="Limit gallery IDs scanned by Hungarian assignment")
     parser.add_argument("--allow-duplicate-gid-per-stream", action="store_true",
                         help="Disable the guard that releases duplicate known "
                              "Global IDs within one stream before Hungarian")
     parser.add_argument("--disable-id-stickiness", action="store_true",
+                        default=defaults["disable_id_stickiness"],
                         help="Allow a known local track to switch Global IDs "
                              "without requiring an extra similarity margin")
     parser.add_argument("--id-switch-margin", type=float,
-                        default=gallery.ID_SWITCH_MARGIN,
+                        default=defaults["id_switch_margin"],
                         help="Extra similarity required before switching from "
                              "a previous Global ID to another one")
     parser.add_argument("--allow-ambiguous-match", action="store_true",
+                        default=defaults["allow_ambiguous_match"],
                         help="Allow matching an existing Global ID even when "
                              "the runner-up ID is very close")
     parser.add_argument("--match-ambiguity-margin", type=float,
-                        default=gallery.MATCH_AMBIGUITY_MARGIN,
+                        default=defaults["match_ambiguity_margin"],
                         help="Best existing Global ID must beat runner-up by "
                              "this margin before it is accepted")
     parser.add_argument("--disable-global-merge", action="store_true",
+                        default=defaults["disable_global_merge"],
                         help="Disable online merging of duplicate Global IDs")
     parser.add_argument("--global-merge-threshold", type=float,
-                        default=gallery.GLOBAL_ID_MERGE_THRESHOLD,
+                        default=defaults["global_merge_threshold"],
                         help="Similarity threshold to merge one Global ID into another")
     parser.add_argument("--global-merge-min-embeddings", type=int,
-                        default=gallery.GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS,
+                        default=defaults["global_merge_min_embeddings"],
                         help="Minimum local tracklet embeddings before merge is considered")
     parser.add_argument("--global-merge-margin", type=float,
-                        default=gallery.GLOBAL_ID_MERGE_MARGIN,
+                        default=defaults["global_merge_margin"],
                         help="Merge candidate must beat runner-up by this margin")
     parser.add_argument("--global-merge-interval", type=int,
-                        default=gallery.GLOBAL_ID_MERGE_INTERVAL,
+                        default=defaults["global_merge_interval"],
                         help="Run duplicate Global ID merge every N batches")
     parser.add_argument("--global-merge-max-candidates", type=int,
-                        default=gallery.GLOBAL_ID_MERGE_MAX_CANDIDATES,
+                        default=defaults["global_merge_max_candidates"],
                         help="Limit older Global IDs scanned per merge candidate")
     parser.add_argument("--disable-tracklet", action="store_true",
+                        default=defaults["disable_tracklet"],
                         help="Use only current-frame embeddings, without local "
                              "tracklet averaging")
     parser.add_argument("--tracklet-embedding-interval", type=int,
-                        default=gallery.TRACKLET_EMBEDDING_INTERVAL,
+                        default=defaults["tracklet_embedding_interval"],
                         help="Store one ReID embedding per local track every N "
                              "batches after warmup. Larger values reduce noisy "
                              "appearance drift.")
     parser.add_argument("--disable-embedding-quality-gate",
                         action="store_true",
+                        default=defaults["disable_embedding_quality_gate"],
                         help="Allow border/overlap/small/aspect-ratio-poor crops "
                              "to update tracklets and the Global ID gallery.")
     parser.add_argument("--tracklet-window", type=int,
-                        default=gallery.TRACKLET_MAX_EMBEDDINGS,
+                        default=defaults["tracklet_window"],
                         help="Number of recent embeddings kept per (camera, track)")
     parser.add_argument("--tracklet-min-embeddings", type=int,
-                        default=gallery.TRACKLET_MIN_EMBEDDINGS_FOR_MATCH,
+                        default=defaults["tracklet_min_embeddings"],
                         help="Minimum embeddings before using the averaged tracklet "
                              "vector for matching")
     parser.add_argument("--tracklet-max-age", type=int,
-                        default=gallery.TRACKLET_MAX_AGE,
+                        default=defaults["tracklet_max_age"],
                         help="Drop inactive local tracklets after this many batches")
     parser.add_argument("--save-video", nargs="?", const="output/videos/reid.mp4",
                         default=defaults["save_video"],

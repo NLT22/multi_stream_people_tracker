@@ -46,8 +46,10 @@ reid:
   ambiguous_match_rejection: true
   match_ambiguity_margin: 0.06
 
-  # Global ID merge — slightly more aggressive for 6-cam cross-camera
-  global_merge: true
+  # Global ID merge — keep realtime conservative.  Online frame-level merge
+  # caused false merges on MTA; use src.eval.offline_merge for delayed
+  # tracklet-level correction after exporting predictions.
+  global_merge: false
   global_merge_threshold: 0.74     # slightly lower than mtmc4cam (0.76) for more merges
   global_merge_min_embeddings: 5   # lower: 41fps builds up embeddings faster
   global_merge_margin: 0.04
