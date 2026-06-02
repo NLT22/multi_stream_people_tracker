@@ -61,7 +61,12 @@ class MtaReidDataset(Dataset):
 
     def __init__(self, root: Path, split: str = "train", transform=None,
                  min_w: int = MIN_W, min_h: int = MIN_H,
-                 min_imgs_per_pid: int = MIN_IMGS_PID) -> None:
+                 min_imgs_per_pid: int = MIN_IMGS_PID,
+                 top_k: int | None = None) -> None:
+        """
+        top_k: if set, keep only the top-k images ranked by area (width×height).
+               Selects the clearest/largest crops — best quality proxy for ReID.
+        """
         self.transform = transform
         self.samples: list[tuple[Path, int, int]] = []  # (path, pid_idx, cam_id)
 
@@ -71,9 +76,8 @@ class MtaReidDataset(Dataset):
 
         raw = list(split_dir.glob("*.png")) + list(split_dir.glob("*.jpg"))
 
-        # Parse pid and cam from filename: framegta_XXXX_camid_N_pid_M.png
-        pid_to_files: dict[int, list[tuple[Path, int]]] = {}
-        skipped_size = 0
+        # Parse pid, cam, and size from each file
+        all_entries: list[tuple[int, Path, int, int]] = []  # (area, path, pid, cam)
         for f in raw:
             m_pid = re.search(r"pid_(\d+)", f.name)
             m_cam = re.search(r"camid_(\d+)", f.name)
@@ -85,10 +89,17 @@ class MtaReidDataset(Dataset):
             except Exception:
                 continue
             if w < min_w or h < min_h:
-                skipped_size += 1
                 continue
-            pid = int(m_pid.group(1))
-            cam = int(m_cam.group(1))
+            all_entries.append((w * h, f, int(m_pid.group(1)), int(m_cam.group(1))))
+
+        # Apply top-k by area (largest = clearest crops)
+        if top_k is not None and top_k < len(all_entries):
+            all_entries.sort(key=lambda x: x[0], reverse=True)
+            all_entries = all_entries[:top_k]
+
+        # Group by pid
+        pid_to_files: dict[int, list[tuple[Path, int]]] = {}
+        for _, f, pid, cam in all_entries:
             pid_to_files.setdefault(pid, []).append((f, cam))
 
         # Keep only pids with enough images
@@ -102,9 +113,10 @@ class MtaReidDataset(Dataset):
                 self.samples.append((f, self.pid_to_idx[pid], cam))
                 cam_counts[cam] = cam_counts.get(cam, 0) + 1
 
+        topk_str = f"top-{top_k} by area → " if top_k else ""
         print(f"[reid_data] {split}: {len(raw)} raw → "
-              f"{skipped_size} size-filtered → "
-              f"{len(self.samples)} kept  "
+              f"{len(all_entries)} size-filtered → "
+              f"{topk_str}{len(self.samples)} kept  "
               f"({self.num_classes} persons)")
         print(f"[reid_data]   Camera dist: " +
               "  ".join(f"cam{c}={n}" for c, n in sorted(cam_counts.items())))
@@ -154,8 +166,9 @@ class SwinTinyReID(nn.Module):
             pretrained=pretrained,
             num_classes=0,
         )
-        # Gradient checkpointing reduces VRAM ~40% at cost of ~20% speed
-        self.backbone.set_grad_checkpointing(enable=True)
+        # Gradient checkpointing only needed if VRAM < 6GB and batch > 64.
+        # Disabled by default — RTX 3050Ti 4GB fits batch=32 without it.
+        self.backbone.set_grad_checkpointing(enable=False)
         backbone_dim = self.backbone.num_features  # 768
 
         # BNNeck: project to feat_dim, normalize for metric learning
@@ -385,6 +398,10 @@ def main() -> None:
     p.add_argument("--min-w",    type=int, default=MIN_W)
     p.add_argument("--min-h",    type=int, default=MIN_H)
     p.add_argument("--min-imgs-pid", type=int, default=MIN_IMGS_PID)
+    p.add_argument("--top-k", type=int, default=None,
+                   help="Keep only the top-K images ranked by area (largest = "
+                        "clearest crops). E.g. --top-k 10000 for fast high-quality run."
+                        " Default: use all images passing size filter.")
     p.add_argument("--ce-weight",    type=float, default=1.0)
     p.add_argument("--tri-weight",   type=float, default=1.0)
     p.add_argument("--workers",  type=int, default=4)
@@ -402,6 +419,7 @@ def main() -> None:
         transform=make_transforms(train=True),
         min_w=args.min_w, min_h=args.min_h,
         min_imgs_per_pid=args.min_imgs_pid,
+        top_k=args.top_k,
     )
     weights  = train_ds.make_weights_for_balanced_cameras()
     sampler  = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
