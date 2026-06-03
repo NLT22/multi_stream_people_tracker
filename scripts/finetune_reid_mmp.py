@@ -71,6 +71,22 @@ def _train_val_scenes() -> tuple[list[str], list[str]]:
     return train, val
 
 
+def _resolve_short_root(short_root: Path, scenes: list[str]) -> Path:
+    if any((short_root / scene).exists() for scene in scenes):
+        return short_root
+
+    fallback = Path("dataset/MMPTracking/MMPTracking_short")
+    if fallback != short_root and any((fallback / scene).exists() for scene in scenes):
+        print(f"[data] Short root has no scenes: {short_root}")
+        print(f"       using nested dataset instead: {fallback}")
+        return fallback
+
+    print(f"[ERROR] No known MMPTracking_short scenes found under: {short_root}")
+    if fallback.exists():
+        print(f"        Try: --short-root {fallback}")
+    raise SystemExit(1)
+
+
 # ---------------------------------------------------------------------------
 # Dataset — crop persons directly from video frames
 # ---------------------------------------------------------------------------
@@ -106,16 +122,22 @@ class MMPReidDataset(Dataset):
 
         for scene_idx, scene in enumerate(scenes):
             scene_dir = short_root / scene
+            if not scene_dir.exists():
+                print(f"  [SKIP] scene not found: {scene_dir}")
+                continue
             # Assign a unique offset block per scene
             scene_offset = scene_idx * 1000
 
             # Build crop list: load video, decode every sample_rate-th frame
             import pandas as pd
 
+            found_csv = False
             for csv_path in sorted(scene_dir.glob("gt_cam*.csv")):
+                found_csv = True
                 cam_id = int(csv_path.stem.replace("gt_cam", ""))
                 vid_path = scene_dir / f"cam{cam_id}.mp4"
                 if not vid_path.exists():
+                    print(f"  [WARN] video not found: {vid_path}")
                     continue
 
                 df = pd.read_csv(csv_path)
@@ -166,6 +188,8 @@ class MMPReidDataset(Dataset):
                             total_kept += 1
                     frame_no += 1
                 cap.release()
+            if not found_csv:
+                print(f"  [WARN] no gt_cam*.csv files found in: {scene_dir}")
 
         # Filter: keep only pids with enough samples
         valid_pids = sorted(
@@ -490,8 +514,8 @@ def main() -> None:
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    short_root = Path(args.short_root)
     train_scenes, val_scenes = _train_val_scenes()
+    short_root = _resolve_short_root(Path(args.short_root), train_scenes + val_scenes)
     print(f"Train scenes ({len(train_scenes)}): {train_scenes}")
 
     # ── Dataset ─────────────────────────────────────────────────────────────

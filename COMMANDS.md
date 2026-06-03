@@ -161,6 +161,8 @@ python scripts/finetune_reid_mmp.py
 | `--grad-ckpt` | — | Bật gradient checkpointing (tiết kiệm ~400MB VRAM, chậm hơn ~20%) |
 | `--resume` | — | Resume hoặc warm-start từ checkpoint `.pth` (tự thay classifier head nếu khác số class) |
 
+Nếu `dataset/MMPTracking_short` rỗng nhưng dataset nằm trong `dataset/MMPTracking/MMPTracking_short`, script sẽ tự dùng path nested đó.
+
 Output: `output/reid_mmp/best.pth` và `output/reid_mmp/swin_tiny_mmp_reid.onnx`.
 
 **Ví dụ warm-start từ MTA ReID model:**
