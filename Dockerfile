@@ -11,11 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV NVIDIA_DRIVER_CAPABILITIES=video,compute,utility,graphics
 
 WORKDIR /app
-COPY requirements.txt requirements.txt
+COPY requirements-runtime.txt requirements-runtime.txt
 
 # Install pyservicemaker from the bundled wheel + Python deps.
 RUN PSMAKER_WHL="$(find /opt/nvidia/deepstream -path '*/service-maker/python/pyservicemaker*.whl' | head -n1)" \
-    && pip3 install --no-cache-dir "$PSMAKER_WHL" -r requirements.txt
+    && pip3 install --no-cache-dir "$PSMAKER_WHL" \
+    && pip3 install --no-cache-dir -r requirements-runtime.txt
 
 # Copy project source. Docker Compose mounts ./models over /app/models so
 # TensorRT engines built in the container persist next to their source model.

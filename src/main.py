@@ -67,6 +67,7 @@ from src.pipeline.model_utils import (
 from src.pipeline.engine_prep import prepare_nvinfer_config
 from src.pipeline.recording import add_recording_branch, compute_grid
 from src.dataset.mta import MtaDataset
+from src.dataset.mmp_tracking import MMPTrackingDataset, MMPTrackingShortDataset
 from src.dataset.wildtrack import WildtrackDataset
 from src.eval.export import PredictionExporter
 from src.eval.gt_overlay import GtOverlayProbe
@@ -604,6 +605,17 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--wildtrack-minutes", type=float, default=None,
                         help="Limit Wildtrack playback/GT to this many minutes "
                              "(max: ~3.3 min = full annotated range).")
+    parser.add_argument("--mmp-dataset", default=None, metavar="ROOT:SCENE",
+                        help="MMPTracking scene to run: 'ROOT:SCENE', e.g. "
+                             "'dataset/MMPTracking:lobby_0'. "
+                             "Auto-loads cam MP4s as sources, overriding --sources.")
+    parser.add_argument("--mmp-split", default="64pm",
+                        help="MMPTracking split subfolder (default: 64pm).")
+    parser.add_argument("--mmp-short-dataset", default=None, metavar="ROOT:SCENE",
+                        help="MMPTracking_short scene: 'ROOT:SCENE', e.g. "
+                             "'dataset/MMPTracking_short:lobby_0'. "
+                             "Pre-built 1-min clips with GT CSVs. "
+                             "Auto-loads camN.mp4 as sources.")
     return parser
 
 
@@ -631,8 +643,11 @@ def main(argv: list[str] | None = None) -> None:
     sources = args.sources
     gt_by_cam = None
     gt_snap_frames = None   # None = exact frame lookup (MTA); int = snap window (Wildtrack)
-    if args.mta_dataset and args.wildtrack_dataset:
-        print("[ERROR] --mta-dataset and --wildtrack-dataset are mutually exclusive.")
+
+    exclusive = [args.mta_dataset, args.wildtrack_dataset, args.mmp_dataset,
+                 args.mmp_short_dataset]
+    if sum(bool(x) for x in exclusive) > 1:
+        print("[ERROR] --mta-dataset, --wildtrack-dataset, and --mmp-dataset are mutually exclusive.")
         sys.exit(1)
 
     if args.mta_dataset:
@@ -665,8 +680,41 @@ def main(argv: list[str] | None = None) -> None:
         except FileNotFoundError as e:
             print(f"[ERROR] {e}")
             sys.exit(1)
+    elif args.mmp_dataset:
+        try:
+            if ":" not in args.mmp_dataset:
+                print("[ERROR] --mmp-dataset must be 'ROOT:SCENE', e.g. "
+                      "'dataset/MMPTracking:lobby_0'")
+                sys.exit(1)
+            mmp_root, mmp_scene = args.mmp_dataset.split(":", 1)
+            mmp = MMPTrackingDataset(mmp_root, mmp_scene, split=args.mmp_split)
+            sources = mmp.get_video_uris()
+            print(f"[reid] MMPTracking scene '{mmp_scene}' → {len(sources)} camera(s)")
+            if args.show_gt:
+                gt_by_cam = mmp.load_all_gt()
+                print(f"[reid] Loading GT annotations for {len(gt_by_cam)} camera(s)")
+        except (FileNotFoundError, ValueError) as e:
+            print(f"[ERROR] {e}")
+            sys.exit(1)
+    elif args.mmp_short_dataset:
+        try:
+            if ":" not in args.mmp_short_dataset:
+                print("[ERROR] --mmp-short-dataset must be 'ROOT:SCENE', e.g. "
+                      "'dataset/MMPTracking_short:lobby_0'")
+                sys.exit(1)
+            short_root, short_scene = args.mmp_short_dataset.split(":", 1)
+            mmp_s = MMPTrackingShortDataset(short_root, short_scene)
+            sources = mmp_s.get_video_uris()
+            print(f"[reid] MMPTracking_short scene '{short_scene}' → {len(sources)} camera(s)")
+            if args.show_gt:
+                gt_by_cam = mmp_s.load_all_gt()
+                print(f"[reid] Loading GT annotations for {len(gt_by_cam)} camera(s)")
+        except (FileNotFoundError, ValueError) as e:
+            print(f"[ERROR] {e}")
+            sys.exit(1)
     elif args.show_gt:
-        print("[WARNING] --show-gt requires --mta-dataset or --wildtrack-dataset; ignoring.")
+        print("[WARNING] --show-gt requires --mta-dataset, --wildtrack-dataset, "
+              "--mmp-dataset, or --mmp-short-dataset; ignoring.")
 
     run(sources, args.nvinfer_config, args.tracker_config,
         args.tile_w, args.tile_h, args.debug_similarity, use_hungarian,

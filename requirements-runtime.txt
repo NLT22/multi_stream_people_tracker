@@ -1,0 +1,12 @@
+# Runtime dependencies for the DeepStream tracker container.
+#
+# Keep training/export packages such as ultralytics, timm, albumentations, and
+# torch out of this image. They are installed in the local venv or the
+# dedicated reid_train service when needed.
+
+pyyaml>=6.0
+numpy>=1.26
+pandas>=2.0
+scipy>=1.11
+motmetrics>=1.4
+trackeval>=0.1
