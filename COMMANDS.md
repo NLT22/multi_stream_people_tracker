@@ -8,6 +8,76 @@ source venv/bin/activate
 
 ---
 
+## 0. Tạo MMPTracking_short từ raw dataset
+
+### Yêu cầu: cấu trúc thư mục dataset gốc
+
+Script `create_mmp_short.py` đọc thẳng từ file zip — **không cần extract trước**. Zip phải nằm đúng vị trí sau:
+
+```
+dataset/MMPTracking/
+└── MMPTracking_validation/
+    └── validation/
+        ├── images/
+        │   └── 64pm/
+        │       ├── cafe_shop_0.zip
+        │       ├── cafe_shop_1.zip
+        │       ├── ...                 ← 24 file zip ảnh (mỗi file ~1.4–3.7 GB)
+        │       └── retail_7.zip
+        ├── labels/
+        │   └── 64pm/
+        │       ├── cafe_shop_0.zip
+        │       ├── ...                 ← 24 file zip GT JSON (~140 MB tổng)
+        │       └── retail_7.zip
+        └── calibrations/
+            ├── cafe_shop/
+            │   └── calibrations.json
+            ├── industry_safety/
+            │   └── calibrations.json
+            ├── lobby/
+            │   └── calibrations.json
+            ├── office/
+            │   └── calibrations.json
+            └── retail/
+                └── calibrations.json
+```
+
+> Dataset gốc tải từ: [MMPTracking @ paperswithcode](https://paperswithcode.com/dataset/mmptracking)  
+> Giải nén file tải về → đặt thư mục `MMPTracking_validation/` vào `dataset/MMPTracking/`.
+
+### Chạy script
+
+```bash
+python scripts/create_mmp_short.py
+```
+
+| Tham số | Mặc định | Mô tả |
+|---------|----------|-------|
+| `--mmp-root` | `dataset/MMPTracking` | Thư mục gốc chứa `MMPTracking_validation/` |
+| `--output` | `dataset/MMPTracking_short` | Thư mục output |
+| `--scenes` | tất cả 24 | Chỉ xử lý scene chỉ định |
+| `--max-frames` | `1500` | Số frame mỗi camera (1500 = 60s @ 25fps) |
+| `--fps` | `25` | Framerate video output |
+| `--jobs` | `2` | Số scene xử lý song song (mỗi scene extract ~2GB; không nên > 3) |
+| `--keep-extracted` | — | Giữ lại frames đã extract sau khi encode video |
+
+**Ví dụ chỉ tạo một số scenes:**
+```bash
+python scripts/create_mmp_short.py --scenes lobby_0 lobby_1 cafe_shop_0 --jobs 3
+```
+
+**Dùng root khác (nếu đặt dataset ở nơi khác):**
+```bash
+python scripts/create_mmp_short.py --mmp-root /data/MMPTracking --output /data/MMPTracking_short
+```
+
+**Yêu cầu disk:**
+- Input zips: ~48 GB
+- Temp frames (xóa sau mỗi scene): ~2 GB/scene tại một thời điểm
+- Output MMPTracking_short: ~1.4 GB
+
+---
+
 ## 1. Chuẩn bị dataset YOLO
 
 Chuyển `MMPTracking_short` sang format Ultralytics YOLO.
