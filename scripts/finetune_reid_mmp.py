@@ -75,15 +75,7 @@ def _resolve_short_root(short_root: Path, scenes: list[str]) -> Path:
     if any((short_root / scene).exists() for scene in scenes):
         return short_root
 
-    fallback = Path("dataset/MMPTracking/MMPTracking_short")
-    if fallback != short_root and any((fallback / scene).exists() for scene in scenes):
-        print(f"[data] Short root has no scenes: {short_root}")
-        print(f"       using nested dataset instead: {fallback}")
-        return fallback
-
     print(f"[ERROR] No known MMPTracking_short scenes found under: {short_root}")
-    if fallback.exists():
-        print(f"        Try: --short-root {fallback}")
     raise SystemExit(1)
 
 

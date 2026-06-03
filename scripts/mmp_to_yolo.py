@@ -157,11 +157,7 @@ def main() -> None:
     train_scenes, val_scenes = _split_scenes()
     known_scenes = train_scenes + val_scenes
     if not any((short_root / scene).exists() for scene in known_scenes):
-        nested_root = Path("dataset/MMPTracking/MMPTracking_short")
-        hint = ""
-        if nested_root.exists():
-            hint = f" Did you mean --short-root {nested_root}?"
-        print(f"[ERROR] No known MMPTracking_short scenes found under: {short_root}.{hint}")
+        print(f"[ERROR] No known MMPTracking_short scenes found under: {short_root}.")
         sys.exit(1)
 
     print(f"Train scenes ({len(train_scenes)}): {train_scenes}")

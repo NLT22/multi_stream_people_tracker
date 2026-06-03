@@ -14,7 +14,7 @@ services:
     volumes:
       - ./scripts:/app/scripts:ro
       - ./dataset/mmp_yolo:/app/dataset/mmp_yolo
-      - ./dataset/MMPTracking/MMPTracking_short:/app/dataset/MMPTracking_short:ro
+      - ./dataset/MMPTracking_short:/app/dataset/MMPTracking_short:ro
       - ./output/train:/app/output/train
       - ./models/yolov11:/app/models/yolov11
     environment:
@@ -94,7 +94,7 @@ services:
     working_dir: /app
     volumes:
       - ./scripts:/app/scripts:ro
-      - ./dataset/MMPTracking/MMPTracking_short:/app/dataset/MMPTracking_short:ro
+      - ./dataset/MMPTracking_short:/app/dataset/MMPTracking_short:ro
       - ./output/reid_mmp:/app/output/reid_mmp
     environment:
       - REID_EPOCHS=${REID_EPOCHS:-40}
