@@ -158,9 +158,11 @@ python scripts/finetune_reid_mmp.py
 | `--min-imgs-pid` | `4` | Bỏ person có ít hơn N crop sau filter |
 | `--early-stop` | `8` | Dừng sau N epoch không cải thiện similarity gap |
 | `--workers` | `4` | DataLoader workers |
+| `--batches-per-epoch` | `200` | Số PK batch mỗi epoch; `0` = phủ xấp xỉ toàn bộ crop |
 | `--grad-ckpt` | — | Bật gradient checkpointing (tiết kiệm ~400MB VRAM, chậm hơn ~20%) |
 | `--resume` | — | Resume hoặc warm-start từ checkpoint `.pth` (tự thay classifier head nếu khác số class) |
 
+Best checkpoint và early stopping dùng `val_gap` trên 5 scene validation của MMPTracking_short, không dùng train gap.
 Output: `output/reid_mmp/best.pth` và `output/reid_mmp/swin_tiny_mmp_reid.onnx`.
 
 **Ví dụ warm-start từ MTA ReID model:**

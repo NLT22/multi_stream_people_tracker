@@ -5,7 +5,7 @@ Data pipeline:
   - For each scene × camera × frame: crop person bounding boxes from GT
   - Sample every --sample-rate frames (default 5 → 5fps)
   - Min crop size filter: --min-w, --min-h
-  - Global person ID = scene_idx * 100 + local_pid (keeps scene identities separate)
+  - Global person ID = scene_idx * 1000 + local_pid (keeps scene identities separate)
   - Train scenes: first N-1 scenes per environment; val = last scene per env
 
 Architecture: same Swin-Tiny + BNNeck as MTA script — compatible ONNX output.
@@ -26,6 +26,7 @@ Output:
 from __future__ import annotations
 
 import argparse
+import math
 import random
 import time
 from pathlib import Path
@@ -101,6 +102,7 @@ class MMPReidDataset(Dataset):
         min_w: int = 20,
         min_h: int = 40,
         min_imgs_per_pid: int = 4,
+        split_name: str = "data",
     ) -> None:
         self.transform = transform
         # (frame_array_or_path, global_pid, cam_id)
@@ -109,7 +111,6 @@ class MMPReidDataset(Dataset):
         # Map global_pid → list[sample_idx]
         self._pid_to_idxs: dict[int, list[int]] = {}
 
-        global_pid_counter = 0
         total_raw = total_kept = 0
 
         for scene_idx, scene in enumerate(scenes):
@@ -204,7 +205,7 @@ class MMPReidDataset(Dataset):
             cls = self.pid_to_cls[gid]
             self._pid_to_idxs.setdefault(cls, []).append(i)
 
-        print(f"[reid_data] {len(scenes)} scenes: "
+        print(f"[reid_data:{split_name}] {len(scenes)} scenes: "
               f"{total_raw} raw crops → {total_kept} size-filtered → "
               f"{len(self.samples)} kept "
               f"({self.num_classes} persons, min_imgs={min_imgs_per_pid})")
@@ -229,12 +230,21 @@ class MMPReidDataset(Dataset):
 # ---------------------------------------------------------------------------
 
 class PKSampler(torch.utils.data.Sampler):
-    def __init__(self, dataset: MMPReidDataset, p: int, k: int) -> None:
+    def __init__(
+        self,
+        dataset: MMPReidDataset,
+        p: int,
+        k: int,
+        batches_per_epoch: int,
+    ) -> None:
         self.pid_to_idxs = dataset.get_pid_indices()
         self.pids = list(self.pid_to_idxs.keys())
         self.p = p
         self.k = k
-        self.num_batches = max(1, len(self.pids) // p)
+        if batches_per_epoch <= 0:
+            batch_size = max(1, p * k)
+            batches_per_epoch = math.ceil(len(dataset) / batch_size)
+        self.num_batches = max(1, batches_per_epoch)
 
     def __len__(self) -> int:
         return self.num_batches * self.p * self.k
@@ -403,7 +413,7 @@ def train_one_epoch(model, loader, optimizer, ce_loss, triplet_loss,
 
 @torch.no_grad()
 def evaluate_cross_cam_sim(model, dataset: MMPReidDataset, device,
-                           n_persons: int = 40) -> dict:
+                           n_persons: int = 80) -> dict:
     """Mean same-pid cross-camera similarity vs mean diff-pid similarity."""
     model.eval()
     tf = make_transforms(train=False)
@@ -415,6 +425,9 @@ def evaluate_cross_cam_sim(model, dataset: MMPReidDataset, device,
         pid_cam.setdefault(cls, {}).setdefault(cam, []).append(i)
 
     multi = {p: cams for p, cams in pid_cam.items() if len(cams) >= 2}
+    if len(multi) < 2:
+        return {"pos_mean": 0.0, "neg_mean": 0.0, "gap": -999.0, "pairs": 0}
+
     sample_pids = random.sample(sorted(multi.keys()), min(n_persons, len(multi)))
 
     def _emb(idx):
@@ -451,6 +464,7 @@ def evaluate_cross_cam_sim(model, dataset: MMPReidDataset, device,
         "pos_mean": float(np.mean(pos_sims)),
         "neg_mean": float(np.mean(neg_sims)),
         "gap":      float(np.mean(pos_sims) - np.mean(neg_sims)),
+        "pairs":    len(pos_sims),
     }
 
 
@@ -459,13 +473,21 @@ def evaluate_cross_cam_sim(model, dataset: MMPReidDataset, device,
 # ---------------------------------------------------------------------------
 
 def export_onnx(model: SwinTinyReID, out_path: Path, device) -> None:
-    model.eval()
+    class FeatureExport(nn.Module):
+        def __init__(self, reid_model: SwinTinyReID) -> None:
+            super().__init__()
+            self.reid_model = reid_model
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.reid_model(x, return_feat=True)
+
+    export_model = FeatureExport(model).eval()
     dummy = torch.zeros(1, 3, INPUT_H, INPUT_W, device=device)
     with torch.no_grad():
         torch.onnx.export(
-            model, (dummy, True), str(out_path),
-            input_names=["input"], output_names=["fc_pred"],
-            dynamic_axes={"input": {0: "batch"}, "fc_pred": {0: "batch"}},
+            export_model, dummy, str(out_path),
+            input_names=["input"], output_names=["features"],
+            dynamic_axes={"input": {0: "batch"}, "features": {0: "batch"}},
             opset_version=16, dynamo=False,
         )
     print(f"[export] ONNX saved → {out_path}")
@@ -495,6 +517,9 @@ def main() -> None:
     p.add_argument("--min-imgs-pid", type=int, default=4)
     p.add_argument("--early-stop",  type=int, default=8)
     p.add_argument("--workers",     type=int, default=4)
+    p.add_argument("--batches-per-epoch", type=int, default=200,
+                   help="PK batches per epoch. Use 0 to cover roughly all crops once "
+                        "(default 200; old behavior was only num_persons // P batches).")
     p.add_argument("--grad-ckpt",   action="store_true")
     p.add_argument("--no-pretrained", action="store_true")
     p.add_argument("--resume",      default=None, metavar="CKPT",
@@ -509,6 +534,7 @@ def main() -> None:
     train_scenes, val_scenes = _train_val_scenes()
     short_root = _resolve_short_root(Path(args.short_root), train_scenes + val_scenes)
     print(f"Train scenes ({len(train_scenes)}): {train_scenes}")
+    print(f"Val   scenes ({len(val_scenes)}):   {val_scenes}")
 
     # ── Dataset ─────────────────────────────────────────────────────────────
     train_ds = MMPReidDataset(
@@ -517,14 +543,32 @@ def main() -> None:
         sample_rate=args.sample_rate,
         min_w=args.min_w, min_h=args.min_h,
         min_imgs_per_pid=args.min_imgs_pid,
+        split_name="train",
     )
 
     if train_ds.num_classes == 0:
         print("[ERROR] No valid persons found. Lower --min-h/--min-w or check dataset.")
         raise SystemExit(1)
 
-    sampler   = PKSampler(train_ds, p=args.pk_p, k=args.pk_k)
+    val_ds = MMPReidDataset(
+        short_root, val_scenes,
+        transform=None,
+        sample_rate=args.sample_rate,
+        min_w=args.min_w, min_h=args.min_h,
+        min_imgs_per_pid=args.min_imgs_pid,
+        split_name="val",
+    )
+    if val_ds.num_classes == 0:
+        print("[ERROR] No valid validation persons found. Check MMPTracking_short val scenes.")
+        raise SystemExit(1)
+
     batch_sz  = args.pk_p * args.pk_k
+    sampler   = PKSampler(
+        train_ds,
+        p=args.pk_p,
+        k=args.pk_k,
+        batches_per_epoch=args.batches_per_epoch,
+    )
     loader    = DataLoader(train_ds, batch_size=batch_sz, sampler=sampler,
                            num_workers=args.workers, pin_memory=True,
                            drop_last=True)
@@ -572,10 +616,13 @@ def main() -> None:
     triplet_loss = TripletLoss(margin=TRIPLET_MARGIN)
     scaler       = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
-    print(f"\n[train] device={device}  persons={train_ds.num_classes}"
-          f"  samples={len(train_ds)}")
+    print(f"\n[train] device={device}"
+          f"  train_persons={train_ds.num_classes}  train_samples={len(train_ds)}"
+          f"  val_persons={val_ds.num_classes}  val_samples={len(val_ds)}")
     print(f"[train] PK: P={args.pk_p} K={args.pk_k} batch={batch_sz}"
           f"  accum={args.accum_steps}  eff_batch={batch_sz*args.accum_steps}")
+    print(f"[train] batches/epoch={len(loader)}"
+          f"  sampled_crops/epoch={len(loader) * batch_sz}")
     print(f"[train] epochs={args.epochs}  early_stop={args.early_stop}"
           f"  FP16={'yes' if scaler else 'no'}\n")
 
@@ -589,37 +636,40 @@ def main() -> None:
         )
         scheduler.step()
 
-        sim_stats = evaluate_cross_cam_sim(model, train_ds, device)
-        improved  = sim_stats["gap"] > best_gap
+        train_sim = evaluate_cross_cam_sim(model, train_ds, device)
+        val_sim = evaluate_cross_cam_sim(model, val_ds, device)
+        improved  = val_sim["gap"] > best_gap
         no_improve = 0 if improved else no_improve + 1
 
         print(f"Epoch {epoch:3d}/{args.epochs}  "
               f"loss={stats['loss']:.4f}  ce={stats['ce']:.4f}  "
               f"tri={stats['tri']:.4f}  acc={stats['acc']:.3f}  "
-              f"pos={sim_stats['pos_mean']:.3f}  neg={sim_stats['neg_mean']:.3f}  "
-              f"gap={sim_stats['gap']:.3f}  "
+              f"train_gap={train_sim['gap']:.3f}  "
+              f"val_pos={val_sim['pos_mean']:.3f}  val_neg={val_sim['neg_mean']:.3f}  "
+              f"val_gap={val_sim['gap']:.3f}  "
               f"no_imp={no_improve}/{args.early_stop}  "
               f"({stats['time']:.0f}s)")
 
         ckpt = {
             "epoch": epoch,
             "model": model.state_dict(),
-            "sim_stats": sim_stats,
+            "train_sim_stats": train_sim,
+            "val_sim_stats": val_sim,
             "args": vars(args),
         }
         torch.save(ckpt, out_dir / "last.pth")
         if improved:
-            best_gap = sim_stats["gap"]
+            best_gap = val_sim["gap"]
             torch.save(ckpt, out_dir / "best.pth")
-            print(f"  ✓ New best gap: {best_gap:.3f}  "
-                  f"(pos={sim_stats['pos_mean']:.3f}  neg={sim_stats['neg_mean']:.3f})")
+            print(f"  ✓ New best val_gap: {best_gap:.3f}  "
+                  f"(pos={val_sim['pos_mean']:.3f}  neg={val_sim['neg_mean']:.3f})")
 
         if args.early_stop > 0 and no_improve >= args.early_stop:
             print(f"\n[train] Early stop.")
             break
 
     # ── Export ──────────────────────────────────────────────────────────────
-    print(f"\n[export] Loading best model (gap={best_gap:.3f})")
+    print(f"\n[export] Loading best model (val_gap={best_gap:.3f})")
     best_ckpt = torch.load(out_dir / "best.pth", map_location=device)
     model.load_state_dict(best_ckpt["model"])
 
