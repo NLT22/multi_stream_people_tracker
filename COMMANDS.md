@@ -232,3 +232,183 @@ python -m src.eval.metrics \
     --gt-dir dataset/mta/MTA_ext_short/test \
     --pred-dir output/eval/mmp_lobby0_merged
 ```
+
+---
+
+## 8. Docker
+
+### Yêu cầu
+
+- Docker Engine + NVIDIA Container Toolkit (`nvidia-docker2`)
+- `docker compose` (v2+)
+
+### Services có sẵn
+
+| Service | Image | Mục đích |
+|---------|-------|----------|
+| `yolo_train` | `pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime` | Convert dataset + train YOLO |
+| `reid_train_mmp` | `pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime` | Train ReID trên MMPTracking_short |
+| `reid_train` | `pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime` | Train ReID trên MTA (legacy) |
+| `tracker` | `multi_stream_people_tracker:latest` (build local) | Chạy DeepStream pipeline |
+
+---
+
+### Build image DeepStream
+
+Chỉ cần build lần đầu hoặc khi thay đổi `Dockerfile` / `requirements-runtime.txt`.
+
+```bash
+docker compose build tracker
+```
+
+---
+
+### Train YOLO (Docker)
+
+Chạy với tham số mặc định:
+
+```bash
+docker compose run --rm yolo_train
+```
+
+Override tham số qua biến môi trường:
+
+```bash
+YOLO_EPOCHS=50 YOLO_BATCH=8 YOLO_PATIENCE=15 docker compose run --rm yolo_train
+```
+
+Warm-start từ MTA model (copy `best.pt` vào container qua volume):
+
+```bash
+# best.pt phải nằm trong output/train/yolo11n_mta/weights/ (đã mount vào /app/output/train)
+YOLO_WEIGHTS=output/train/yolo11n_mta/weights/best.pt docker compose run --rm yolo_train
+```
+
+| Biến môi trường | Mặc định | Tương đương tham số |
+|----------------|----------|---------------------|
+| `YOLO_EPOCHS` | `30` | `--epochs` |
+| `YOLO_BATCH` | `16` | `--batch` |
+| `YOLO_PATIENCE` | `10` | `--patience` |
+| `YOLO_WEIGHTS` | `yolo11n.pt` | `--weights` |
+
+Output tự động ghi ra `output/train/yolo11n_mmp/` và `models/yolov11/yolo11n_mmp.onnx` trên host.
+
+---
+
+### Train ReID MMPTracking (Docker)
+
+Chạy với tham số mặc định:
+
+```bash
+docker compose run --rm reid_train_mmp
+```
+
+Warm-start từ MTA model:
+
+```bash
+# best.pth phải nằm trong output/reid_mmp/ hoặc output/reid_v2/ trên host
+# Mount thêm nếu cần:
+REID_RESUME=output/reid_v2/best.pth docker compose run --rm \
+    -v $(pwd)/output/reid_v2:/app/output/reid_v2:ro \
+    reid_train_mmp
+```
+
+Giảm memory nếu OOM (4GB VRAM):
+
+```bash
+REID_PKP=16 REID_PKK=4 docker compose run --rm reid_train_mmp \
+    bash -c "pip install timm tqdm opencv-python-headless pandas -q &&
+             python scripts/finetune_reid_mmp.py
+               --pk-p 16 --pk-k 4 --accum-steps 4 --grad-ckpt
+               --output output/reid_mmp"
+```
+
+| Biến môi trường | Mặc định | Tương đương tham số |
+|----------------|----------|---------------------|
+| `REID_EPOCHS` | `40` | `--epochs` |
+| `REID_PKP` | `24` | `--pk-p` |
+| `REID_PKK` | `4` | `--pk-k` |
+| `REID_RESUME` | _(trống)_ | `--resume` |
+
+Output tự động ghi ra `output/reid_mmp/` trên host.
+
+---
+
+### Chạy pipeline DeepStream (Docker)
+
+**Scene MMPTracking_short:**
+
+```bash
+docker compose run --rm tracker \
+    python3 -m src.main \
+        --config configs/pipeline_mta.yaml \
+        --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
+        --no-display --no-sync \
+        --export-predictions output/eval/mmp_lobby0
+```
+
+**Với model MMP mới train:**
+
+```bash
+docker compose run --rm tracker \
+    python3 -m src.main \
+        --config configs/pipeline_mta.yaml \
+        --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
+        --nvinfer-config  configs/models/nvinfer_yolov11_mmp.yml \
+        --tracker-config  configs/tracker/nvdeepsort_reid_swin_mmp.yaml \
+        --no-display --no-sync \
+        --export-predictions output/eval/mmp_lobby0
+```
+
+**Offline merge + eval trong container:**
+
+```bash
+docker compose run --rm tracker \
+    python3 -m src.eval.offline_merge \
+        --pred-dir output/eval/mmp_lobby0 \
+        --out-dir  output/eval/mmp_lobby0_merged
+
+docker compose run --rm tracker \
+    python3 -m src.eval.metrics \
+        --gt-dir  dataset/mta/MTA_ext_short/test \
+        --pred-dir output/eval/mmp_lobby0_merged
+```
+
+---
+
+### Luồng Docker đầy đủ
+
+```bash
+# 1. Build DeepStream image (lần đầu)
+docker compose build tracker
+
+# 2. Train YOLO
+YOLO_WEIGHTS=output/train/yolo11n_mta/weights/best.pt \
+YOLO_EPOCHS=30 YOLO_PATIENCE=10 \
+docker compose run --rm yolo_train
+
+# 3. Train ReID
+REID_RESUME=output/reid_v2/best.pth \
+REID_EPOCHS=30 \
+docker compose run --rm reid_train_mmp
+
+# 4. Chạy pipeline (lặp lại cho từng scene)
+for SCENE in lobby_0 lobby_1 cafe_shop_0 office_0 retail_0; do
+    docker compose run --rm tracker \
+        python3 -m src.main \
+            --config configs/pipeline_mta.yaml \
+            --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+            --nvinfer-config  configs/models/nvinfer_yolov11_mmp.yml \
+            --tracker-config  configs/tracker/nvdeepsort_reid_swin_mmp.yaml \
+            --no-display --no-sync \
+            --export-predictions output/eval/mmp_${SCENE}
+done
+
+# 5. Offline merge + eval mỗi scene
+for SCENE in lobby_0 lobby_1 cafe_shop_0 office_0 retail_0; do
+    docker compose run --rm tracker \
+        python3 -m src.eval.offline_merge \
+            --pred-dir output/eval/mmp_${SCENE} \
+            --out-dir  output/eval/mmp_${SCENE}_merged
+done
+```
