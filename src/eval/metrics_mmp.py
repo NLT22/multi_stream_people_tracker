@@ -118,6 +118,8 @@ def _eval_scene(
         "hota_results": hota_results,
         "all_gt":       all_gt,
         "all_pred":     all_pred,
+        "cam_ids":      list(per_cam_accs.keys()),
+        "iou_thr":      iou_thr,
     }
 
 
@@ -153,8 +155,14 @@ def _print_scene_summary(scene: str, result: dict) -> None:
     ))
 
     if len(per_cam_accs) > 1:
-        global_idf1 = _eval_global_idf1(all_gt, all_pred)
-        print(f"  Global IDF1: {global_idf1:.4f}")
+        gidf1 = _eval_global_idf1(
+            all_gt, all_pred,
+            cam_ids=list(per_cam_accs.keys()),
+            iou_threshold=result.get("iou_thr", 0.5),
+        )
+        print(f"  Global IDF1 : {gidf1['idf1']:.4f}  "
+              f"(IDTP={gidf1['idtp']}  IDFP={gidf1['idfp']}  IDFN={gidf1['idfn']}  "
+              f"GT IDs={gidf1['num_gt_ids']}  Pred IDs={gidf1['num_pred_ids']})")
 
     if _TRACKEVAL_AVAILABLE and hota_results:
         valid = {c: r for c, r in hota_results.items() if r}
@@ -273,8 +281,14 @@ def main() -> None:
         formatters=mh.formatters,
         namemap=mm.io.motchallenge_metric_names,
     ))
-    global_idf1 = _eval_global_idf1(grand_idf1_gt, grand_idf1_pred)
-    print(f"  Grand Global IDF1: {global_idf1:.4f}")
+    grand_gidf1 = _eval_global_idf1(
+        grand_idf1_gt, grand_idf1_pred,
+        cam_ids=list(grand_idf1_gt.keys()),
+        iou_threshold=args.iou_threshold,
+    )
+    print(f"  Grand Global IDF1: {grand_gidf1['idf1']:.4f}  "
+          f"(GT IDs={grand_gidf1['num_gt_ids']}  "
+          f"Pred IDs={grand_gidf1['num_pred_ids']})")
 
 
 if __name__ == "__main__":
