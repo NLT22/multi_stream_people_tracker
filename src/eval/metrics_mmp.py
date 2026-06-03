@@ -5,8 +5,8 @@ Khác biệt so với src.eval.metrics (MTA):
   1. GT load từ MMPTracking_short CSV (640×360).
   2. Prediction cam_id = source_id (0-based index theo thứ tự get_cam_ids()),
      không phải camera ID thật (1-based). Mapping tự động.
-  3. Tọa độ prediction ở không gian 1920×1080 (nvstreammux) → scale ×(1/3)
-     về GT space 640×360 trước khi so sánh.
+  3. Tọa độ prediction có thể ở source/tile/mux space. Mặc định auto-detect
+     từ bbox extents rồi scale về GT space 640×360 trước khi so sánh.
 
 Usage:
     # Single scene
@@ -40,12 +40,19 @@ from src.dataset.mmp_tracking import MMPTrackingShortDataset
 # GT resolution
 GT_W, GT_H = 640, 360
 
-# Pipeline mux resolution (nvstreammux default)
-PRED_W, PRED_H = 1920, 1080
-
-# Scale factors: prediction → GT space
-SCALE_X = GT_W / PRED_W   # 1/3
-SCALE_Y = GT_H / PRED_H   # 1/3
+# Default pipeline export space.
+#
+# In the normal two-probe path the exporter runs post-tiler, after
+# nvmultistreamtiler has scaled each source into a tile.  The gallery subtracts
+# the tile offset before writing CSV, so prediction boxes are tile-local
+# 1280x720 by default, while MMPTracking_short GT is source-frame 640x360.
+#
+# If you export with different tile dimensions, pass --pred-width/--pred-height
+# or leave them unset to auto-infer the most likely space from the CSV extents.
+PRED_W, PRED_H = 1280, 720
+MUX_W, MUX_H = 1920, 1080
+SCALE_X = GT_W / PRED_W
+SCALE_Y = GT_H / PRED_H
 
 # Default difficulty filter (GT space, 640×360)
 _DEFAULT_MIN_HEIGHT     = 20.0
@@ -57,18 +64,48 @@ _DEFAULT_MIN_VIS        = 0.30
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _load_pred(pred_dir: Path, source_id: int) -> pd.DataFrame:
+def _load_pred(
+    pred_dir: Path,
+    source_id: int,
+    scale_x: float,
+    scale_y: float,
+) -> pd.DataFrame:
     """Load cam_<source_id>_predictions.csv và scale tọa độ về GT space."""
     path = pred_dir / f"cam_{source_id}_predictions.csv"
     if not path.exists():
         raise FileNotFoundError(f"Prediction file not found: {path}")
     df = pd.read_csv(path)
     df = df.rename(columns={"frame_no_cam": "frame"})
-    df["left"]   = df["left"]   * SCALE_X
-    df["top"]    = df["top"]    * SCALE_Y
-    df["width"]  = df["width"]  * SCALE_X
-    df["height"] = df["height"] * SCALE_Y
+    # global_id=-1 means unassigned — exclude from evaluation
+    df = df[df["global_id"] >= 0].reset_index(drop=True)
+    df["left"]   = df["left"]   * scale_x
+    df["top"]    = df["top"]    * scale_y
+    df["width"]  = df["width"]  * scale_x
+    df["height"] = df["height"] * scale_y
     return df
+
+
+def _infer_pred_space(pred_dir: Path, source_ids: list[int]) -> tuple[float, float]:
+    """Infer source/tiler/mux prediction space from bbox extents."""
+    max_right = 0.0
+    max_bottom = 0.0
+    for source_id in source_ids:
+        path = pred_dir / f"cam_{source_id}_predictions.csv"
+        if not path.exists():
+            continue
+        df = pd.read_csv(path)
+        if "global_id" in df.columns:
+            df = df[df["global_id"] >= 0]
+        if df.empty:
+            continue
+        max_right = max(max_right, float((df["left"] + df["width"]).max()))
+        max_bottom = max(max_bottom, float((df["top"] + df["height"]).max()))
+
+    if max_right <= GT_W * 1.25 and max_bottom <= GT_H * 1.25:
+        return float(GT_W), float(GT_H)
+    if max_right <= PRED_W * 1.25 and max_bottom <= PRED_H * 1.25:
+        return float(PRED_W), float(PRED_H)
+    return float(MUX_W), float(MUX_H)
 
 
 def _filter_boxes(
@@ -181,16 +218,8 @@ def _eval_global_idf1(
             gt_pids    = g["person_id"].tolist()
             gt_boxes   = g[["left", "top", "width", "height"]].values.astype(float)
 
-            # Unassigned global_id (-1) → unique sentinel per (key, frame, tid)
-            pred_gids = []
-            for gid, tid in zip(p["global_id"].tolist(),
-                                 p["local_track_id"].tolist()):
-                gid_int = int(gid)
-                if gid_int != -1:
-                    pred_gids.append(gid_int)
-                else:
-                    sentinel = f"_unassigned_{key}_{frame}_{tid}"
-                    pred_gids.append(sentinel)
+            # global_id=-1 already filtered in _load_pred
+            pred_gids = [int(g) for g in p["global_id"].tolist()]
 
             pred_boxes = p[["left", "top", "width", "height"]].values.astype(float)
 
@@ -251,6 +280,8 @@ def _eval_scene(
     min_width: float,
     min_visibility: float,
     cameras: list[int] | None,
+    pred_width: float | None,
+    pred_height: float | None,
 ) -> dict:
     try:
         ds = MMPTrackingShortDataset(str(short_root), scene)
@@ -261,6 +292,11 @@ def _eval_scene(
     # Thứ tự get_cam_ids() khớp với thứ tự source_id trong pipeline
     real_cam_ids = cameras if cameras else ds.get_cam_ids()
     source_to_cam = {i: c for i, c in enumerate(real_cam_ids)}
+    if pred_width is None or pred_height is None:
+        pred_width, pred_height = _infer_pred_space(
+            pred_dir, list(source_to_cam.keys()))
+    scale_x = GT_W / pred_width
+    scale_y = GT_H / pred_height
 
     all_gt:       dict[int, pd.DataFrame] = {}
     all_pred:     dict[int, pd.DataFrame] = {}
@@ -269,6 +305,8 @@ def _eval_scene(
     print(f"\n[{scene}] cameras={real_cam_ids}  "
           f"(source_id 0→cam{real_cam_ids[0]} ... "
           f"{len(real_cam_ids)-1}→cam{real_cam_ids[-1]})")
+    print(f"  pred-space={pred_width:g}×{pred_height:g}  "
+          f"scale=×{scale_x:.4f}/×{scale_y:.4f}")
 
     for source_id, cam_id in source_to_cam.items():
         try:
@@ -278,7 +316,7 @@ def _eval_scene(
             continue
 
         try:
-            pred_df = _load_pred(pred_dir, source_id)
+            pred_df = _load_pred(pred_dir, source_id, scale_x, scale_y)
         except FileNotFoundError as e:
             print(f"  [cam_{cam_id}] {e} — skipping")
             continue
@@ -377,6 +415,12 @@ def _parse_args() -> argparse.Namespace:
                         f"(default: {_DEFAULT_MIN_VIS}). Set 0 to disable.")
     p.add_argument("--no-filter", action="store_true",
                    help="Disable all difficulty filters (evaluate on raw GT).")
+    p.add_argument("--pred-width", type=float, default=None,
+                   help=f"Prediction coordinate width before scaling to GT "
+                        f"(default: auto; current tile width is {PRED_W}).")
+    p.add_argument("--pred-height", type=float, default=None,
+                   help=f"Prediction coordinate height before scaling to GT "
+                        f"(default: auto; current tile height is {PRED_H}).")
     return p.parse_args()
 
 
@@ -393,8 +437,13 @@ def main() -> None:
 
     print(f"[eval] short-root    : {short_root}")
     print(f"[eval] IoU threshold : {args.iou_threshold}")
-    print(f"[eval] Pred space    : {PRED_W}×{PRED_H} → "
-          f"scale ×{SCALE_X:.4f}/×{SCALE_Y:.4f} → GT {GT_W}×{GT_H}")
+    if args.pred_width is None or args.pred_height is None:
+        print(f"[eval] Pred space    : auto-detect per scene → GT {GT_W}×{GT_H}")
+    else:
+        scale_x = GT_W / args.pred_width
+        scale_y = GT_H / args.pred_height
+        print(f"[eval] Pred space    : {args.pred_width:g}×{args.pred_height:g} "
+              f"→ scale ×{scale_x:.4f}/×{scale_y:.4f} → GT {GT_W}×{GT_H}")
     if min_height > 0 or min_width > 0 or min_visibility > 0:
         print(f"[eval] Filter        : min_height={min_height}px  "
               f"min_width={min_width}px  min_visibility={min_visibility:.0%}  "
@@ -410,6 +459,7 @@ def main() -> None:
             args.scene, short_root, pred_dir,
             args.iou_threshold, min_height, min_width, min_visibility,
             args.cameras,
+            args.pred_width, args.pred_height,
         )
         _print_scene_summary(args.scene, result)
         return
@@ -436,6 +486,7 @@ def main() -> None:
             scene, short_root, pred_dir,
             args.iou_threshold, min_height, min_width, min_visibility,
             args.cameras,
+            args.pred_width, args.pred_height,
         )
         _print_scene_summary(scene, result)
 

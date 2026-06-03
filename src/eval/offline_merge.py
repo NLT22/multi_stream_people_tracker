@@ -68,6 +68,17 @@ def _parse_args() -> argparse.Namespace:
                    help="Bound candidate pairs considered per global ID")
     p.add_argument("--temporal-tolerance", type=int, default=0,
                    help="Same-camera frame-overlap tolerance before IDs conflict")
+    p.add_argument("--mmp-short-root", default=None,
+                   help="Enable geometry-assisted merge using MMPTracking_short root")
+    p.add_argument("--scene", default=None,
+                   help="MMPTracking_short scene name for geometry-assisted merge")
+    p.add_argument("--geo-weight", type=float, default=0.0,
+                   help="Blend weight for ground-plane geometry score. "
+                        "0 = embedding only, e.g. 0.25 for MMP lobby.")
+    p.add_argument("--geo-sample-step", type=int, default=5,
+                   help="Sample every N frames when computing geometry score")
+    p.add_argument("--geo-min-overlaps", type=int, default=20,
+                   help="Minimum cross-camera overlapping samples for geometry score")
     p.add_argument("--dry-run", action="store_true",
                    help="Print merge summary without writing remapped CSVs")
     return p.parse_args()
@@ -170,6 +181,74 @@ def _intervals_conflict(
     return False
 
 
+def _load_geometry_points(
+    pred_dir: Path,
+    short_root: str | None,
+    scene: str | None,
+    sample_step: int,
+) -> dict[int, dict[int, list[tuple[int, float, float]]]]:
+    """Return gid -> frame -> [(cam_id, world_x, world_y), ...]."""
+    if not short_root or not scene:
+        return {}
+
+    try:
+        from src.dataset.mmp_tracking import MMPTrackingShortDataset
+        from src.reid.geometry import GroundPlaneGeometry
+    except ImportError as e:
+        print(f"[offline merge] geometry disabled: {e}")
+        return {}
+
+    ds = MMPTrackingShortDataset(short_root, scene)
+    geometry = GroundPlaneGeometry(ds.load_calibration())
+    points: dict[int, dict[int, list[tuple[int, float, float]]]] = {}
+    step = max(1, sample_step)
+
+    for path in sorted(pred_dir.glob("cam_*_predictions.csv")):
+        cam_id = int(path.stem.split("_")[1])
+        real_cam_id = cam_id + 1
+        with open(path, newline="") as f:
+            for row in csv.DictReader(f):
+                gid = int(float(row["global_id"]))
+                if gid < 0:
+                    continue
+                frame = int(float(row["frame_no_cam"]))
+                if frame % step != 0:
+                    continue
+                foot = geometry.bbox_foot(
+                    real_cam_id,
+                    float(row["left"]),
+                    float(row["top"]),
+                    float(row["width"]),
+                    float(row["height"]),
+                )
+                if foot is None:
+                    continue
+                points.setdefault(gid, {}).setdefault(frame, []).append(
+                    (cam_id, foot[0], foot[1]))
+    return points
+
+
+def _geometry_pair_score(
+    gid_a: int,
+    gid_b: int,
+    points: dict[int, dict[int, list[tuple[int, float, float]]]],
+    min_overlaps: int,
+) -> tuple[float, int]:
+    frames = set(points.get(gid_a, {})) & set(points.get(gid_b, {}))
+    scores = []
+    for frame in frames:
+        for cam_a, xa, ya in points[gid_a][frame]:
+            for cam_b, xb, yb in points[gid_b][frame]:
+                if cam_a == cam_b:
+                    continue
+                dist = float(np.hypot(xa - xb, ya - yb))
+                t = max(0.0, (dist - 300.0) / 1700.0)
+                scores.append(float(np.exp(-3.0 * t * t)))
+    if len(scores) < min_overlaps:
+        return 0.0, len(scores)
+    return float(np.median(scores)), len(scores)
+
+
 def _component_conflict(
     root_a: int,
     root_b: int,
@@ -191,15 +270,31 @@ def _candidate_pairs(
     threshold: float,
     margin: float,
     max_candidates_per_gid: int,
+    intervals: dict[int, list[tuple[int, int, int]]] | None = None,
+    geometry_points: dict[int, dict[int, list[tuple[int, float, float]]]] | None = None,
+    geo_weight: float = 0.0,
+    geo_min_overlaps: int = 20,
 ) -> list[tuple[float, int, int]]:
     if len(gids) < 2:
         return []
 
     sim = vectors @ vectors.T
     np.fill_diagonal(sim, -1.0)
+    use_geo = bool(geometry_points) and geo_weight > 0.0
     pairs = {}
     for i, gid in enumerate(gids):
-        scores = sim[i]
+        scores = sim[i].copy()
+        if use_geo:
+            for j, other_gid in enumerate(gids):
+                if i == j:
+                    continue
+                if intervals and _intervals_conflict(
+                    intervals.get(gid, []), intervals.get(other_gid, []), 0
+                ):
+                    continue
+                geo_score, _ = _geometry_pair_score(
+                    gid, other_gid, geometry_points, geo_min_overlaps)
+                scores[j] = (1.0 - geo_weight) * scores[j] + geo_weight * geo_score
         order = np.argsort(scores)[::-1]
         top = [
             j for j in order[:max(2, max_candidates_per_gid + 1)]
@@ -319,6 +414,15 @@ def main() -> None:
         threshold=args.threshold,
         margin=args.margin,
         max_candidates_per_gid=args.max_candidates_per_gid,
+        intervals=intervals,
+        geometry_points=_load_geometry_points(
+            pred_dir,
+            args.mmp_short_root,
+            args.scene,
+            args.geo_sample_step,
+        ),
+        geo_weight=max(0.0, min(1.0, args.geo_weight)),
+        geo_min_overlaps=max(1, args.geo_min_overlaps),
     )
     remap, accepted = _merge_map(
         gids, pairs, intervals, temporal_tolerance=args.temporal_tolerance)
@@ -327,6 +431,9 @@ def main() -> None:
     print(f"[offline merge] eligible_gids={len(gids)} candidate_pairs={len(pairs)}")
     print(f"[offline merge] accepted_merges={len(accepted)}")
     print(f"[offline merge] threshold={args.threshold} margin={args.margin}")
+    if args.geo_weight > 0.0:
+        print(f"[offline merge] geo_weight={args.geo_weight} "
+              f"scene={args.scene} sample_step={args.geo_sample_step}")
 
     if args.dry_run:
         for source_gid, target_gid, score in accepted[:20]:

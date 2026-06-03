@@ -1,0 +1,69 @@
+# =============================================================================
+# NvDeepSORT Tracker Config — ReID Swin-Tiny fine-tuned on MMPTracking_short
+# =============================================================================
+# Model: scripts/finetune_reid_mmp.py output
+#   Input : RGB 256x128 (HxW), output: 256-dim L2-normalised embedding
+#   Trained on indoor MMPTracking_short.
+#
+# The MMP ReID validation positive mean is much lower than the MTA model, so
+# local DeepSORT ReID thresholds must stay softer than the Market/AICity config.
+# =============================================================================
+
+BaseConfig:
+  minDetectorConfidence: 0.25
+
+TargetManagement:
+  preserveStreamUpdateOrder: 0
+  maxTargetsPerStream: 80
+  minIouDiff4NewTarget: 0.65
+  minTrackerConfidence: 0.30
+  probationAge: 4
+  maxShadowTrackingAge: 180
+  earlyTerminationAge: 1
+
+DataAssociator:
+  dataAssociatorType: 0
+  associationMatcherType: 1
+  checkClassMatch: 1
+  usePrediction4Assoc: 1
+  thresholdMahalanobis: 8.0
+  minMatchingScore4Overall: 0.24
+  minMatchingScore4SizeSimilarity: 0.30
+  minMatchingScore4Iou: 0.08
+  minMatchingScore4ReidSimilarity: 0.35
+  matchingScoreWeight4SizeSimilarity: 0.20
+  matchingScoreWeight4Iou: 0.10
+  matchingScoreWeight4ReidSimilarity: 1.00
+  tentativeDetectorConfidence: 0.30
+  minMatchingScore4TentativeIou: 0.30
+
+StateEstimator:
+  stateEstimatorType: 2
+  noiseWeightVar4Loc: 0.05
+  noiseWeightVar4Vel: 0.004
+  useAspectRatio: 1
+
+ReID:
+  reidType: 1
+
+  batchSize: 16
+  workspaceSize: 1000
+  reidFeatureSize: 256
+  reidHistorySize: 100
+  inferDims: [3, 256, 128]
+  networkMode: 1
+
+  inputOrder: 0
+  colorFormat: 0
+  # Match scripts/finetune_reid_mmp.py:
+  # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]).
+  # NvMOT exposes one scalar scale, so use the common TAO/ImageNet
+  # approximation used by the ResNet50 ReID config.
+  offsets: [123.6750, 116.2800, 103.5300]
+  netScaleFactor: 0.01735207
+  keepAspc: 1
+  addFeatureNormalization: 0
+  outputReidTensor: 1
+
+  onnxFile: "models/reid/swin_tiny_mmp_reid.onnx"
+  modelEngineFile: ""

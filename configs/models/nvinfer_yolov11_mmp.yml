@@ -1,0 +1,40 @@
+# =============================================================================
+# nvinfer Config — YOLO11n fine-tuned on MMPTracking_short (1 class: person)
+# =============================================================================
+# Same architecture as yolo11n_people.yml but trained on indoor MMPTracking data.
+# Output tensor: [batch, 5, 8400]  (4 bbox + 1 class score, pre-NMS)
+# =============================================================================
+
+property:
+  gpu-id: 0
+
+  onnx-file: ../../models/yolov11/yolo11n_mmp.onnx
+  model-engine-file: ../../models/yolov11/yolo11n_mmp.onnx_b4_gpu0_fp16.engine
+
+  labelfile-path: ../labels/people_only_labels.txt
+
+  net-scale-factor: 0.0039215697906911373
+  model-color-format: 0
+  maintain-aspect-ratio: 1
+  symmetric-padding: 1
+  infer-dims: 3;640;640
+
+  batch-size: 4
+  network-mode: 2
+  num-detected-classes: 1
+
+  interval: 0
+  gie-unique-id: 1
+  process-mode: 1
+  network-type: 0
+
+  cluster-mode: 2
+
+  custom-lib-path: ../../models/yolov8/libnvds_infercustomparser_yolov8.so
+  parse-bbox-func-name: NvDsInferParseYoloV8
+  output-blob-names: output0
+
+class-attrs-all:
+  pre-cluster-threshold: 0.25
+  topk: 20
+  nms-iou-threshold: 0.45

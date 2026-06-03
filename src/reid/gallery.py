@@ -260,11 +260,13 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
     """
 
     def __init__(self, id_map: dict, embeddings: dict, person_class_id: int,
-                 debug: bool = False, frame_numbers: dict | None = None):
+                 debug: bool = False, frame_numbers: dict | None = None,
+                 frame_sizes: dict | None = None):
         super().__init__()
         self._id_map = id_map
         self._embeddings = embeddings
         self._frame_numbers = frame_numbers  # source_id → frame_number (for exporter)
+        self._frame_sizes = frame_sizes      # source_id → (width, height)
         self._person_class_id = person_class_id
         self._debug = debug
         self._frame_count = 0
@@ -298,11 +300,17 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
         self._id_map.clear()
         if self._frame_numbers is not None:
             self._frame_numbers.clear()
+        if self._frame_sizes is not None:
+            self._frame_sizes.clear()
 
         for frame_meta in batch_meta.frame_items:
             src = frame_meta.source_id
             if self._frame_numbers is not None:
                 self._frame_numbers[src] = frame_meta.frame_number
+            if self._frame_sizes is not None:
+                size = self._source_frame_size(frame_meta)
+                if size is not None:
+                    self._frame_sizes[src] = size
             frame_tensor_count = self._count_iter(frame_meta.tensor_items)
             batch_frame_tensors += frame_tensor_count
             for obj_meta in frame_meta.object_items:
@@ -356,6 +364,24 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
     @staticmethod
     def _count_iter(items) -> int:
         return sum(1 for _ in items)
+
+    @staticmethod
+    def _source_frame_size(frame_meta) -> tuple[float, float] | None:
+        width_names = ("source_frame_width", "frame_width", "source_width", "width")
+        height_names = ("source_frame_height", "frame_height", "source_height", "height")
+        width = next(
+            (float(getattr(frame_meta, name)) for name in width_names
+             if hasattr(frame_meta, name) and getattr(frame_meta, name)),
+            None,
+        )
+        height = next(
+            (float(getattr(frame_meta, name)) for name in height_names
+             if hasattr(frame_meta, name) and getattr(frame_meta, name)),
+            None,
+        )
+        if width and height:
+            return width, height
+        return None
 
     @staticmethod
     def _extract_embedding(obj_meta) -> tuple[list[float], int, int, str]:
@@ -429,11 +455,13 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                  trajectory_visualizer=None,
                  exporter=None,
                  frame_numbers: dict | None = None,
+                 frame_sizes: dict | None = None,
                  geometry: "GroundPlaneGeometry | None" = None):
         super().__init__()
         self._id_map = id_map
         self._embeddings = embeddings
         self._frame_numbers = frame_numbers  # source_id → frame_number from pre-tiler
+        self._frame_sizes = frame_sizes      # source_id → source frame size from pre-tiler
         self._person_class_id = person_class_id
         self._tile_w = tile_w
         self._tile_h = tile_h
@@ -571,6 +599,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 row["allow_new_gid"] = row["embedding_quality_ok"]
                 row["identity_conflict"] = False
                 row["suppress_gallery_update"] = False
+                row["release_previous_gid"] = False
                 # Known tracks keep their GID through low-quality frames, but
                 # low-quality new tracks may only match existing IDs. They wait
                 # for a cleaner crop before creating a brand-new Global ID.
@@ -601,6 +630,9 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                             if row.get("update_gallery") else [],
                             row["src"],
                         )
+                elif row.get("release_previous_gid"):
+                    self._track_to_gid.pop(row["track_key"], None)
+                    self._tracklets[row["track_key"]]["gid"] = None
 
             if (
                 ENABLE_GLOBAL_ID_MERGE
@@ -735,14 +767,12 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         return gid
 
     def _mark_duplicate_known_conflicts(self, rows: list[dict]) -> None:
-        """Keep known GIDs stable, but avoid learning from same-stream conflicts.
+        """Release weaker same-stream duplicate GIDs before assignment.
 
-        Earlier versions released the lower-scoring duplicate back to Hungarian
-        assignment. On MTA this turned small embedding-score fluctuations into
-        frame-by-frame GID swaps for otherwise stable local tracks. A local
-        tracker ID that already owns a GID is now treated as authoritative while
-        it remains alive; if two active tracks display the same GID in one
-        camera, only the stronger row may update the long-term gallery.
+        A single Global ID cannot represent two simultaneous tracks in the same
+        camera. Keep the stronger holder stable and send the weaker row back
+        through Hungarian assignment so it can take another existing ID or open
+        a new one. This prevents same-frame duplicate GIDs from poisoning IDF1.
         """
         active: dict[tuple[int, int], dict] = {}
         for row in rows:
@@ -770,6 +800,9 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             active[key]["identity_conflict"] = True
             suppressed["identity_conflict"] = True
             suppressed["suppress_gallery_update"] = True
+            suppressed["release_previous_gid"] = True
+            suppressed["previous_gid"] = gid
+            suppressed["gid"] = None
             if self._debug_similarity:
                 print(
                     f"  [Re-ID conflict] Cam{suppressed['src']}#{suppressed['track_id']} "
@@ -965,7 +998,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 continue
 
             candidate = self._best_merge_candidate(
-                source_gid, row["embedding"], row["src"], active_by_src)
+                source_gid, row, active_by_src)
             if candidate is None:
                 continue
 
@@ -986,19 +1019,22 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     f"Cam{row['src']}#{row['track_id']}"
                 )
 
-    def _best_merge_candidate(self, source_gid: int, embedding: list[float],
-                              src: int,
+    def _best_merge_candidate(self, source_gid: int, row: dict,
                               active_by_src: dict[int, set[int]]
                               ) -> tuple[int, float, float] | None:
         candidates = self._candidate_gids(
-            exclude=active_by_src.get(src, set()),
+            exclude=active_by_src.get(row["src"], set()),
             max_count=GLOBAL_ID_MERGE_MAX_CANDIDATES,
             only_older_than=source_gid,
         )
 
         scores = []
         for target_gid in candidates:
-            scores.append((target_gid, self._score_gid(target_gid, embedding)))
+            reid_score = self._score_gid(target_gid, row["embedding"])
+            scores.append((
+                target_gid,
+                self._blend_geo_score(reid_score, row, target_gid),
+            ))
 
         if not scores:
             return None
@@ -1075,7 +1111,17 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             row = src // max(1, self._cols)
             left -= col * self._tile_w
             top -= row * self._tile_h
-            frame_w, frame_h = float(self._tile_w), float(self._tile_h)
+            frame_w, frame_h = self._frame_sizes.get(
+                src, (float(self._tile_w), float(self._tile_h))
+            ) if self._frame_sizes is not None else (
+                float(self._tile_w), float(self._tile_h)
+            )
+            sx = frame_w / max(1.0, float(self._tile_w))
+            sy = frame_h / max(1.0, float(self._tile_h))
+            left *= sx
+            top *= sy
+            width *= sx
+            height *= sy
 
         return {
             "left": left,

@@ -324,10 +324,12 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
             pretiler=pretiler,
         )
 
-    # frame_numbers: shared dict source_id → frame_number, filled by
+    # frame_numbers/frame_sizes: shared dicts filled by
     # SourceIdCollectorProbe (pre-tiler) and read by CrossCameraGalleryProbe
-    # (post-tiler) so the exporter records the correct per-source frame index.
+    # (post-tiler) so the exporter records the correct per-source frame index
+    # and source-space bbox coordinates.
     frame_numbers: dict = {}
+    frame_sizes: dict = {}
 
     gallery_probe = gallery.CrossCameraGalleryProbe(
         id_map, embeddings, person_class_id, tile_w, tile_h, cols, n,
@@ -339,6 +341,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         trajectory_visualizer=trajectory_visualizer,
         exporter=exporter,
         frame_numbers=frame_numbers if not pretiler else None,
+        frame_sizes=frame_sizes if not pretiler else None,
         geometry=geometry)
 
     if pretiler:
@@ -355,7 +358,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
             "src_collector",
             gallery.SourceIdCollectorProbe(
                 id_map, embeddings, person_class_id, debug=debug_similarity,
-                frame_numbers=frame_numbers),
+                frame_numbers=frame_numbers, frame_sizes=frame_sizes),
         ))
 
     if gt_by_cam:

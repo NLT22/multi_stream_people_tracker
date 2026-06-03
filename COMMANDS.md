@@ -210,10 +210,8 @@ python -m src.main \
 **Dùng model MMP mới train:**
 ```bash
 python -m src.main \
-    --config configs/pipeline_mta.yaml \
+    --config configs/pipeline_mmp.yaml \
     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
-    --nvinfer-config configs/models/nvinfer_yolov11_mmp.yml \
-    --tracker-config configs/tracker/nvdeepsort_reid_swin_mmp.yaml \
     --no-display --no-sync \
     --export-predictions output/eval/mmp_lobby0
 ```
@@ -222,23 +220,26 @@ python -m src.main \
 
 ## 5. Eval tracking (per-camera MOTA + Global IDF1)
 
-Đánh giá kết quả tracking với MTA dataset.
+Đánh giá kết quả tracking với MMPTracking_short.
 
 ```bash
-python -m src.eval.metrics \
-    --gt-dir dataset/mta/MTA_ext_short/test \
-    --pred-dir output/eval/mta_run1
+python -m src.eval.metrics_mmp \
+    --short-root dataset/MMPTracking_short \
+    --scene lobby_0 \
+    --pred-dir output/eval/mmp_lobby0
 ```
 
 | Tham số | Mặc định | Mô tả |
 |---------|----------|-------|
-| `--gt-dir` | *(bắt buộc)* | Thư mục GT (MTA split) |
+| `--short-root` | `dataset/MMPTracking_short` | Thư mục MMPTracking_short |
+| `--scene` | *(bắt buộc)* | Scene cần eval, vd `lobby_0` |
 | `--pred-dir` | *(bắt buộc)* | Thư mục chứa `cam_N_predictions.csv` |
-| `--cameras` | tất cả | Chỉ eval camera chỉ định, vd: `--cameras 0 1 2` |
+| `--cameras` | tất cả | Chỉ eval camera thật chỉ định, vd: `--cameras 1 2 3 4` |
 | `--iou-threshold` | `0.5` | IoU tối thiểu để match GT ↔ pred |
-| `--min-height` | `60` | Filter box quá nhỏ |
-| `--min-width` | `20` | Filter box quá hẹp |
+| `--min-height` | `20` | Filter box quá nhỏ trong GT space 640×360 |
+| `--min-width` | `8` | Filter box quá hẹp trong GT space 640×360 |
 | `--min-visibility` | `0.3` | Filter box ngoài frame |
+| `--pred-width/--pred-height` | auto | Không gian bbox prediction; mặc định auto-detect |
 | `--no-filter` | — | Tắt toàn bộ difficulty filter |
 
 ---
@@ -250,14 +251,18 @@ Sau khi chạy pipeline, merge các global ID bị fragment bằng embedding sim
 ```bash
 python -m src.eval.offline_merge \
     --pred-dir output/eval/mmp_lobby0 \
-    --out-dir  output/eval/mmp_lobby0_merged
+    --out-dir  output/eval/mmp_lobby0_merged \
+    --threshold 0.70 \
+    --margin 0.05 \
+    --min-gid-embeddings 6 \
+    --min-tracklet-detections 10
 ```
 
 | Tham số | Mặc định | Mô tả |
 |---------|----------|-------|
 | `--pred-dir` | *(bắt buộc)* | Thư mục predictions gốc |
 | `--out-dir` | *(bắt buộc)* | Thư mục ghi predictions sau merge |
-| `--threshold` | `0.82` | Similarity tối thiểu để merge 2 global ID |
+| `--threshold` | `0.82` | Similarity tối thiểu để merge 2 global ID (`0.70` đang tốt hơn cho MMP) |
 | `--margin` | `0.05` | Best candidate phải hơn runner-up ít nhất N |
 | `--min-gid-embeddings` | `12` | Bỏ qua global ID có ít hơn N embeddings |
 | `--min-tracklet-detections` | `20` | Bỏ qua tracklet quá ngắn |
@@ -266,7 +271,131 @@ python -m src.eval.offline_merge \
 
 ---
 
-## 7. Luồng làm việc đầy đủ
+## 7. Tune NvDCF + online merge
+
+### 7.0 Realtime simple gallery
+
+Nếu mục tiêu là chạy realtime ổn định, ưu tiên preset này trước. Nó bỏ online duplicate merge và tắt ambiguity rejection để giảm split GID trong lúc live.
+
+```bash
+SCENE=lobby_0
+
+python -m src.main \
+  --config configs/pipeline_mmp_nvdcf_realtime_simple.yaml \
+  --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+  --no-display --no-sync \
+  --geo-weight 0.20 \
+  --export-predictions output/eval/mmp_${SCENE}_nvdcf_realtime_simple
+
+python -m src.eval.metrics_mmp \
+  --short-root dataset/MMPTracking_short \
+  --scene ${SCENE} \
+  --pred-dir output/eval/mmp_${SCENE}_nvdcf_realtime_simple
+```
+
+Preset online merge:
+
+- Pipeline: `configs/pipeline_mmp_nvdcf_online.yaml`
+- Tracker: `configs/tracker/nvdcf_accuracy_mmp_recall.yaml`
+- Online merge đã bật trong config, có calibration-assisted scoring khi chạy với `--mmp-short-dataset`.
+
+### 7.1 Chạy một scene với NvDCF online merge
+
+```bash
+SCENE=lobby_0
+
+python -m src.main \
+  --config configs/pipeline_mmp_nvdcf_online.yaml \
+  --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+  --no-display --no-sync \
+  --geo-weight 0.25 \
+  --export-predictions output/eval/mmp_${SCENE}_nvdcf_online
+
+python -m src.eval.metrics_mmp \
+  --short-root dataset/MMPTracking_short \
+  --scene ${SCENE} \
+  --pred-dir output/eval/mmp_${SCENE}_nvdcf_online
+```
+
+### 7.2 Conservative online merge sweep
+
+Ưu tiên chạy trước trên `lobby_0`, `industry_safety_0`, `retail_0`.
+
+```bash
+for SCENE in lobby_0 industry_safety_0 retail_0; do
+  for THR in 0.72 0.74 0.76; do
+    OUT=output/eval/mmp_${SCENE}_nvdcf_online_t${THR}
+
+    python -m src.main \
+      --config configs/pipeline_mmp_nvdcf_online.yaml \
+      --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+      --no-display --no-sync \
+      --geo-weight 0.25 \
+      --global-merge-threshold ${THR} \
+      --global-merge-margin 0.04 \
+      --global-merge-interval 10 \
+      --export-predictions ${OUT}
+
+    python -m src.eval.metrics_mmp \
+      --short-root dataset/MMPTracking_short \
+      --scene ${SCENE} \
+      --pred-dir ${OUT}
+  done
+done
+```
+
+### 7.3 A/B online merge vs offline merge
+
+```bash
+SCENE=lobby_0
+
+# Online merge trực tiếp
+python -m src.main \
+  --config configs/pipeline_mmp_nvdcf_online.yaml \
+  --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+  --no-display --no-sync \
+  --geo-weight 0.25 \
+  --global-merge-threshold 0.74 \
+  --global-merge-margin 0.04 \
+  --export-predictions output/eval/mmp_${SCENE}_nvdcf_online_t074
+
+python -m src.eval.metrics_mmp \
+  --short-root dataset/MMPTracking_short \
+  --scene ${SCENE} \
+  --pred-dir output/eval/mmp_${SCENE}_nvdcf_online_t074
+
+# Offline geo merge từ raw NvDCF output để làm mốc so sánh
+python -m src.main \
+  --config configs/pipeline_mmp.yaml \
+  --tracker-config configs/tracker/nvdcf_accuracy_mmp_recall.yaml \
+  --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+  --no-display --no-sync \
+  --disable-global-merge \
+  --geo-weight 0.25 \
+  --export-predictions output/eval/mmp_${SCENE}_nvdcf_raw
+
+python -m src.eval.offline_merge \
+  --pred-dir output/eval/mmp_${SCENE}_nvdcf_raw \
+  --out-dir output/eval/mmp_${SCENE}_nvdcf_raw_geo_merged \
+  --threshold 0.65 --margin 0.03 \
+  --min-gid-embeddings 6 --min-tracklet-detections 10 \
+  --mmp-short-root dataset/MMPTracking_short \
+  --scene ${SCENE} \
+  --geo-weight 0.25 \
+  --geo-sample-step 5 \
+  --geo-min-overlaps 20
+
+python -m src.eval.metrics_mmp \
+  --short-root dataset/MMPTracking_short \
+  --scene ${SCENE} \
+  --pred-dir output/eval/mmp_${SCENE}_nvdcf_raw_geo_merged
+```
+
+Nếu online merge làm Global IDF1 tăng nhưng Pred IDs vẫn cao, giảm threshold nhẹ (`0.72`). Nếu Global IDF1 tụt hoặc IDFP tăng mạnh, tăng threshold (`0.76`) hoặc margin (`0.06`).
+
+---
+
+## 8. Luồng làm việc đầy đủ
 
 ```
 # Bước 1: Tạo YOLO dataset
@@ -278,37 +407,32 @@ python scripts/train_yolo_mmp.py --weights output/train/yolo11n_mta/weights/best
 # Bước 3: Train ReID
 python scripts/finetune_reid_mmp.py --resume output/reid_v2/best.pth
 
-# Bước 4: Tạo nvinfer config cho model mới (copy và sửa path ONNX)
-cp configs/models/nvinfer_yolov11_mta.yml configs/models/nvinfer_yolov11_mmp.yml
-# → sửa onnxFile: "models/yolov11/yolo11n_mmp.onnx"
-
-# Bước 5: Tạo tracker config cho ReID mới (copy và sửa path ONNX)
-cp configs/tracker/nvdeepsort_reid_swin_mta.yaml configs/tracker/nvdeepsort_reid_swin_mmp.yaml
-# → sửa onnxFile: "output/reid_mmp/swin_tiny_mmp_reid.onnx"
-
-# Bước 6: Chạy pipeline trên từng scene
+# Bước 4: Chạy pipeline trên từng scene
 python -m src.main \
-    --config configs/pipeline_mta.yaml \
+    --config configs/pipeline_mmp.yaml \
     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
-    --nvinfer-config configs/models/nvinfer_yolov11_mmp.yml \
-    --tracker-config configs/tracker/nvdeepsort_reid_swin_mmp.yaml \
     --no-display --no-sync \
     --export-predictions output/eval/mmp_lobby0
 
-# Bước 7: Offline merge (tuỳ chọn)
+# Bước 5: Offline merge (tuỳ chọn)
 python -m src.eval.offline_merge \
     --pred-dir output/eval/mmp_lobby0 \
-    --out-dir  output/eval/mmp_lobby0_merged
+    --out-dir  output/eval/mmp_lobby0_merged \
+    --threshold 0.70 \
+    --margin 0.05 \
+    --min-gid-embeddings 6 \
+    --min-tracklet-detections 10
 
-# Bước 8: Eval
-python -m src.eval.metrics \
-    --gt-dir dataset/mta/MTA_ext_short/test \
+# Bước 6: Eval
+python -m src.eval.metrics_mmp \
+    --short-root dataset/MMPTracking_short \
+    --scene lobby_0 \
     --pred-dir output/eval/mmp_lobby0_merged
 ```
 
 ---
 
-## 8. Docker
+## 9. Docker
 
 ### Yêu cầu
 
@@ -433,10 +557,8 @@ docker compose run --rm tracker \
 ```bash
 docker compose run --rm tracker \
     python3 -m src.main \
-        --config configs/pipeline_mta.yaml \
+        --config configs/pipeline_mmp.yaml \
         --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
-        --nvinfer-config  configs/models/nvinfer_yolov11_mmp.yml \
-        --tracker-config  configs/tracker/nvdeepsort_reid_swin_mmp.yaml \
         --no-display --no-sync \
         --export-predictions output/eval/mmp_lobby0
 ```
@@ -447,11 +569,16 @@ docker compose run --rm tracker \
 docker compose run --rm tracker \
     python3 -m src.eval.offline_merge \
         --pred-dir output/eval/mmp_lobby0 \
-        --out-dir  output/eval/mmp_lobby0_merged
+        --out-dir  output/eval/mmp_lobby0_merged \
+        --threshold 0.70 \
+        --margin 0.05 \
+        --min-gid-embeddings 6 \
+        --min-tracklet-detections 10
 
 docker compose run --rm tracker \
-    python3 -m src.eval.metrics \
-        --gt-dir  dataset/mta/MTA_ext_short/test \
+    python3 -m src.eval.metrics_mmp \
+        --short-root dataset/MMPTracking_short \
+        --scene lobby_0 \
         --pred-dir output/eval/mmp_lobby0_merged
 ```
 
@@ -477,10 +604,8 @@ docker compose run --rm reid_train_mmp
 for SCENE in lobby_0 lobby_1 cafe_shop_0 office_0 retail_0; do
     docker compose run --rm tracker \
         python3 -m src.main \
-            --config configs/pipeline_mta.yaml \
+            --config configs/pipeline_mmp.yaml \
             --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
-            --nvinfer-config  configs/models/nvinfer_yolov11_mmp.yml \
-            --tracker-config  configs/tracker/nvdeepsort_reid_swin_mmp.yaml \
             --no-display --no-sync \
             --export-predictions output/eval/mmp_${SCENE}
 done
@@ -490,6 +615,10 @@ for SCENE in lobby_0 lobby_1 cafe_shop_0 office_0 retail_0; do
     docker compose run --rm tracker \
         python3 -m src.eval.offline_merge \
             --pred-dir output/eval/mmp_${SCENE} \
-            --out-dir  output/eval/mmp_${SCENE}_merged
+            --out-dir  output/eval/mmp_${SCENE}_merged \
+            --threshold 0.70 \
+            --margin 0.05 \
+            --min-gid-embeddings 6 \
+            --min-tracklet-detections 10
 done
 ```
