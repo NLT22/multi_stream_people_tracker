@@ -16,9 +16,11 @@ Run:
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 from pathlib import Path
 
+import yaml
 from ultralytics import YOLO
 
 
@@ -39,6 +41,61 @@ Then evaluate:
       --scene lobby_0 \\
       --pred-dir output/eval/mmp_lobby0
 """
+
+
+def _is_writable_dir(path: Path) -> bool:
+    if path.exists():
+        return path.is_dir() and os.access(path, os.W_OK)
+    existing_parent = path.parent
+    while not existing_parent.exists() and existing_parent != existing_parent.parent:
+        existing_parent = existing_parent.parent
+    return os.access(existing_parent, os.W_OK)
+
+
+def _fail_if_unwritable(path: Path, description: str) -> None:
+    if _is_writable_dir(path):
+        return
+    print(f"[ERROR] {description} is not writable: {path}")
+    print("This is usually caused by an earlier `sudo docker compose run` creating root-owned files.")
+    print("Fix ownership from the repo root:")
+    print("  sudo chown -R $USER:$USER output dataset/mmp_yolo models/yolov11")
+    print("Or choose a user-writable run directory, e.g.:")
+    print("  python scripts/train_yolo_mmp.py --project runs/train --name yolo11n_mmp")
+    raise SystemExit(1)
+
+
+def _resolve_yolo_data_yaml(data_path: Path) -> Path:
+    with data_path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    root = Path(data.get("path") or data_path.parent)
+    if not root.is_absolute():
+        root = (data_path.parent / root).resolve()
+
+    train_rel = Path(data.get("train", "images/train"))
+    val_rel = Path(data.get("val", "images/val"))
+    train_path = train_rel if train_rel.is_absolute() else root / train_rel
+    val_path = val_rel if val_rel.is_absolute() else root / val_rel
+    if train_path.exists() and val_path.exists():
+        return data_path
+
+    local_root = data_path.parent.resolve()
+    local_train = train_rel if train_rel.is_absolute() else local_root / train_rel
+    local_val = val_rel if val_rel.is_absolute() else local_root / val_rel
+    if local_train.exists() and local_val.exists():
+        local_yaml = data_path.with_name(f"{data_path.stem}.local{data_path.suffix}")
+        data["path"] = str(local_root)
+        local_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        print(f"[data] Rewriting dataset root for this environment: {local_yaml}")
+        print(f"       original path={root}")
+        print(f"       local path={local_root}")
+        return local_yaml
+
+    print(f"[ERROR] YOLO images not found from dataset yaml: {data_path}")
+    print(f"  Tried: {train_path} and {val_path}")
+    print(f"  Also tried local root: {local_train} and {local_val}")
+    print("  Run dataset conversion again or check dataset/mmp_yolo/images/{train,val}.")
+    raise SystemExit(1)
 
 
 def main() -> None:
@@ -66,11 +123,17 @@ def main() -> None:
 
     data_path   = Path(args.data).resolve()
     project_dir = Path(args.project).resolve()
+    save_dir = project_dir / args.name
 
     if not data_path.exists():
         print(f"[ERROR] dataset.yaml not found: {data_path}")
         print("  Run first: python scripts/mmp_to_yolo.py")
         raise SystemExit(1)
+
+    data_path = _resolve_yolo_data_yaml(data_path)
+    _fail_if_unwritable(save_dir, "Training output directory")
+    _fail_if_unwritable(data_path.parent / "labels", "YOLO labels/cache directory")
+    _fail_if_unwritable(ONNX_DEST.parent.resolve(), "ONNX destination directory")
 
     if args.resume:
         last_ckpt = project_dir / args.name / "weights" / "last.pt"

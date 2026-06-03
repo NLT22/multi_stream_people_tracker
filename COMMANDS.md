@@ -97,6 +97,7 @@ python scripts/mmp_to_yolo.py
 
 Output: `dataset/mmp_yolo/` gồm `images/train`, `images/val`, `labels/train`, `labels/val`, `dataset.yaml`.  
 Val split = scene cuối mỗi môi trường (5 scenes); train = 19 scenes còn lại.
+Nếu `dataset.yaml` được tạo trong Docker, path có thể là `/app/dataset/mmp_yolo`; script train sẽ tự tạo `dataset.local.yaml` khi chạy trực tiếp bằng venv host.
 
 ---
 
@@ -316,9 +317,9 @@ python -m src.eval.metrics \
 
 | Service | Image | Mục đích |
 |---------|-------|----------|
-| `yolo_train` | `pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime` | Convert dataset + train YOLO |
-| `reid_train_mmp` | `pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime` | Train ReID trên MMPTracking_short |
-| `reid_train` | `pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime` | Train ReID trên MTA (legacy) |
+| `yolo_train` | `pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime` | Convert dataset + train YOLO |
+| `reid_train_mmp` | `pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime` | Train ReID trên MMPTracking_short |
+| `reid_train` | `pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime` | Train ReID trên MTA (legacy) |
 | `tracker` | `multi_stream_people_tracker:latest` (build local) | Chạy DeepStream pipeline |
 
 ---
@@ -360,8 +361,16 @@ YOLO_WEIGHTS=output/train/yolo11n_mta/weights/best.pt docker compose run --rm yo
 | `YOLO_BATCH` | `16` | `--batch` |
 | `YOLO_PATIENCE` | `10` | `--patience` |
 | `YOLO_WEIGHTS` | `yolo11n.pt` | `--weights` |
+| `YOLO_WORKERS` | `4` | `--workers` |
 
 Output tự động ghi ra `output/train/yolo11n_mmp/` và `models/yolov11/yolo11n_mmp.onnx` trên host.
+Các service train dùng `shm_size: "16gb"` để tránh lỗi PyTorch DataLoader `Unexpected bus error` / thiếu `/dev/shm`.
+
+Nếu đã từng chạy bằng `sudo docker compose run` rồi chuyển sang chạy trực tiếp bằng venv host, sửa owner các thư mục output/cache trước:
+
+```bash
+sudo chown -R $USER:$USER output dataset/mmp_yolo models/yolov11
+```
 
 ---
 

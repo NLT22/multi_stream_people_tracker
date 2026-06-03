@@ -1,7 +1,8 @@
 services:
   # ── YOLO fine-tune on MMPTracking_short ────────────────────────────────────
   yolo_train:
-    image: pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+    image: pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
+    shm_size: "16gb"
     deploy:
       resources:
         reservations:
@@ -13,7 +14,7 @@ services:
     volumes:
       - ./scripts:/app/scripts:ro
       - ./dataset/mmp_yolo:/app/dataset/mmp_yolo
-      - ./dataset/MMPTracking_short:/app/dataset/MMPTracking_short:ro
+      - ./dataset/MMPTracking/MMPTracking_short:/app/dataset/MMPTracking_short:ro
       - ./output/train:/app/output/train
       - ./models/yolov11:/app/models/yolov11
     environment:
@@ -21,20 +22,37 @@ services:
       - YOLO_BATCH=${YOLO_BATCH:-16}
       - YOLO_PATIENCE=${YOLO_PATIENCE:-10}
       - YOLO_WEIGHTS=${YOLO_WEIGHTS:-yolo11n.pt}
-    command: >
-      bash -c "pip install ultralytics opencv-python-headless pandas pyyaml -q &&
-               python scripts/mmp_to_yolo.py &&
-               python scripts/train_yolo_mmp.py
-                 --epochs ${YOLO_EPOCHS:-30}
-                 --batch  ${YOLO_BATCH:-16}
-                 --patience ${YOLO_PATIENCE:-10}
-                 --weights ${YOLO_WEIGHTS:-yolo11n.pt}"
+      - YOLO_WORKERS=${YOLO_WORKERS:-4}
+      - HOST_UID=${HOST_UID:-1000}
+      - HOST_GID=${HOST_GID:-1000}
+    command:
+      - bash
+      - -c
+      - |
+        trap 'chown -R "$$HOST_UID:$$HOST_GID" /app/dataset/mmp_yolo /app/output/train /app/models/yolov11 2>/dev/null || true' EXIT
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq &&
+        apt-get install -y --no-install-recommends libxcb1 libgl1 libglib2.0-0 >/dev/null &&
+        rm -rf /var/lib/apt/lists/*
+        pip uninstall -y opencv-python opencv-contrib-python opencv-contrib-python-headless >/dev/null 2>&1 || true
+        pip install "numpy<2" ultralytics pandas pyyaml -q &&
+        pip uninstall -y opencv-python opencv-contrib-python >/dev/null 2>&1 || true
+        pip install --force-reinstall --no-deps opencv-python-headless -q &&
+        rm -f /app/dataset/mmp_yolo/labels/*.cache &&
+        python scripts/mmp_to_yolo.py &&
+        python scripts/train_yolo_mmp.py \
+          --epochs $$YOLO_EPOCHS \
+          --batch $$YOLO_BATCH \
+          --patience $$YOLO_PATIENCE \
+          --weights $$YOLO_WEIGHTS \
+          --workers $$YOLO_WORKERS
     stdin_open: true
     tty: true
 
   # ── ReID fine-tune on MTA (legacy) ─────────────────────────────────────────
   reid_train:
-    image: pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+    image: pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
+    shm_size: "16gb"
     deploy:
       resources:
         reservations:
@@ -47,17 +65,25 @@ services:
       - ./scripts:/app/scripts:ro
       - ./dataset/mta/MTA_reid:/app/dataset/mta/MTA_reid:ro
       - ./output/reid:/app/output/reid
-    command: >
-      bash -c "pip install timm tqdm albumentations -q &&
-               python scripts/finetune_reid_mta.py
-               --epochs 50 --batch 32 --accum-steps 1
-               --workers 4 --output output/reid"
+    environment:
+      - HOST_UID=${HOST_UID:-1000}
+      - HOST_GID=${HOST_GID:-1000}
+    command:
+      - bash
+      - -c
+      - |
+        trap 'chown -R "$$HOST_UID:$$HOST_GID" /app/output/reid 2>/dev/null || true' EXIT
+        pip install timm tqdm albumentations -q &&
+        python scripts/finetune_reid_mta.py \
+          --epochs 50 --batch 32 --accum-steps 1 \
+          --workers 4 --output output/reid
     stdin_open: true
     tty: true
 
   # ── ReID fine-tune on MMPTracking_short ────────────────────────────────────
   reid_train_mmp:
-    image: pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+    image: pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
+    shm_size: "16gb"
     deploy:
       resources:
         reservations:
@@ -68,21 +94,33 @@ services:
     working_dir: /app
     volumes:
       - ./scripts:/app/scripts:ro
-      - ./dataset/MMPTracking_short:/app/dataset/MMPTracking_short:ro
+      - ./dataset/MMPTracking/MMPTracking_short:/app/dataset/MMPTracking_short:ro
       - ./output/reid_mmp:/app/output/reid_mmp
     environment:
       - REID_EPOCHS=${REID_EPOCHS:-40}
       - REID_PKP=${REID_PKP:-24}
       - REID_PKK=${REID_PKK:-4}
       - REID_RESUME=${REID_RESUME:-}
-    command: >
-      bash -c "pip install timm tqdm opencv-python-headless pandas -q &&
-               python scripts/finetune_reid_mmp.py
-                 --epochs ${REID_EPOCHS:-40}
-                 --pk-p   ${REID_PKP:-24}
-                 --pk-k   ${REID_PKK:-4}
-                 --output output/reid_mmp
-                 ${REID_RESUME:+--resume $REID_RESUME}"
+      - HOST_UID=${HOST_UID:-1000}
+      - HOST_GID=${HOST_GID:-1000}
+    command:
+      - bash
+      - -c
+      - |
+        trap 'chown -R "$$HOST_UID:$$HOST_GID" /app/output/reid_mmp 2>/dev/null || true' EXIT
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq &&
+        apt-get install -y --no-install-recommends libxcb1 libgl1 libglib2.0-0 >/dev/null &&
+        rm -rf /var/lib/apt/lists/*
+        pip uninstall -y opencv-python opencv-contrib-python opencv-contrib-python-headless >/dev/null 2>&1 || true
+        pip install "numpy<2" timm tqdm pandas -q &&
+        pip install --force-reinstall --no-deps opencv-python-headless -q &&
+        python scripts/finetune_reid_mmp.py \
+          --epochs $$REID_EPOCHS \
+          --pk-p $$REID_PKP \
+          --pk-k $$REID_PKK \
+          --output output/reid_mmp \
+          $${REID_RESUME:+--resume $$REID_RESUME}
     stdin_open: true
     tty: true
 
