@@ -27,6 +27,7 @@ from src.pipeline.model_utils import (
     set_object_label,
 )
 from src.reid.visualization import style_object_by_id
+from src.reid.geometry import GroundPlaneGeometry
 
 
 # =============================================================================
@@ -39,7 +40,7 @@ from src.reid.visualization import style_object_by_id
 #   create/update long-term identity memory. Keep the current GID if known, and
 #   wait for a cleaner crop before matching a brand-new local track.
 ENABLE_EMBEDDING_QUALITY_GATE = True
-REID_EDGE_MARGIN_RATIO = 0.02
+REID_EDGE_MARGIN_RATIO = 0.005  # MMPTracking: indoor wide-angle, persons often near edge
 REID_MIN_BBOX_HEIGHT_RATIO = 0.04
 REID_MIN_BBOX_AREA_RATIO = 0.0008
 REID_MIN_BBOX_ASPECT_RATIO = 0.12
@@ -126,6 +127,15 @@ GLOBAL_ID_MERGE_MAX_CANDIDATES = 80
 # --- 8. Debug ----------------------------------------------------------------
 #   Number of nearest Global IDs printed when --debug-similarity is enabled.
 DEBUG_TOP_K = 3
+
+# --- 9. Ground-plane geometry (calibration-assisted matching) ----------------
+#   When GroundPlaneGeometry is provided, the combined score is:
+#     score = (1 - GEO_WEIGHT) * reid_score + GEO_WEIGHT * geo_score
+#   GEO_WEIGHT=0 disables geometry blending entirely (pure ReID).
+#   GEO_WEIGHT=0.35 gives meaningful spatial cues without overriding appearance.
+#   Only cross-camera pairs (src_a != src_b) use geometry; same-camera pairs
+#   skip it because the DeepSORT local tracker already handles those.
+GEO_WEIGHT = 0.35
 
 
 def _cosine_similarity(a, b) -> float:
@@ -418,7 +428,8 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                  extract_embeddings: bool = False,
                  trajectory_visualizer=None,
                  exporter=None,
-                 frame_numbers: dict | None = None):
+                 frame_numbers: dict | None = None,
+                 geometry: "GroundPlaneGeometry | None" = None):
         super().__init__()
         self._id_map = id_map
         self._embeddings = embeddings
@@ -444,6 +455,11 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         self._enforce_unique_per_stream = enforce_unique_per_stream
         self._trajectory_visualizer = trajectory_visualizer
         self._exporter = exporter
+        # Optional ground-plane geometry for calibration-assisted matching.
+        # When provided, foot positions in world-mm are stored per row and used
+        # to blend a geometric similarity score into the ReID score for
+        # cross-camera candidate pairs.
+        self._geometry: GroundPlaneGeometry | None = geometry
 
     def handle_metadata(self, batch_meta):
         try:
@@ -503,23 +519,35 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                             self._cols, self._num_sources)
                     embedding = self._embeddings.get((src, oid), [])
                 track_key = (src, oid)
+                rect = self._local_rect(obj_meta.rect_params, src, frame_meta)
+                foot_world = None
+                if self._geometry is not None:
+                    # cam_id in calibration is 1-based (same as source_id + 1
+                    # for MMP).  We store foot in world-mm for geo blending.
+                    foot_world = self._geometry.bbox_foot(
+                        src + 1,   # source_id is 0-based; cam_id is 1-based
+                        rect["left"], rect["top"],
+                        rect["width"], rect["height"],
+                    )
                 rows.append({
                     "src": src,
                     "track_id": oid,
                     "track_key": track_key,
-                    "rect": self._local_rect(obj_meta.rect_params, src, frame_meta),
+                    "rect": rect,
                     "embedding": [],
                     "raw_embedding": embedding,
                     "tracklet_len": 0,
                     "gid": None,
                     "previous_gid": None,
+                    "foot_world": foot_world,   # (X_mm, Y_mm) or None
                 })
 
             self._annotate_embedding_quality(rows)
             for row in rows:
                 tracklet = self._update_tracklet(
                     row["track_key"], row["src"], row["track_id"],
-                    row["raw_embedding"], row["embedding_quality_ok"])
+                    row["raw_embedding"], row["embedding_quality_ok"],
+                    foot_world=row.get("foot_world"))
                 row["tracklet_len"] = len(tracklet["embeddings"])
                 row["update_gallery"] = tracklet.get("sampled_this_frame", False)
                 match_embedding = self._tracklet_embedding(
@@ -834,11 +862,12 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 row_weights = []
                 for kind, value in columns:
                     if kind == "gid":
-                        score = scores_for_row[value]
+                        reid_score = scores_for_row[value]
+                        blended = self._blend_geo_score(reid_score, row, value)
                         allowed, _ = self._is_gid_match_allowed(
                             row["embedding"], value, row.get("previous_gid"),
                             ranked)
-                        row_weights.append(score if allowed else -1.0)
+                        row_weights.append(blended if allowed else -1.0)
                     else:
                         row_weights.append(0.0)
                 weights.append(row_weights)
@@ -1145,7 +1174,8 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
     def _update_tracklet(self, track_key: tuple, src: int, track_id: int,
                          embedding: list[float],
-                         quality_ok: bool = True) -> dict:
+                         quality_ok: bool = True,
+                         foot_world=None) -> dict:
         tracklet = self._tracklets.setdefault(track_key, {
             "src": src,
             "track_id": track_id,
@@ -1153,10 +1183,13 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             "age": 0,
             "gid": self._track_to_gid.get(track_key),
             "last_embedding_frame": -TRACKLET_EMBEDDING_INTERVAL,
+            "foot_world": None,
         })
         tracklet["age"] = 0
         tracklet["src"] = src
         tracklet["track_id"] = track_id
+        if foot_world is not None:
+            tracklet["foot_world"] = foot_world
         should_sample = self._should_sample_tracklet_embedding(tracklet)
         tracklet["sampled_this_frame"] = bool(embedding and quality_ok and should_sample)
         if tracklet["sampled_this_frame"]:
@@ -1255,6 +1288,40 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             return self._best_prototype_score(embedding, entry)
         return _cosine_similarity(embedding, entry.get("embedding", []))
 
+    def _blend_geo_score(self, reid_score: float, row: dict,
+                         candidate_gid: int) -> float:
+        """
+        Blend geometry score into the ReID score for cross-camera pairs.
+
+        Same-camera assignments are left unchanged (geometry doesn't help
+        when the local tracker already handles intra-camera identity).
+        Returns reid_score unchanged when geometry is disabled or unavailable.
+        """
+        if self._geometry is None or GEO_WEIGHT <= 0.0:
+            return reid_score
+
+        foot_q = row.get("foot_world")
+        if foot_q is None:
+            return reid_score
+
+        # Look for the best geo score among all tracklets mapped to this gid
+        # that come from a *different* source.
+        best_geo = 0.0
+        for (t_src, _t_id), t_gid in self._track_to_gid.items():
+            if t_gid != candidate_gid:
+                continue
+            if t_src == row["src"]:
+                continue   # same camera — skip
+            foot_t = self._tracklets.get((t_src, _t_id), {}).get("foot_world")
+            g = GroundPlaneGeometry.geo_score(foot_q, foot_t)
+            if g > best_geo:
+                best_geo = g
+
+        if best_geo == 0.0:
+            return reid_score
+
+        return (1.0 - GEO_WEIGHT) * reid_score + GEO_WEIGHT * best_geo
+
     @staticmethod
     def _use_prototypes() -> bool:
         return GALLERY_MAX_PROTOTYPES > 0
@@ -1341,6 +1408,7 @@ def configure_from_args(args) -> None:
     global USE_TRACKLET_EMBEDDING, TRACKLET_MAX_EMBEDDINGS
     global TRACKLET_MIN_EMBEDDINGS_FOR_MATCH, TRACKLET_MAX_AGE
     global TRACKLET_EMBEDDING_INTERVAL, ENABLE_EMBEDDING_QUALITY_GATE
+    global GEO_WEIGHT
 
     SIMILARITY_THRESHOLD = max(0.0, args.similarity_threshold)
     GALLERY_MAX_AGE = max(1, args.gallery_max_age)
@@ -1362,6 +1430,9 @@ def configure_from_args(args) -> None:
     TRACKLET_MAX_EMBEDDINGS = max(1, args.tracklet_window)
     TRACKLET_MIN_EMBEDDINGS_FOR_MATCH = max(1, args.tracklet_min_embeddings)
     TRACKLET_MAX_AGE = max(1, args.tracklet_max_age)
+    _gw = getattr(args, "geo_weight", None)
+    if _gw is not None:
+        GEO_WEIGHT = max(0.0, min(1.0, float(_gw)))
 
 
 def config_summary() -> str:
@@ -1388,4 +1459,5 @@ def config_summary() -> str:
         (f"[reid] embedding_quality_gate={ENABLE_EMBEDDING_QUALITY_GATE} "
          f"edge_margin={REID_EDGE_MARGIN_RATIO} "
          f"max_overlap_iou={REID_MAX_OVERLAP_IOU_FOR_UPDATE}"),
+        f"[reid] geo_weight={GEO_WEIGHT} (0=pure ReID, >0=calibration-assisted)",
     ])

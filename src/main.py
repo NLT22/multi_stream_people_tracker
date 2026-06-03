@@ -218,14 +218,17 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         export_predictions: str | None = None,
         gt_by_cam: dict | None = None,
         gt_snap_frames: int | None = None,
-        no_sync: bool = False):
+        no_sync: bool = False,
+        geometry=None):
     # pretiler=True guarantees exact source_id and frame_number — no geometric
     # guessing from tile coordinates.  Force it whenever:
     #   - --no-tiler: tiler absent, only pre-tiler position makes sense
-    #   - --export-predictions: predictions must have exact cam_id + frame_no
-    #   - --show-gt: GT overlay reads per-source frame_number pre-tiler
-    if export_predictions or gt_by_cam:
-        pretiler = True
+    # NOTE: --export-predictions and --show-gt do NOT force pretiler anymore.
+    #   SourceIdCollectorProbe (pre-tiler) already fills frame_numbers exactly,
+    #   and CrossCameraGalleryProbe (post-tiler) uses that dict for the exporter.
+    #   Forcing pretiler breaks ReID because NvDeepSORT's ReID tensor is only
+    #   accessible via obj_reid_items post-tracker, which the two-probe path
+    #   handles correctly through SourceIdCollectorProbe.
     pretiler = pretiler or no_tiler
     try:
         uris, is_live = resolve_sources(sources)
@@ -335,7 +338,8 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         extract_embeddings=pretiler,
         trajectory_visualizer=trajectory_visualizer,
         exporter=exporter,
-        frame_numbers=frame_numbers if not pretiler else None)
+        frame_numbers=frame_numbers if not pretiler else None,
+        geometry=geometry)
 
     if pretiler:
         # One pre-tiler probe on the tracker: exact source_id (no geometric
@@ -616,6 +620,14 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "'dataset/MMPTracking_short:lobby_0'. "
                              "Pre-built 1-min clips with GT CSVs. "
                              "Auto-loads camN.mp4 as sources.")
+    parser.add_argument("--no-calibration", action="store_true",
+                        help="Disable ground-plane geometry assistance even when "
+                             "calibration data is available (--mmp-short-dataset). "
+                             "Useful for A/B comparison against pure-ReID baseline.")
+    parser.add_argument("--geo-weight", type=float, default=None,
+                        help="Geometry blend weight [0.0–1.0]. "
+                             "0 = pure ReID (same as --no-calibration), "
+                             "1 = pure geometry. Default: 0.35.")
     return parser
 
 
@@ -643,6 +655,7 @@ def main(argv: list[str] | None = None) -> None:
     sources = args.sources
     gt_by_cam = None
     gt_snap_frames = None   # None = exact frame lookup (MTA); int = snap window (Wildtrack)
+    geometry = None
 
     exclusive = [args.mta_dataset, args.wildtrack_dataset, args.mmp_dataset,
                  args.mmp_short_dataset]
@@ -709,6 +722,18 @@ def main(argv: list[str] | None = None) -> None:
             if args.show_gt:
                 gt_by_cam = mmp_s.load_all_gt()
                 print(f"[reid] Loading GT annotations for {len(gt_by_cam)} camera(s)")
+            # Load calibration and build GroundPlaneGeometry when available
+            if not args.no_calibration:
+                try:
+                    from src.reid.geometry import GroundPlaneGeometry
+                    calib = mmp_s.load_calibration()
+                    geometry = GroundPlaneGeometry(calib)
+                    n_cams = len(calib.get("Cameras", []))
+                    print(f"[reid] Ground-plane geometry loaded: {n_cams} camera(s), "
+                          f"geo_weight={gallery.GEO_WEIGHT}")
+                except FileNotFoundError as cal_err:
+                    print(f"[reid] Calibration not found ({cal_err}); "
+                          f"running without geometry assistance.")
         except (FileNotFoundError, ValueError) as e:
             print(f"[ERROR] {e}")
             sys.exit(1)
@@ -731,7 +756,8 @@ def main(argv: list[str] | None = None) -> None:
         export_predictions=args.export_predictions,
         gt_by_cam=gt_by_cam,
         gt_snap_frames=gt_snap_frames,
-        no_sync=args.no_sync)
+        no_sync=args.no_sync,
+        geometry=geometry)
 
 
 if __name__ == "__main__":
