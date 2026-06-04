@@ -26,6 +26,7 @@ class TrackerConfig:
     config_file: str = "configs/tracker/nvdcf_perf.yaml"
     tracker_width: int = 640
     tracker_height: int = 384
+    sub_batches: str | None = None
 
 
 @dataclass
@@ -106,6 +107,7 @@ class PipelineConfig:
                 config_file=t.get("config_file", cfg.tracker.config_file),
                 tracker_width=t.get("tracker_width", cfg.tracker.tracker_width),
                 tracker_height=t.get("tracker_height", cfg.tracker.tracker_height),
+                sub_batches=t.get("sub_batches", cfg.tracker.sub_batches),
             )
 
         # ── display ───────────────────────────────────────────────────────

@@ -1,0 +1,58 @@
+%YAML:1.0
+# =============================================================================
+# NvDCF Tracker Config — MMP realtime lite
+# =============================================================================
+# Realtime target: keep local tracks stable enough while leaving Global-ID
+# repair to sparse/nearline MTMC. This intentionally disables tracker ReID and
+# uses small DCF features so multi-camera FPS is not dominated by appearance
+# extraction.
+# =============================================================================
+
+BaseConfig:
+  minDetectorConfidence: 0.12
+
+TargetManagement:
+  enableBboxUnClipping: 1
+  preserveStreamUpdateOrder: 0
+  maxTargetsPerStream: 80
+  minIouDiff4NewTarget: 0.60
+  minTrackerConfidence: 0.35
+  probationAge: 2
+  maxShadowTrackingAge: 45
+  earlyTerminationAge: 1
+
+TrajectoryManagement:
+  useUniqueID: 0
+
+DataAssociator:
+  dataAssociatorType: 0
+  associationMatcherType: 1
+  checkClassMatch: 1
+  minMatchingScore4Overall: 0.35
+  minMatchingScore4SizeSimilarity: 0.30
+  minMatchingScore4Iou: 0.20
+  minMatchingScore4VisualSimilarity: 0.45
+  matchingScoreWeight4VisualSimilarity: 0.35
+  matchingScoreWeight4SizeSimilarity: 0.35
+  matchingScoreWeight4Iou: 0.45
+  tentativeDetectorConfidence: 0.18
+  minMatchingScore4TentativeIou: 0.35
+
+StateEstimator:
+  stateEstimatorType: 1
+  processNoiseVar4Loc: 1.5
+  processNoiseVar4Size: 1.3
+  processNoiseVar4Vel: 0.03
+  measurementNoiseVar4Detector: 3.0
+  measurementNoiseVar4Tracker: 8.0
+
+VisualTracker:
+  visualTrackerType: 2
+  useColorNames: 1
+  useHog: 0
+  useHighPrecisionFeature: 0
+  featureImgSizeLevel: 2
+  featureFocusOffsetFactor_y: -0.20
+  filterLr: 0.075
+  filterChannelWeightsLr: 0.10
+  gaussianSigma: 0.75

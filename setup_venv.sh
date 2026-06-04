@@ -15,8 +15,12 @@ set -e  # exit on first error
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "=== Creating Python virtual environment ==="
-python3 -m venv venv
+if [ -d "venv" ]; then
+    echo "=== Reusing existing Python virtual environment ==="
+else
+    echo "=== Creating Python virtual environment ==="
+    python3 -m venv venv
+fi
 
 echo "=== Activating venv ==="
 source venv/bin/activate
@@ -25,11 +29,13 @@ echo "=== Installing pyservicemaker from DeepStream SDK wheel ==="
 # pyservicemaker is installed system-wide by the DeepStream installer but is
 # NOT accessible from a standard venv. We must install it explicitly.
 # The .whl file is bundled with DeepStream 9.0 at the path below.
-PSMAKER_WHL=$(ls /opt/nvidia/deepstream/deepstream/service-maker/python/pyservicemaker*.whl 2>/dev/null | head -n1)
+PSMAKER_WHL=$(find /opt/nvidia/deepstream -path '*/service-maker/python/pyservicemaker*.whl' 2>/dev/null | sort | head -n1)
 
 if [ -z "$PSMAKER_WHL" ]; then
     echo "[ERROR] pyservicemaker wheel not found."
-    echo "        Expected: /opt/nvidia/deepstream/deepstream/service-maker/python/pyservicemaker*.whl"
+    echo "        Expected one of:"
+    echo "          /opt/nvidia/deepstream/deepstream/service-maker/python/pyservicemaker*.whl"
+    echo "          /opt/nvidia/deepstream/deepstream-9.0/service-maker/python/pyservicemaker*.whl"
     echo "        Make sure DeepStream 9.0 is installed."
     exit 1
 fi

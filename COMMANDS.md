@@ -271,7 +271,48 @@ python -m src.eval.offline_merge \
 
 ## 7. Tune NvDCF + online merge
 
-### 7.0 Realtime simple gallery
+### 7.0a Realtime 20-camera throughput path
+
+Preset này theo hướng DeepStream realtime nhẹ: YOLO MMP + NvDCF lite, tắt
+tracker ReID/re-assoc, tắt gallery/OSD/tiler khi chạy headless. Dùng nó để đo
+khả năng đạt 20 camera @ 10 FPS trước; Global-ID/IDF1 xử lý bằng nearline ở
+các mục sau.
+
+```bash
+python -m src.main \
+  --config configs/pipeline_mmp_realtime_20cam.yaml \
+  --mmp-short-dataset dataset/MMPTracking_short:lobby_0
+```
+
+Benchmark throughput, dừng ngay khi fail target:
+
+```bash
+python scripts/benchmark_throughput.py \
+  --source dataset/MMPTracking_short/lobby_0/cam1.mp4 \
+  --cam-counts 4 8 12 16 20 \
+  --target-fps 10 \
+  --stop-on-fail \
+  --nvinfer-config configs/models/nvinfer_yolov11_mmp_iv4.yml \
+  --tracker-config configs/tracker/nvdcf_perf_mmp_lite.yaml
+```
+
+Mốc hiện tại trên RTX 5060 Ti: `12 cam` đạt `16.5 FPS/cam`, `16 cam` fail ở
+`9.0 FPS/cam`. VRAM chỉ peak `1.7GB/16GB`, GPU peak `100%`, nên bottleneck sau
+khi bỏ ReID tracker là compute/throughput tổng thể của detector + decode/mux
+scaling, không phải bộ nhớ.
+
+Nếu cần so thủ phạm FPS:
+
+```bash
+python scripts/benchmark_fps_ablation.py \
+  --source dataset/MMPTracking_short/lobby_0/cam1.mp4 \
+  --variants detector_only tracker_lite full_lite tracker_recall full_main \
+  --cam-counts 4 8 20 \
+  --target-fps 10 \
+  --stop-on-fail
+```
+
+### 7.0b Realtime simple gallery
 
 Nếu mục tiêu là chạy realtime ổn định, ưu tiên preset này trước. Nó bỏ online duplicate merge và tắt ambiguity rejection để giảm split GID trong lúc live.
 
@@ -291,7 +332,7 @@ python -m src.eval.metrics_mmp \
   --pred-dir output/eval/mmp_${SCENE}_nvdcf_realtime_simple
 ```
 
-### 7.0b Baseline frozen vs geometry-tuned
+### 7.0c Baseline frozen vs geometry-tuned
 
 Baseline frozen giữ lại mốc tốt cũ; geometry-tuned dùng calibration thận trọng hơn: chỉ để geometry chọn giữa các candidate có ReID score gần nhau.
 
@@ -316,7 +357,7 @@ for SCENE in lobby_0 industry_safety_0 office_0 cafe_shop_0; do
 done
 ```
 
-### 7.0c Nearline remap events
+### 7.0d Nearline remap events
 
 Mô phỏng service nearline: realtime gallery xuất GID tạm, sau mỗi cửa sổ vài giây sinh event `source_gid -> target_gid`, rồi ghi predictions đã remap để eval.
 

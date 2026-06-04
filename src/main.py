@@ -86,6 +86,9 @@ def _load_defaults(config_path: str) -> dict:
         "sources": ["configs/sources/video_files.txt"],
         "nvinfer_config": "configs/models/nvinfer_yolov11_people.yml",
         "tracker_config": "configs/tracker/nvdeepsort_reid_swin.yaml",
+        "tracker_width": 640,
+        "tracker_height": 384,
+        "tracker_sub_batches": None,
         "tile_w": 1280,
         "tile_h": 720,
         "batch_size": None,
@@ -96,6 +99,9 @@ def _load_defaults(config_path: str) -> dict:
         "save_video": None,
         "record_bitrate": 8000000,
         "no_display": False,
+        "no_sync": False,
+        "disable_gallery": False,
+        "osd_enabled": True,
         "show_trajectories": True,
         "trajectory_history": 96,
         "trajectory_sample_interval": 20,
@@ -147,8 +153,16 @@ def _load_defaults(config_path: str) -> dict:
         "config_file", defaults["nvinfer_config"])
     defaults["tracker_config"] = tracker.get(
         "config_file", defaults["tracker_config"])
+    defaults["tracker_width"] = tracker.get(
+        "tracker_width", defaults["tracker_width"])
+    defaults["tracker_height"] = tracker.get(
+        "tracker_height", defaults["tracker_height"])
+    defaults["tracker_sub_batches"] = tracker.get(
+        "sub_batches", defaults["tracker_sub_batches"])
     defaults["tile_w"] = display.get("tile_width", defaults["tile_w"])
     defaults["tile_h"] = display.get("tile_height", defaults["tile_h"])
+    defaults["osd_enabled"] = display.get(
+        "osd_enabled", defaults["osd_enabled"])
     defaults["batch_size"] = raw.get("batch_size", defaults["batch_size"])
     defaults["max_sources"] = runtime.get(
         "max_sources", defaults["max_sources"])
@@ -159,6 +173,9 @@ def _load_defaults(config_path: str) -> dict:
     defaults["record_bitrate"] = runtime.get(
         "record_bitrate", defaults["record_bitrate"])
     defaults["no_display"] = runtime.get("no_display", defaults["no_display"])
+    defaults["no_sync"] = runtime.get("no_sync", defaults["no_sync"])
+    defaults["disable_gallery"] = runtime.get(
+        "disable_gallery", defaults["disable_gallery"])
     defaults["show_trajectories"] = runtime.get(
         "show_trajectories", defaults["show_trajectories"])
     defaults["trajectory_history"] = runtime.get(
@@ -211,6 +228,8 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         use_hungarian_assignment: bool, enforce_unique_per_stream: bool,
         save_video: str | None, record_bitrate: int, no_display: bool,
         batch_size: int | None = None, gpu_id: int = 0,
+        tracker_width: int = 640, tracker_height: int = 384,
+        tracker_sub_batches: str | None = None,
         max_sources: int | None = None,
         force_rebuild_engine: bool = False,
         trim_seconds: float | None = None, trim_start: float = 0.0,
@@ -220,6 +239,8 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         trajectory_sample_interval: int = 20,
         trajectory_max_segments: int = 24,
         export_predictions: str | None = None,
+        disable_gallery: bool = False,
+        osd_enabled: bool = True,
         gt_by_cam: dict | None = None,
         gt_snap_frames: int | None = None,
         gt_scale: tuple[float, float] = (1.0, 1.0),
@@ -272,22 +293,33 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     print(f"[reid] {n} stream(s) → {rows}×{cols} grid  canvas={total_w}×{total_h}")
     print(f"[reid] batch_size={batch} gpu_id={gpu_id} live_source={is_live}")
     print(f"[reid] nvinfer runtime config={runtime_nvinfer_config}")
-    print(f"[reid] tracker={tracker_config} (ReID engine independent of stream count)")
+    tracker_extra = (
+        f" sub_batches={tracker_sub_batches}" if tracker_sub_batches else "")
+    print(
+        f"[reid] tracker={tracker_config} "
+        f"({tracker_width}x{tracker_height}{tracker_extra})"
+    )
     print(f"[reid] person_class_id={person_class_id} inferred from {nvinfer_config}")
     print(f"[reid] debug_similarity={debug_similarity}")
     print(f"[reid] use_hungarian_assignment={use_hungarian_assignment}")
     print(f"[reid] enforce_unique_per_stream={enforce_unique_per_stream}")
     print(f"[reid] show_trajectories={show_trajectories}")
+    print(f"[reid] gallery_enabled={not disable_gallery} osd_enabled={osd_enabled}")
     print(gallery.config_summary())
     if save_video:
         print(f"[reid] save_video={save_video}")
     if export_predictions:
         print(f"[reid] export_predictions={export_predictions}")
+    if disable_gallery and export_predictions:
+        print("[reid] WARNING: --disable-gallery ignores --export-predictions.")
 
     id_map: dict[int, int] = {}
     embeddings: dict[tuple, list] = {}  # (source_id, object_id) → embedding vector
 
-    exporter = PredictionExporter(export_predictions) if export_predictions else None
+    exporter = (
+        PredictionExporter(export_predictions)
+        if export_predictions and not disable_gallery else None
+    )
 
     pipeline = psm.Pipeline("reid-pipeline")
 
@@ -312,12 +344,15 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     })
     pipeline.attach("pgie", "measure_fps_probe", "fps_probe")
 
-    pipeline.add("nvtracker", "tracker", {
+    tracker_props = {
         "ll-lib-file": deepstream_tracker_lib_path(),
         "ll-config-file": tracker_config,
-        "tracker-width": 640, "tracker-height": 384,
+        "tracker-width": tracker_width, "tracker-height": tracker_height,
         "gpu-id": gpu_id,
-    })
+    }
+    if tracker_sub_batches:
+        tracker_props["sub-batches"] = tracker_sub_batches
+    pipeline.add("nvtracker", "tracker", tracker_props)
 
     trajectory_visualizer = None
     if show_trajectories:
@@ -336,35 +371,39 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     frame_numbers: dict = {}
     frame_sizes: dict = {}
 
-    gallery_probe = gallery.CrossCameraGalleryProbe(
-        id_map, embeddings, person_class_id, tile_w, tile_h, cols, n,
-        debug_similarity=debug_similarity,
-        use_hungarian_assignment=use_hungarian_assignment,
-        enforce_unique_per_stream=enforce_unique_per_stream,
-        pretiler=pretiler,
-        extract_embeddings=pretiler,
-        trajectory_visualizer=trajectory_visualizer,
-        exporter=exporter,
-        frame_numbers=frame_numbers if not pretiler else None,
-        frame_sizes=frame_sizes if not pretiler else None,
-        geometry=geometry)
-
-    if pretiler:
-        # One pre-tiler probe on the tracker: exact source_id (no geometric
-        # guessing), extracts embeddings + matches + sets labels in one pass.
-        print("[reid] pretiler mode: gallery runs on tracker (no src guessing)")
-        pipeline.attach("tracker", psm.Probe("reid_probe", gallery_probe))
+    gallery_probe = None
+    if disable_gallery:
+        print("[reid] gallery disabled: tracker-only realtime path")
     else:
-        # Two-probe path: SourceIdCollectorProbe fills id_map pre-tiler
-        # (source_id exact), CrossCameraGalleryProbe reads id_map post-tiler.
-        # source_id is resolved from id_map — no geometric tile guessing.
-        print("[reid] two-probe mode: source_id via id_map (pre-tiler exact)")
-        pipeline.attach("tracker", psm.Probe(
-            "src_collector",
-            gallery.SourceIdCollectorProbe(
-                id_map, embeddings, person_class_id, debug=debug_similarity,
-                frame_numbers=frame_numbers, frame_sizes=frame_sizes),
-        ))
+        gallery_probe = gallery.CrossCameraGalleryProbe(
+            id_map, embeddings, person_class_id, tile_w, tile_h, cols, n,
+            debug_similarity=debug_similarity,
+            use_hungarian_assignment=use_hungarian_assignment,
+            enforce_unique_per_stream=enforce_unique_per_stream,
+            pretiler=pretiler,
+            extract_embeddings=pretiler,
+            trajectory_visualizer=trajectory_visualizer,
+            exporter=exporter,
+            frame_numbers=frame_numbers if not pretiler else None,
+            frame_sizes=frame_sizes if not pretiler else None,
+            geometry=geometry)
+
+        if pretiler:
+            # One pre-tiler probe on the tracker: exact source_id (no geometric
+            # guessing), extracts embeddings + matches + sets labels in one pass.
+            print("[reid] pretiler mode: gallery runs on tracker (no src guessing)")
+            pipeline.attach("tracker", psm.Probe("reid_probe", gallery_probe))
+        else:
+            # Two-probe path: SourceIdCollectorProbe fills id_map pre-tiler
+            # (source_id exact), CrossCameraGalleryProbe reads id_map post-tiler.
+            # source_id is resolved from id_map — no geometric tile guessing.
+            print("[reid] two-probe mode: source_id via id_map (pre-tiler exact)")
+            pipeline.attach("tracker", psm.Probe(
+                "src_collector",
+                gallery.SourceIdCollectorProbe(
+                    id_map, embeddings, person_class_id, debug=debug_similarity,
+                    frame_numbers=frame_numbers, frame_sizes=frame_sizes),
+            ))
 
     if gt_by_cam:
         pipeline.attach("tracker", psm.Probe(
@@ -382,24 +421,29 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
             "rows": rows, "columns": cols,
             "width": total_w, "height": total_h, "gpu-id": gpu_id,
         })
-        if not pretiler:
+        if not pretiler and gallery_probe is not None:
             pipeline.attach("tiler", psm.Probe("reid_probe", gallery_probe))
 
-    pipeline.add("nvosdbin", "osd", {
-        "gpu-id": gpu_id,
-        "process-mode": 1,
-        "display-text": 1,
-        "display-bbox": 1,
-        "text-size": 18,
-    })
     pipeline.link("mux", "pgie")
     pipeline.link("pgie", "tracker")
+    visual_tail = "tracker"
     if no_tiler:
         # Headless throughput: skip the tiler entirely.
-        pipeline.link("tracker", "osd")
+        visual_tail = "tracker"
     else:
         pipeline.link("tracker", "tiler")
-        pipeline.link("tiler", "osd")
+        visual_tail = "tiler"
+
+    if osd_enabled:
+        pipeline.add("nvosdbin", "osd", {
+            "gpu-id": gpu_id,
+            "process-mode": 1,
+            "display-text": 1,
+            "display-bbox": 1,
+            "text-size": 18,
+        })
+        pipeline.link(visual_tail, "osd")
+        visual_tail = "osd"
 
     # sync=0: render as-fast-as-possible (no timestamp throttling).
     # Use for RTSP, high-fps sources (MTA=41fps), or slow GPUs.
@@ -413,21 +457,21 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
                      {"leaky": 2, "max-size-buffers": 5})
         pipeline.add(get_sink_element(), "sink",
                      {"sync": sink_sync, "qos": 0, "async": 0})
-        pipeline.link("osd", "output_tee", "display_queue", "sink")
+        pipeline.link(visual_tail, "output_tee", "display_queue", "sink")
         written_path = add_recording_branch(
             pipeline, "output_tee", save_video, record_bitrate,
             canvas_w=total_w, canvas_h=total_h, gpu_id=gpu_id)
     elif save_video:
         written_path = add_recording_branch(
-            pipeline, "osd", save_video, record_bitrate,
+            pipeline, visual_tail, save_video, record_bitrate,
             canvas_w=total_w, canvas_h=total_h, gpu_id=gpu_id)
     elif no_display:
         # Headless: drop frames as fast as possible, no window opened.
         pipeline.add("fakesink", "sink", {"sync": 0, "async": 0})
-        pipeline.link("osd", "sink")
+        pipeline.link(visual_tail, "sink")
     else:
         pipeline.add(get_sink_element(), "sink", {"sync": sink_sync, "qos": 0})
-        pipeline.link("osd", "sink")
+        pipeline.link(visual_tail, "sink")
 
     try:
         pipeline.start()
@@ -439,8 +483,9 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         pipeline.wait()
     except KeyboardInterrupt:
         print("\n[reid] Stopped.")
-        total_gids = gallery_probe._next_gid - 1
-        print(f"[reid] Total unique global IDs assigned: {total_gids}")
+        if gallery_probe is not None:
+            total_gids = gallery_probe._next_gid - 1
+            print(f"[reid] Total unique global IDs assigned: {total_gids}")
     finally:
         pipeline.stop()
         if exporter is not None:
@@ -498,6 +543,18 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "Recommended demo: nvdeepsort_reid_swin.yaml. "
                              "Alternatives: nvdcf_accuracy.yaml, "
                              "nvdeepsort_reid.yaml, nvdcf_perf.yaml")
+    parser.add_argument("--tracker-width", type=int,
+                        default=defaults["tracker_width"],
+                        help="nvtracker input width. Match detector input for "
+                             "best performance.")
+    parser.add_argument("--tracker-height", type=int,
+                        default=defaults["tracker_height"],
+                        help="nvtracker input height. Match detector input for "
+                             "best performance.")
+    parser.add_argument("--tracker-sub-batches",
+                        default=defaults["tracker_sub_batches"],
+                        help="Optional nvtracker sub-batches string, e.g. "
+                             "'5:5:5:5' for four tracker instances.")
     parser.add_argument("--tile-w", type=int, default=defaults["tile_w"])
     parser.add_argument("--tile-h", type=int, default=defaults["tile_h"])
     parser.add_argument("--debug-similarity", action="store_true",
@@ -609,10 +666,31 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--no-display", action="store_true",
                         default=defaults["no_display"],
                         help="Only valid with --save-video: record without opening a window")
+    parser.add_argument("--disable-gallery", action="store_true",
+                        default=defaults["disable_gallery"],
+                        help="Skip cross-camera gallery probes. Use for pure "
+                             "tracker-only realtime throughput.")
+    parser.add_argument("--enable-gallery", action="store_false",
+                        dest="disable_gallery",
+                        help="Enable cross-camera gallery probes even if the "
+                             "selected YAML disables them.")
+    parser.add_argument("--disable-osd", action="store_false",
+                        dest="osd_enabled",
+                        default=defaults["osd_enabled"],
+                        help="Skip nvosdbin. Use with --no-display for pure "
+                             "throughput or backend ingest.")
+    parser.add_argument("--enable-osd", action="store_true",
+                        dest="osd_enabled",
+                        help="Enable nvosdbin even if the selected YAML "
+                             "disables it.")
     parser.add_argument("--no-sync", action="store_true",
+                        default=defaults["no_sync"],
                         help="Disable sink clock sync (sync=0). Prevents buffer drops on "
                              "high-fps sources like MTA (41fps) or slow GPUs. "
                              "Video plays as fast as the pipeline processes.")
+    parser.add_argument("--sync", action="store_false", dest="no_sync",
+                        help="Use sink clock sync even if the selected YAML "
+                             "sets runtime.no_sync.")
     parser.add_argument("--mta-dataset", default=None, metavar="PATH",
                         help="Path to an MTA split folder (e.g. dataset/mta/MTA_ext_short/test). "
                              "Auto-loads all cam_*.mp4 files as sources, overriding --sources.")
@@ -777,6 +855,9 @@ def main(argv: list[str] | None = None) -> None:
         args.tile_w, args.tile_h, args.debug_similarity, use_hungarian,
         enforce_unique, args.save_video, args.record_bitrate, args.no_display,
         batch_size=args.batch_size, gpu_id=args.gpu_id,
+        tracker_width=args.tracker_width,
+        tracker_height=args.tracker_height,
+        tracker_sub_batches=args.tracker_sub_batches,
         max_sources=args.max_sources,
         force_rebuild_engine=args.force_rebuild_engine,
         trim_seconds=args.trim_seconds, trim_start=args.trim_start,
@@ -786,6 +867,8 @@ def main(argv: list[str] | None = None) -> None:
         trajectory_sample_interval=args.trajectory_sample_interval,
         trajectory_max_segments=args.trajectory_max_segments,
         export_predictions=args.export_predictions,
+        disable_gallery=args.disable_gallery,
+        osd_enabled=args.osd_enabled,
         gt_by_cam=gt_by_cam,
         gt_snap_frames=gt_snap_frames,
         gt_scale=gt_scale,

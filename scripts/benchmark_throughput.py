@@ -221,9 +221,9 @@ def _run_single(
     duration: int,
     warmup: int,
     nvinfer_config: str,
+    tracker_config: str,
     gpu_id: int,
     inference_interval: int,
-    extra_args: list[str],
 ) -> dict:
     """Run pipeline with n_cams copies of source, return timing stats.
 
@@ -275,9 +275,11 @@ def _run_single(
         "--no-display",
         "--no-sync",
         "--nvinfer-config", patched_config,
+        "--tracker-config", tracker_config,
         "--gpu-id", str(gpu_id),
         "--no-tiler",       # skip tiler for pure throughput measurement
-        *extra_args,
+        "--disable-gallery",
+        "--disable-osd",
     ]
 
     iv = inference_interval
@@ -522,8 +524,11 @@ def main() -> None:
     p.add_argument("--target-fps", type=float, default=10.0,
                    help="Per-camera FPS target for pass/fail (default: 10)")
     p.add_argument("--nvinfer-config",
-                   default="configs/models/nvinfer_yolov11_people.yml",
+                   default="configs/models/nvinfer_yolov11_mmp_iv4.yml",
                    help="nvinfer config file to use")
+    p.add_argument("--tracker-config",
+                   default="configs/tracker/nvdcf_perf_mmp_lite.yaml",
+                   help="Tracker config file to use for throughput runs")
     p.add_argument("--gpu-id", type=int, default=0)
     p.add_argument("--output-dir", default="output/benchmark",
                    help="Directory to save CSV results (default: output/benchmark)")
@@ -552,6 +557,7 @@ def main() -> None:
     print(f"[bench] Duration   : {args.duration}s + {args.warmup}s warmup per run")
     print(f"[bench] Target FPS : {args.target_fps} per camera")
     print(f"[bench] nvinfer    : {args.nvinfer_config}")
+    print(f"[bench] tracker    : {args.tracker_config}")
 
     results: list[dict] = []
 
@@ -569,9 +575,9 @@ def main() -> None:
                 duration           = args.duration,
                 warmup             = args.warmup,
                 nvinfer_config     = args.nvinfer_config,
+                tracker_config     = args.tracker_config,
                 gpu_id             = args.gpu_id,
                 inference_interval = iv,
-                extra_args         = [],
             )
             results.append(r)
 

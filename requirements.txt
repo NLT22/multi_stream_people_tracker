@@ -35,6 +35,7 @@ ultralytics>=8.0.0
 onnx
 onnxoptimizer
 onnxsim
+onnxruntime
 onnxscript
 Cython
 

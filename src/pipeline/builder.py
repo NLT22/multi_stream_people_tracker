@@ -197,13 +197,16 @@ class PipelineBuilder:
         best accuracy when using input-tensor-meta (not required here).
         """
         cfg = self.config
-        self._pipeline.add("nvtracker", "tracker", {
+        tracker_props = {
             "ll-lib-file": deepstream_tracker_lib_path(),
             "ll-config-file": cfg.tracker.config_file,
             "tracker-width":  cfg.tracker.tracker_width,
             "tracker-height": cfg.tracker.tracker_height,
             "gpu-id": cfg.gpu_id,
-        })
+        }
+        if cfg.tracker.sub_batches:
+            tracker_props["sub-batches"] = cfg.tracker.sub_batches
+        self._pipeline.add("nvtracker", "tracker", tracker_props)
 
     def _add_osd(self, upstream: str):
         """
