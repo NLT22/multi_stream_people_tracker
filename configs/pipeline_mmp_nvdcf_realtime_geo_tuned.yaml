@@ -1,20 +1,9 @@
 # =============================================================================
-# MMPTracking_short Preset — YOLO MMP + NvDCF MMP + simple realtime gallery
+# MMPTracking_short Candidate — NvDCF realtime + guarded geometry assignment
 # =============================================================================
-# Purpose: realtime display/export with fewer gallery decision layers.
-#
-# Keep:
-#   - NvDCF local tracker
-#   - tracklet embedding average
-#   - Hungarian one-to-one assignment inside each camera
-#   - ID stickiness for live local tracks
-#   - quality gate for gallery memory updates
-#
-# Remove from realtime path:
-#   - online duplicate Global-ID merge: too little future evidence, caused split
-#     and unstable remaps compared with offline/nearline merge.
-#   - ambiguity rejection: conservative guard that often creates extra GIDs in
-#     MMP when several people have close ReID scores.
+# Geometry is useful when calibration exists, but should not override appearance
+# globally.  This preset keeps ReID as the gate and lets geometry reorder only
+# candidates whose ReID scores are close to the best ReID candidate.
 # =============================================================================
 
 source_mode: video_files
@@ -78,3 +67,6 @@ reid:
   tracklet_min_embeddings: 3
   tracklet_max_age: 1800
   embedding_quality_gate: true
+
+  geometry_assignment_mode: close_reid_only
+  geometry_reid_margin: 0.08

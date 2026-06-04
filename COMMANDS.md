@@ -178,6 +178,119 @@ python scripts/finetune_reid_mmp.py \
     --pk-p 16 --pk-k 4 --accum-steps 4 --grad-ckpt
 ```
 
+### 3.1 FastReID train lại trên MMPTracking_short
+
+FastReID official repo được đặt tại:
+
+```text
+third_party/fast-reid
+```
+
+Nếu setup máy remote mới:
+
+```bash
+git clone https://github.com/JDAI-CV/fast-reid third_party/fast-reid
+python -m pip install -r requirements-fastreid.txt
+```
+
+Config chính nên dùng để train/deploy:
+
+```text
+configs/fastreid/mmp_bagtricks_R50_deploy.yml
+configs/tracker/nvdcf_accuracy_mmp_fastreid_r50_deploy.yaml
+```
+
+Ghi chú: không dùng `R50-IBN` làm default deploy. Bản IBN train/export được,
+nhưng ONNX có `Split/InstanceNorm` và đã lỗi TensorRT runtime trong
+DeepStream `NvMultiObjectTracker`.
+
+Chuẩn bị crop dataset theo Market1501 format:
+
+```bash
+python scripts/train_fastreid_mmp.py prepare \
+  --install-deps \
+  --overwrite \
+  --sample-rate 25 \
+  --min-w 20 --min-h 40 \
+  --min-visible-ratio 0.30
+```
+
+Train full trên máy mạnh:
+
+```bash
+python scripts/train_fastreid_mmp.py train \
+  --num-gpus 1 \
+  --batch-size 128 \
+  --test-batch-size 256
+```
+
+Máy ít VRAM hơn:
+
+```bash
+python scripts/train_fastreid_mmp.py train \
+  --num-gpus 1 \
+  --batch-size 32 \
+  --test-batch-size 128 \
+  --no-amp
+```
+
+Resume train:
+
+```bash
+python scripts/train_fastreid_mmp.py train --resume --num-gpus 1
+```
+
+Eval checkpoint:
+
+```bash
+python scripts/train_fastreid_mmp.py eval \
+  --weights output/fastreid_mmp/bagtricks_R50_deploy/model_best.pth
+```
+
+Export ONNX DeepStream-friendly sau khi train:
+
+```bash
+python scripts/train_fastreid_mmp.py export \
+  --weights output/fastreid_mmp/bagtricks_R50_deploy/model_best.pth \
+  --onnx-path models/reid/fastreid_mmp_R50_deploy.onnx \
+  --batch-size 16
+```
+
+Nếu không truyền `--weights`, script tự tìm `model_best.pth`, rồi
+`model_final.pth`, rồi checkpoint `.pth` mới nhất trong `OUTPUT_DIR`.
+
+Copy file này từ máy train về máy DeepStream:
+
+```text
+models/reid/fastreid_mmp_R50_deploy.onnx
+```
+
+Xóa TensorRT engine cache cũ trước khi test model mới:
+
+```bash
+python scripts/train_fastreid_mmp.py clean-engines
+```
+
+A/B pipeline với FastReID:
+
+```bash
+SCENE=lobby_0
+OUT=output/eval/mmp_${SCENE}_nvdcf_fastreid_r50_deploy
+
+python -m src.main \
+  --config configs/pipeline_mmp_nvdcf_realtime_baseline.yaml \
+  --tracker-config configs/tracker/nvdcf_accuracy_mmp_fastreid_r50_deploy.yaml \
+  --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+  --no-display --no-sync \
+  --geo-weight 0.30 \
+  --export-predictions ${OUT}
+
+python -m src.eval.metrics_mmp \
+  --short-root dataset/MMPTracking_short \
+  --scene ${SCENE} \
+  --pred-dir ${OUT}
+```
+
 ---
 
 ## 4. Chạy pipeline
@@ -284,13 +397,189 @@ python -m src.main \
   --config configs/pipeline_mmp_nvdcf_realtime_simple.yaml \
   --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
   --no-display --no-sync \
-  --geo-weight 0.20 \
+  --geo-weight 0.30 \
   --export-predictions output/eval/mmp_${SCENE}_nvdcf_realtime_simple
 
 python -m src.eval.metrics_mmp \
   --short-root dataset/MMPTracking_short \
   --scene ${SCENE} \
   --pred-dir output/eval/mmp_${SCENE}_nvdcf_realtime_simple
+```
+
+### 7.0b Baseline frozen vs geometry-tuned
+
+Baseline frozen giữ lại mốc tốt cũ; geometry-tuned dùng calibration thận trọng hơn: chỉ để geometry chọn giữa các candidate có ReID score gần nhau.
+
+```bash
+for SCENE in lobby_0 industry_safety_0 office_0 cafe_shop_0; do
+  for PRESET in baseline geo_tuned; do
+    CFG=configs/pipeline_mmp_nvdcf_realtime_${PRESET}.yaml
+    OUT=output/eval/mmp_${SCENE}_nvdcf_realtime_${PRESET}
+
+    python -m src.main \
+      --config ${CFG} \
+      --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+      --no-display --no-sync \
+      --geo-weight 0.30 \
+      --export-predictions ${OUT}
+
+    python -m src.eval.metrics_mmp \
+      --short-root dataset/MMPTracking_short \
+      --scene ${SCENE} \
+      --pred-dir ${OUT}
+  done
+done
+```
+
+### 7.0c Nearline remap events
+
+Mô phỏng service nearline: realtime gallery xuất GID tạm, sau mỗi cửa sổ vài giây sinh event `source_gid -> target_gid`, rồi ghi predictions đã remap để eval.
+
+```bash
+SCENE=lobby_0
+PRED=output/eval/mmp_${SCENE}_nvdcf_realtime_baseline
+OUT=output/eval/mmp_${SCENE}_nvdcf_realtime_baseline_nearline
+
+python -m src.eval.nearline_merge \
+  --pred-dir ${PRED} \
+  --out-dir ${OUT} \
+  --threshold 0.65 --margin 0.03 \
+  --min-gid-embeddings 6 --min-tracklet-detections 10 \
+  --mmp-short-root dataset/MMPTracking_short \
+  --scene ${SCENE} \
+  --geo-weight 0.25 \
+  --geo-sample-step 5 \
+  --geo-min-overlaps 8 \
+  --window-frames 125 \
+  --delay-frames 50
+
+python -m src.eval.metrics_mmp \
+  --short-root dataset/MMPTracking_short \
+  --scene ${SCENE} \
+  --pred-dir ${OUT}
+```
+
+Output phụ:
+
+- `remap_events.csv`: event remap theo thời gian, dùng để mô phỏng nearline service.
+- `merge_map.csv`: các merge được chấp nhận.
+- `global_id_remap.csv`: bảng remap cuối cùng.
+
+Lưu ý: nearline remap tối ưu MTMC Global IDF1, có thể làm per-camera IDF1 giảm vì ID được đổi lại sau delay.
+
+### 7.0c2 Sweep nearline để tune Global IDF1
+
+Script sweep dùng các prediction baseline đã export, chạy `nearline_merge + metrics_mmp`, rồi sort tham số theo micro Global IDF1.
+
+```bash
+python scripts/sweep_nearline_mmp.py \
+  --scenes lobby_0 industry_safety_0 office_0 cafe_shop_0 lobby_3 industry_safety_4 office_2 cafe_shop_3 \
+  --thresholds 0.62,0.65 \
+  --margins 0.02,0.03 \
+  --geo-weights 0.25,0.35 \
+  --geo-min-overlaps 8 \
+  --window-frames 125 \
+  --out-root output/eval/nearline_sweep_nonretail_small
+```
+
+Kết quả hiện tại trên 8 scene non-retail:
+
+- Best: `threshold=0.62`, `margin=0.02 hoặc 0.03`, `geo_weight=0.25`, `geo_min_overlaps=8`, `window_frames=125`.
+- Micro Global IDF1: `0.7444`.
+- Scene đã đạt/tiệm cận mục tiêu: `lobby_0=0.8365`, `industry_safety_0=0.8360`, `office_0=0.8192`, `lobby_3=0.8082`.
+- Scene kéo tụt: `cafe_shop_3=0.5549`, `industry_safety_4=0.6129`, `office_2=0.7085`.
+
+Điều này nghĩa là merge threshold không còn là bottleneck duy nhất; muốn tổng quát `Global IDF1 > 80%` cần cải thiện baseline local/ReID trên các validation scene yếu.
+
+### 7.0d Validation scenes: export baseline trước, nearline sau
+
+`nearline_merge` không tự chạy detector/tracker. Nó cần thư mục prediction đã có đủ `cam_*_predictions.csv`, `tracklets.csv`, `tracklet_embeddings.npz`. Nếu báo thiếu `tracklets.csv`, nghĩa là scene đó chưa được chạy pipeline với `--export-predictions`.
+
+Pha 1: chạy realtime baseline để sinh prediction + tracklet embedding:
+
+```bash
+for SCENE in cafe_shop_3 industry_safety_4 lobby_3 office_2; do
+  OUT=output/eval/mmp_${SCENE}_nvdcf_realtime_baseline
+  rm -rf ${OUT}
+
+  python -m src.main \
+    --config configs/pipeline_mmp_nvdcf_realtime_baseline.yaml \
+    --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+    --no-display --no-sync \
+    --geo-weight 0.30 \
+    --export-predictions ${OUT}
+done
+```
+
+`retail_7` nên chạy riêng bằng tracker low-memory nếu preset baseline bị OOM:
+
+```bash
+SCENE=retail_7
+OUT=output/eval/mmp_${SCENE}_nvdcf_realtime_baseline
+rm -rf ${OUT}
+
+python -m src.main \
+  --config configs/pipeline_mmp_nvdcf_realtime_baseline.yaml \
+  --tracker-config configs/tracker/nvdcf_accuracy_mmp_retail_lowmem.yaml \
+  --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+  --no-display --no-sync \
+  --geo-weight 0.30 \
+  --export-predictions ${OUT}
+```
+
+Pha 2: chạy nearline + eval, tự skip scene chưa có baseline export:
+
+```bash
+for SCENE in cafe_shop_3 industry_safety_4 lobby_3 office_2 retail_7; do
+  PRED=output/eval/mmp_${SCENE}_nvdcf_realtime_baseline
+  OUT=output/eval/mmp_${SCENE}_nvdcf_realtime_baseline_nearline
+
+  if [ ! -f "${PRED}/tracklets.csv" ] || [ ! -f "${PRED}/tracklet_embeddings.npz" ]; then
+    echo "[skip] ${SCENE}: missing baseline export in ${PRED}"
+    continue
+  fi
+
+  python -m src.eval.nearline_merge \
+    --pred-dir ${PRED} \
+    --out-dir ${OUT} \
+    --threshold 0.65 --margin 0.03 \
+    --min-gid-embeddings 6 --min-tracklet-detections 10 \
+    --mmp-short-root dataset/MMPTracking_short \
+    --scene ${SCENE} \
+    --geo-weight 0.25 \
+    --geo-sample-step 5 \
+    --geo-min-overlaps 8 \
+    --window-frames 125 \
+    --delay-frames 50
+
+  python -m src.eval.metrics_mmp \
+    --short-root dataset/MMPTracking_short \
+    --scene ${SCENE} \
+    --pred-dir ${OUT}
+done
+```
+
+Sweep nhẹ geometry margin nếu `geo_tuned` chưa ổn:
+
+```bash
+for SCENE in lobby_0 industry_safety_0 office_0 cafe_shop_0; do
+  for MARGIN in 0.04 0.08 0.12; do
+    OUT=output/eval/mmp_${SCENE}_nvdcf_geo_margin${MARGIN}
+
+    python -m src.main \
+      --config configs/pipeline_mmp_nvdcf_realtime_geo_tuned.yaml \
+      --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+      --no-display --no-sync \
+      --geo-weight 0.30 \
+      --geometry-reid-margin ${MARGIN} \
+      --export-predictions ${OUT}
+
+    python -m src.eval.metrics_mmp \
+      --short-root dataset/MMPTracking_short \
+      --scene ${SCENE} \
+      --pred-dir ${OUT}
+  done
+done
 ```
 
 Preset online merge:
@@ -315,6 +604,30 @@ python -m src.eval.metrics_mmp \
   --short-root dataset/MMPTracking_short \
   --scene ${SCENE} \
   --pred-dir output/eval/mmp_${SCENE}_nvdcf_online
+```
+
+### 7.1b Retail low-memory NvDCF
+
+`retail_0` có 6 camera và đông người, NvDCF recall preset có thể lỗi `cudaErrorMemoryAllocation` trong `cuDCFv2`. Dùng config nhẹ hơn này để chạy retail.
+
+```bash
+SCENE=retail_0
+OUT=output/eval/mmp_${SCENE}_nvdcf_realtime_lowmem
+
+rm -rf ${OUT}
+
+python -m src.main \
+  --config configs/pipeline_mmp_nvdcf_realtime_simple.yaml \
+  --tracker-config configs/tracker/nvdcf_accuracy_mmp_retail_lowmem.yaml \
+  --mmp-short-dataset dataset/MMPTracking_short:${SCENE} \
+  --no-display --no-sync \
+  --geo-weight 0.30 \
+  --export-predictions ${OUT}
+
+python -m src.eval.metrics_mmp \
+  --short-root dataset/MMPTracking_short \
+  --scene ${SCENE} \
+  --pred-dir ${OUT}
 ```
 
 ### 7.2 Conservative online merge sweep

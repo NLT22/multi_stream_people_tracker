@@ -1,20 +1,16 @@
 # =============================================================================
-# MMPTracking_short Preset — YOLO MMP + NvDCF MMP + simple realtime gallery
+# MMPTracking_short Baseline — NvDCF realtime simple, 2026-06-04
 # =============================================================================
-# Purpose: realtime display/export with fewer gallery decision layers.
+# Frozen baseline before geometry-assignment experiments.
 #
-# Keep:
-#   - NvDCF local tracker
-#   - tracklet embedding average
-#   - Hungarian one-to-one assignment inside each camera
-#   - ID stickiness for live local tracks
-#   - quality gate for gallery memory updates
+# Anchor metrics on training/test scenes:
+#   lobby_0           Global IDF1 0.7649, MOTA 90.1, Pred IDs 10
+#   industry_safety_0 Global IDF1 0.8301, MOTA 91.8, Pred IDs 8
+#   office_0          Global IDF1 0.8192, MOTA 86.4, Pred IDs 9
+#   cafe_shop_0       Global IDF1 0.7684, MOTA 95.1, Pred IDs 9
 #
-# Remove from realtime path:
-#   - online duplicate Global-ID merge: too little future evidence, caused split
-#     and unstable remaps compared with offline/nearline merge.
-#   - ambiguity rejection: conservative guard that often creates extra GIDs in
-#     MMP when several people have close ReID scores.
+# This baseline keeps online merge off and uses geometry as assignment weight
+# only; ReID threshold/stickiness gates remain appearance-based.
 # =============================================================================
 
 source_mode: video_files
@@ -78,3 +74,6 @@ reid:
   tracklet_min_embeddings: 3
   tracklet_max_age: 1800
   embedding_quality_gate: true
+
+  geometry_assignment_mode: weight_only
+  geometry_reid_margin: 1.00

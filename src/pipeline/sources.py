@@ -12,6 +12,7 @@ WHY THIS EXISTS:
 """
 
 import os
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -225,7 +226,10 @@ def trim_sources(uris: List[str], seconds: float, start: float = 0.0,
 
         src = Path(uri[len("file://"):])
         suffix = src.suffix if src.suffix else ".mp4"
-        out = out_dir / f"{src.stem}_s{int(start)}_t{int(seconds)}{suffix}"
+        key = hashlib.sha1(str(src.resolve()).encode("utf-8")).hexdigest()[:10]
+        out = out_dir / (
+            f"{src.stem}_{key}_s{int(start)}_t{int(seconds)}{suffix}"
+        )
 
         if out.exists() and out.stat().st_size > 0:
             print(f"[reid][trim] reuse {out.name}")

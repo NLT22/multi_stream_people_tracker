@@ -1,0 +1,14 @@
+yacs
+termcolor
+tabulate
+tensorboard
+gdown
+faiss-cpu
+prettytable
+easydict
+scikit-learn
+scipy
+onnxoptimizer
+onnxsim
+Cython
+onnxscript

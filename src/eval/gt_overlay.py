@@ -50,9 +50,13 @@ class GtOverlayProbe(psm.BatchMetadataOperator):
         self,
         gt_by_cam: dict[int, pd.DataFrame],
         snap_frames: int | None = None,
+        scale_x: float = 1.0,
+        scale_y: float = 1.0,
     ) -> None:
         super().__init__()
         self._snap = snap_frames
+        self._scale_x = scale_x
+        self._scale_y = scale_y
         # Index by (cam_id, frame) → list of rows for O(1) lookup per frame
         self._index: dict[tuple[int, int], list[dict]] = {}
         for cam_id, df in gt_by_cam.items():
@@ -60,10 +64,10 @@ class GtOverlayProbe(psm.BatchMetadataOperator):
                 key = (cam_id, int(row["frame"]))
                 self._index.setdefault(key, []).append({
                     "person_id": int(row["person_id"]),
-                    "left": float(row["left"]),
-                    "top": float(row["top"]),
-                    "width": float(row["width"]),
-                    "height": float(row["height"]),
+                    "left": float(row["left"]) * self._scale_x,
+                    "top": float(row["top"]) * self._scale_y,
+                    "width": float(row["width"]) * self._scale_x,
+                    "height": float(row["height"]) * self._scale_y,
                 })
 
     def _resolve_frame(self, frame_no: int) -> int:

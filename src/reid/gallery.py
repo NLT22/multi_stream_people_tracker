@@ -136,6 +136,8 @@ DEBUG_TOP_K = 3
 #   Only cross-camera pairs (src_a != src_b) use geometry; same-camera pairs
 #   skip it because the DeepSORT local tracker already handles those.
 GEO_WEIGHT = 0.35
+GEO_ASSIGNMENT_MODE = "weight_only"  # weight_only | close_reid_only
+GEO_REID_MARGIN = 1.0                # only used by close_reid_only
 
 
 def _cosine_similarity(a, b) -> float:
@@ -893,14 +895,16 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 ranked = sorted(scores_for_row.items(),
                                 key=lambda item: item[1], reverse=True)
                 row_weights = []
+                best_reid_score = ranked[0][1] if ranked else 0.0
                 for kind, value in columns:
                     if kind == "gid":
                         reid_score = scores_for_row[value]
-                        blended = self._blend_geo_score(reid_score, row, value)
+                        assignment_score = self._assignment_score(
+                            reid_score, best_reid_score, row, value)
                         allowed, _ = self._is_gid_match_allowed(
                             row["embedding"], value, row.get("previous_gid"),
                             ranked)
-                        row_weights.append(blended if allowed else -1.0)
+                        row_weights.append(assignment_score if allowed else -1.0)
                     else:
                         row_weights.append(0.0)
                 weights.append(row_weights)
@@ -1368,6 +1372,13 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
         return (1.0 - GEO_WEIGHT) * reid_score + GEO_WEIGHT * best_geo
 
+    def _assignment_score(self, reid_score: float, best_reid_score: float,
+                          row: dict, candidate_gid: int) -> float:
+        if GEO_ASSIGNMENT_MODE == "close_reid_only":
+            if best_reid_score - reid_score > GEO_REID_MARGIN:
+                return reid_score
+        return self._blend_geo_score(reid_score, row, candidate_gid)
+
     @staticmethod
     def _use_prototypes() -> bool:
         return GALLERY_MAX_PROTOTYPES > 0
@@ -1454,7 +1465,7 @@ def configure_from_args(args) -> None:
     global USE_TRACKLET_EMBEDDING, TRACKLET_MAX_EMBEDDINGS
     global TRACKLET_MIN_EMBEDDINGS_FOR_MATCH, TRACKLET_MAX_AGE
     global TRACKLET_EMBEDDING_INTERVAL, ENABLE_EMBEDDING_QUALITY_GATE
-    global GEO_WEIGHT
+    global GEO_WEIGHT, GEO_ASSIGNMENT_MODE, GEO_REID_MARGIN
 
     SIMILARITY_THRESHOLD = max(0.0, args.similarity_threshold)
     GALLERY_MAX_AGE = max(1, args.gallery_max_age)
@@ -1479,6 +1490,12 @@ def configure_from_args(args) -> None:
     _gw = getattr(args, "geo_weight", None)
     if _gw is not None:
         GEO_WEIGHT = max(0.0, min(1.0, float(_gw)))
+    _mode = getattr(args, "geometry_assignment_mode", GEO_ASSIGNMENT_MODE)
+    if _mode in {"weight_only", "close_reid_only"}:
+        GEO_ASSIGNMENT_MODE = _mode
+    _margin = getattr(args, "geometry_reid_margin", None)
+    if _margin is not None:
+        GEO_REID_MARGIN = max(0.0, float(_margin))
 
 
 def config_summary() -> str:
@@ -1505,5 +1522,7 @@ def config_summary() -> str:
         (f"[reid] embedding_quality_gate={ENABLE_EMBEDDING_QUALITY_GATE} "
          f"edge_margin={REID_EDGE_MARGIN_RATIO} "
          f"max_overlap_iou={REID_MAX_OVERLAP_IOU_FOR_UPDATE}"),
-        f"[reid] geo_weight={GEO_WEIGHT} (0=pure ReID, >0=calibration-assisted)",
+        (f"[reid] geo_weight={GEO_WEIGHT} "
+         f"assignment_mode={GEO_ASSIGNMENT_MODE} "
+         f"reid_margin={GEO_REID_MARGIN}"),
     ])

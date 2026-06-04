@@ -22,4 +22,6 @@ models/**/*.static_b1.onnx
 models/**/*.onnx
 models/**/*.etlt
 models/**/*.pt
+models/**/*.pth
 *.pt
+third_party/fast-reid/

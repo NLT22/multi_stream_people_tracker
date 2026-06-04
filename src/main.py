@@ -120,6 +120,8 @@ def _load_defaults(config_path: str) -> dict:
         "tracklet_window":                   gallery.TRACKLET_MAX_EMBEDDINGS,
         "tracklet_min_embeddings":           gallery.TRACKLET_MIN_EMBEDDINGS_FOR_MATCH,
         "tracklet_max_age":                  gallery.TRACKLET_MAX_AGE,
+        "geometry_assignment_mode":          gallery.GEO_ASSIGNMENT_MODE,
+        "geometry_reid_margin":              gallery.GEO_REID_MARGIN,
     }
 
     path = Path(config_path)
@@ -184,6 +186,8 @@ def _load_defaults(config_path: str) -> dict:
         ("tracklet_window",                "tracklet_window"),
         ("tracklet_min_embeddings",        "tracklet_min_embeddings"),
         ("tracklet_max_age",               "tracklet_max_age"),
+        ("geometry_assignment_mode",       "geometry_assignment_mode"),
+        ("geometry_reid_margin",           "geometry_reid_margin"),
     ]:
         if yaml_key in reid:
             defaults[key] = reid[yaml_key]
@@ -218,6 +222,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         export_predictions: str | None = None,
         gt_by_cam: dict | None = None,
         gt_snap_frames: int | None = None,
+        gt_scale: tuple[float, float] = (1.0, 1.0),
         no_sync: bool = False,
         geometry=None):
     # pretiler=True guarantees exact source_id and frame_number — no geometric
@@ -363,7 +368,12 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
 
     if gt_by_cam:
         pipeline.attach("tracker", psm.Probe(
-            "gt_overlay", GtOverlayProbe(gt_by_cam, snap_frames=gt_snap_frames)))
+            "gt_overlay", GtOverlayProbe(
+                gt_by_cam,
+                snap_frames=gt_snap_frames,
+                scale_x=gt_scale[0],
+                scale_y=gt_scale[1],
+            )))
         print(f"[reid] GT overlay enabled for {len(gt_by_cam)} camera(s) "
               f"(green boxes = ground truth)")
 
@@ -581,6 +591,14 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--tracklet-max-age", type=int,
                         default=defaults["tracklet_max_age"],
                         help="Drop inactive local tracklets after this many batches")
+    parser.add_argument("--geometry-assignment-mode",
+                        choices=["weight_only", "close_reid_only"],
+                        default=defaults["geometry_assignment_mode"],
+                        help="How calibration geometry affects Hungarian assignment")
+    parser.add_argument("--geometry-reid-margin", type=float,
+                        default=defaults["geometry_reid_margin"],
+                        help="For close_reid_only mode, apply geometry only to "
+                             "candidates within this ReID score margin of best")
     parser.add_argument("--save-video", nargs="?", const="output/videos/reid.mp4",
                         default=defaults["save_video"],
                         help="Save annotated output MP4. Default path when no value is "
@@ -658,6 +676,7 @@ def main(argv: list[str] | None = None) -> None:
     sources = args.sources
     gt_by_cam = None
     gt_snap_frames = None   # None = exact frame lookup (MTA); int = snap window (Wildtrack)
+    gt_scale = (1.0, 1.0)
     geometry = None
 
     exclusive = [args.mta_dataset, args.wildtrack_dataset, args.mmp_dataset,
@@ -707,7 +726,10 @@ def main(argv: list[str] | None = None) -> None:
             sources = mmp.get_video_uris()
             print(f"[reid] MMPTracking scene '{mmp_scene}' → {len(sources)} camera(s)")
             if args.show_gt:
-                gt_by_cam = mmp.load_all_gt()
+                gt_by_cam = {
+                    source_id: mmp.load_gt(cam_id)
+                    for source_id, cam_id in enumerate(mmp.get_cam_ids())
+                }
                 print(f"[reid] Loading GT annotations for {len(gt_by_cam)} camera(s)")
         except (FileNotFoundError, ValueError) as e:
             print(f"[ERROR] {e}")
@@ -723,7 +745,14 @@ def main(argv: list[str] | None = None) -> None:
             sources = mmp_s.get_video_uris()
             print(f"[reid] MMPTracking_short scene '{short_scene}' → {len(sources)} camera(s)")
             if args.show_gt:
-                gt_by_cam = mmp_s.load_all_gt()
+                gt_by_cam = {
+                    source_id: mmp_s.load_gt(cam_id)
+                    for source_id, cam_id in enumerate(mmp_s.get_cam_ids())
+                }
+                gt_scale = (
+                    1920.0 / MMPTrackingShortDataset.IMG_W,
+                    1080.0 / MMPTrackingShortDataset.IMG_H,
+                )
                 print(f"[reid] Loading GT annotations for {len(gt_by_cam)} camera(s)")
             # Load calibration and build GroundPlaneGeometry when available
             if not args.no_calibration:
@@ -759,6 +788,7 @@ def main(argv: list[str] | None = None) -> None:
         export_predictions=args.export_predictions,
         gt_by_cam=gt_by_cam,
         gt_snap_frames=gt_snap_frames,
+        gt_scale=gt_scale,
         no_sync=args.no_sync,
         geometry=geometry)
 
