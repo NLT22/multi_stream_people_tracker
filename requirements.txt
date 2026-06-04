@@ -4,26 +4,40 @@
 # IMPORTANT: pyservicemaker is NOT listed here because it cannot be installed
 # from PyPI. It must be installed from the DeepStream SDK wheel file.
 # See setup_venv.sh for the correct installation command.
+#
+# This file intentionally covers the main host-side project workflow:
+# dataset conversion, YOLO training/export, Swin ReID training/export,
+# and offline evaluation.
+#
+# PyTorch wheels are included here for one-command venv setup. If pip installs
+# a CPU-only or CUDA-incompatible wheel on a specific machine, reinstall torch
+# and torchvision manually with the correct CUDA wheel, then rerun this file.
 # =============================================================================
 
-# YAML parsing (for pipeline.yaml and tracker configs)
+# Core config/data utilities
 pyyaml>=6.0
-
-# Vectorized ReID gallery similarity/prototype operations
 numpy>=1.26
-
-# MTA dataset loading + offline evaluation (src/dataset/, src/eval/)
 pandas>=2.0
-motmetrics>=1.4
-trackeval>=0.1
-
-# YOLO model training + ONNX export (scripts/train_yolo_mta.py, scripts/export_yolo_onnx.py)
-# Not needed for inference-only deployment (DeepStream uses TRT engine directly)
-ultralytics>=8.0.0
-
-# scipy: used by offline metrics (linear_sum_assignment for global IDF1)
 scipy>=1.11
+opencv-python-headless>=4.9
+tqdm>=4.66
 
-# ReID fine-tuning (scripts/finetune_reid_mta.py)
+# PyTorch training stack
+torch
+torchvision
 timm>=1.0
 albumentations>=2.0
+
+# YOLO model training + ONNX export
+ultralytics>=8.0.0
+
+# ONNX export/simplification
+onnx
+onnxoptimizer
+onnxsim
+onnxscript
+Cython
+
+# Offline tracking/evaluation
+motmetrics>=1.4
+trackeval>=0.1
