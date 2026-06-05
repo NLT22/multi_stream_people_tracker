@@ -1,8 +1,9 @@
 # =============================================================================
-# MMPTracking_short Realtime Preset — 20 camera target
+# MMPTracking_short Realtime Preset — 20 camera, 416×416 detector input
 # =============================================================================
-# Goal: maximize realtime throughput. This path keeps detector + lightweight
-# NvDCF local tracking online; Global-ID/ReID repair should run sparse/nearline.
+# Same as pipeline_mmp_realtime_20cam.yaml but uses 416×416 detector input
+# for ~40% less inference compute. Use when 640px doesn't reach 10 FPS/cam.
+# Trade-off: slightly lower recall on small/distant persons.
 # =============================================================================
 
 source_mode: video_files
@@ -14,15 +15,13 @@ source_configs:
 
 detection:
   enabled: true
-  config_file: configs/models/nvinfer_yolov11_mmp_iv4.yml
+  config_file: configs/models/nvinfer_yolov11_mmp_416_iv4.yml
 
 tracker:
   enabled: true
   config_file: configs/tracker/nvdcf_perf_mmp_20cam.yaml
   tracker_width: 640
   tracker_height: 384
-  # Split the 20-source tracker batch into separate low-level tracker instances.
-  # Tune with benchmark_fps_ablation if a target machine behaves differently.
   sub_batches: "5:5:5:5"
 
 display:
@@ -49,7 +48,6 @@ runtime:
   record_bitrate: 8000000
 
 reid:
-  # Deliberately disabled for the realtime path.
   id_stickiness: false
   ambiguous_match_rejection: false
   global_merge: false

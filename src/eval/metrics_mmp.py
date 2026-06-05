@@ -108,6 +108,24 @@ def _infer_pred_space(pred_dir: Path, source_ids: list[int]) -> tuple[float, flo
     return float(MUX_W), float(MUX_H)
 
 
+def _load_exclude_ids(path: str | None) -> set:
+    """Load a set of person_ids to exclude from GT evaluation.
+
+    File format: one integer per line (comments with # are ignored).
+    Used to remove phantom annotations (persons permanently occluded by
+    shelves/walls that the detector can never see).
+    """
+    if path is None:
+        return set()
+    excluded: set = set()
+    with open(path) as f:
+        for line in f:
+            line = line.split("#")[0].strip()
+            if line:
+                excluded.add(int(line))
+    return excluded
+
+
 def _filter_boxes(
     df: pd.DataFrame,
     min_height: float,
@@ -282,6 +300,7 @@ def _eval_scene(
     cameras: list[int] | None,
     pred_width: float | None,
     pred_height: float | None,
+    exclude_person_ids: set | None = None,
 ) -> dict:
     try:
         ds = MMPTrackingShortDataset(str(short_root), scene)
@@ -320,6 +339,14 @@ def _eval_scene(
         except FileNotFoundError as e:
             print(f"  [cam_{cam_id}] {e} — skipping")
             continue
+
+        if exclude_person_ids:
+            before = len(gt_df)
+            gt_df = gt_df[~gt_df["person_id"].isin(exclude_person_ids)].reset_index(drop=True)
+            removed = before - len(gt_df)
+            if removed:
+                print(f"  [cam_{cam_id}] Excluded {removed} GT rows "
+                      f"({len(exclude_person_ids)} phantom person_ids)")
 
         if min_height > 0 or min_width > 0 or min_visibility > 0:
             gt_raw, pred_raw = len(gt_df), len(pred_df)
@@ -421,6 +448,10 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--pred-height", type=float, default=None,
                    help=f"Prediction coordinate height before scaling to GT "
                         f"(default: auto; current tile height is {PRED_H}).")
+    p.add_argument("--exclude-person-ids", default=None, metavar="FILE",
+                   help="Path to a text file with person_ids (one per line) to "
+                        "remove from GT before evaluation. Use detect_phantom_gt.py "
+                        "to generate this file for retail scenes with occluded persons.")
     return p.parse_args()
 
 
@@ -434,6 +465,11 @@ def main() -> None:
         min_height     = args.min_height
         min_width      = args.min_width
         min_visibility = args.min_visibility
+
+    exclude_person_ids = _load_exclude_ids(args.exclude_person_ids)
+    if exclude_person_ids:
+        print(f"[eval] Exclude IDs   : {len(exclude_person_ids)} person_ids "
+              f"from {args.exclude_person_ids}")
 
     print(f"[eval] short-root    : {short_root}")
     print(f"[eval] IoU threshold : {args.iou_threshold}")
@@ -460,6 +496,7 @@ def main() -> None:
             args.iou_threshold, min_height, min_width, min_visibility,
             args.cameras,
             args.pred_width, args.pred_height,
+            exclude_person_ids=exclude_person_ids,
         )
         _print_scene_summary(args.scene, result)
         return
@@ -487,6 +524,7 @@ def main() -> None:
             args.iou_threshold, min_height, min_width, min_visibility,
             args.cameras,
             args.pred_width, args.pred_height,
+            exclude_person_ids=exclude_person_ids,
         )
         _print_scene_summary(scene, result)
 
