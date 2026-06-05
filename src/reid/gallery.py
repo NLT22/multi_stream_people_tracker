@@ -367,6 +367,11 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
     def _count_iter(items) -> int:
         return sum(1 for _ in items)
 
+    # Maximum plausible source resolution — anything larger is the MUX
+    # output size being mis-reported as the per-source size.
+    _MAX_SOURCE_W = 1280.0
+    _MAX_SOURCE_H = 720.0
+
     @staticmethod
     def _source_frame_size(frame_meta) -> tuple[float, float] | None:
         width_names = ("source_frame_width", "frame_width", "source_width", "width")
@@ -382,6 +387,13 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
             None,
         )
         if width and height:
+            # Reject MUX-level dimensions (e.g. 1920×1080) that DeepStream
+            # sometimes reports as the per-source size for early-initialised
+            # sources.  Values larger than _MAX_SOURCE_W/H are the mux output
+            # size leaking into source metadata; treat them as unknown.
+            if (width > SourceIdCollectorProbe._MAX_SOURCE_W
+                    or height > SourceIdCollectorProbe._MAX_SOURCE_H):
+                return None
             return width, height
         return None
 
@@ -1115,11 +1127,21 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             row = src // max(1, self._cols)
             left -= col * self._tile_w
             top -= row * self._tile_h
-            frame_w, frame_h = self._frame_sizes.get(
-                src, (float(self._tile_w), float(self._tile_h))
-            ) if self._frame_sizes is not None else (
-                float(self._tile_w), float(self._tile_h)
-            )
+            if self._frame_sizes is not None:
+                if src in self._frame_sizes:
+                    frame_w, frame_h = self._frame_sizes[src]
+                elif self._frame_sizes:
+                    # Use minimum valid frame width as fallback so all cameras
+                    # land in the same coordinate space.  The min corresponds to
+                    # the actual source resolution (e.g. 640×360) while the
+                    # tile_w default (1280) creates a mixed PRED/GT space that
+                    # breaks the single-scale assumption in metrics_mmp.py.
+                    frame_w = min(w for w, _ in self._frame_sizes.values())
+                    frame_h = min(h for _, h in self._frame_sizes.values())
+                else:
+                    frame_w, frame_h = float(self._tile_w), float(self._tile_h)
+            else:
+                frame_w, frame_h = float(self._tile_w), float(self._tile_h)
             sx = frame_w / max(1.0, float(self._tile_w))
             sy = frame_h / max(1.0, float(self._tile_h))
             left *= sx
