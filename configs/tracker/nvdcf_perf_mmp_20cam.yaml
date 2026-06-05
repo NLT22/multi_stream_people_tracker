@@ -52,7 +52,7 @@ StateEstimator:
 VisualTracker:
   visualTrackerType: 2
   useColorNames: 0
-  useHog: 0
+  useHog: 1
   useHighPrecisionFeature: 0
   featureImgSizeLevel: 1
   featureFocusOffsetFactor_y: -0.20

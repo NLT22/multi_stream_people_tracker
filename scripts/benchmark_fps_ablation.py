@@ -29,12 +29,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FPS_RE = re.compile(r"\*\*FPS:\s+([\d.]+)\s+\(([\d.]+)\)")
+ERROR_RE = re.compile(
+    r"ERROR|Traceback|Segmentation|GPUassert|tracker lib returned error"
+    r"|streaming stopped.*error|VPI_ERROR",
+    re.IGNORECASE,
+)
 
 TRACKER_CONFIGS = {
     "tracker_iou": "configs/tracker/iou.yaml",
     "tracker_perf": "configs/tracker/nvdcf_perf.yaml",
     "tracker_recall": "configs/tracker/nvdcf_accuracy_mmp_recall.yaml",
 }
+
+
+def _scale_sub_batches(template: str, n_cams: int) -> str:
+    """Redistribute n_cams evenly across the same number of sub-batches."""
+    n_batches = len(template.split(":"))
+    base, rem = divmod(n_cams, n_batches)
+    return ":".join(str(base + (1 if i < rem else 0)) for i in range(n_batches))
 
 
 def _probe_cmd(args: argparse.Namespace, variant: str, n_cams: int) -> list[str]:
@@ -51,28 +63,40 @@ def _probe_cmd(args: argparse.Namespace, variant: str, n_cams: int) -> list[str]
             "--disable-global-merge",
         ]
     if variant == "full_lite":
-        return [
+        sub_batches = (
+            _scale_sub_batches(args.tracker_sub_batches, n_cams)
+            if args.tracker_sub_batches else None
+        )
+        cmd = [
             sys.executable, "-m", "src.main",
             "--sources", *sources,
-            "--no-display", "--no-sync", "--no-tiler",
+            "--no-display", "--no-sync", "--no-tiler", "--loop-video",
             "--nvinfer-config", args.nvinfer_config,
             "--tracker-config", args.lite_tracker_config,
-            "--tracker-sub-batches", args.tracker_sub_batches,
             "--gpu-id", str(args.gpu_id),
             "--no-trajectories",
             "--disable-gallery",
             "--disable-osd",
         ]
+        if sub_batches:
+            cmd += ["--tracker-sub-batches", sub_batches]
+        return cmd
 
-    return [
+    scaled_sub_batches = (
+        _scale_sub_batches(args.tracker_sub_batches, n_cams)
+        if args.tracker_sub_batches else None
+    )
+    cmd = [
         sys.executable, str(ROOT / "scripts" / "_run_fps_ablation_variant.py"),
         "--variant", variant,
         "--sources", *sources,
         "--nvinfer-config", args.nvinfer_config,
         "--gpu-id", str(args.gpu_id),
         "--batch-size", str(n_cams),
-        "--tracker-sub-batches", args.tracker_sub_batches,
     ]
+    if scaled_sub_batches:
+        cmd += ["--tracker-sub-batches", scaled_sub_batches]
+    return cmd
 
 
 def _run_one(args: argparse.Namespace, variant: str, n_cams: int) -> dict:
@@ -95,7 +119,7 @@ def _run_one(args: argparse.Namespace, variant: str, n_cams: int) -> dict:
         assert proc.stdout is not None
         for raw in proc.stdout:
             line = raw.rstrip()
-            if "ERROR" in line or "Traceback" in line or "Segmentation" in line:
+            if ERROR_RE.search(line):
                 errors.append(line)
                 print("  [!]", line)
             match = FPS_RE.search(line)
@@ -162,7 +186,7 @@ def main() -> None:
                                  "tracker_lite", "tracker_recall",
                                  "full_lite", "full_main"])
     parser.add_argument("--duration", type=int, default=20)
-    parser.add_argument("--warmup", type=int, default=8)
+    parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--target-fps", type=float, default=10.0)
     parser.add_argument("--stop-on-fail", action="store_true",
                         help="Stop larger camera counts for a variant once it "

@@ -53,12 +53,15 @@ def prepare_nvinfer_config(config_path: str, batch: int, gpu_id: int = 0,
         return _write_runtime_config(cfg_path, raw, batch, gpu_id)
 
     # nvinfer paths are relative to the CONFIG FILE's directory.
+    # Use the logical name from the config (preserving symlink names) for engine
+    # naming so that different aliases of the same ONNX get separate engine caches.
+    onnx_logical_name = Path(onnx_rel).name
     onnx_path = (cfg_path.parent / onnx_rel).resolve()
     prec = precision_token(prop.get("network-mode", 2))
-    eng_file = engine_name(onnx_path, batch, gpu_id, prec)
+    eng_file = f"{onnx_logical_name}_b{batch}_gpu{gpu_id}_{prec}.engine"
     eng_path = onnx_path.parent / eng_file
 
-    _clean_stale_engines(onnx_path, eng_path, force_rebuild)
+    _clean_stale_engines(onnx_path, onnx_logical_name, eng_path, force_rebuild)
 
     # Point model-engine-file at the per-batch engine, expressed relative to the
     # config dir so the generated sibling config keeps working paths.
@@ -72,19 +75,19 @@ def prepare_nvinfer_config(config_path: str, batch: int, gpu_id: int = 0,
     raw["property"] = prop
 
     reuse = eng_path.exists()
-    print(f"[engine] onnx={onnx_path.name} batch={batch} prec={prec} "
+    print(f"[engine] onnx={onnx_logical_name} batch={batch} prec={prec} "
           f"engine={'REUSE' if reuse else 'BUILD'} -> {eng_path}")
     return _write_runtime_config(cfg_path, raw, batch, gpu_id)
 
 
-def _clean_stale_engines(onnx_path: Path, target_engine: Path,
-                         force_rebuild: bool) -> None:
+def _clean_stale_engines(onnx_path: Path, onnx_logical_name: str,
+                         target_engine: Path, force_rebuild: bool) -> None:
     """Delete stale engines for this ONNX; keep valid per-batch caches."""
     model_dir = onnx_path.parent
     if not model_dir.is_dir():
         return
     onnx_mtime = onnx_path.stat().st_mtime if onnx_path.exists() else 0.0
-    for eng in model_dir.glob(f"{onnx_path.name}_b*_gpu*_*.engine"):
+    for eng in model_dir.glob(f"{onnx_logical_name}_b*_gpu*_*.engine"):
         # ONNX re-exported after the engine was built -> engine is stale.
         if eng.stat().st_mtime < onnx_mtime:
             print(f"[engine] removing stale engine (older than ONNX): {eng.name}")

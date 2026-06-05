@@ -28,6 +28,9 @@ import argparse
 import sys
 from pathlib import Path
 
+# Allow running as `python scripts/detect_phantom_gt.py` (not just `python -m`)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import numpy as np
 import pandas as pd
 
@@ -214,19 +217,7 @@ def main() -> None:
         min_width=args.min_width,
     )
 
-    if not low_recall:
-        print("[phantom] No phantom person_ids found — all GT persons were detected "
-              "at least once.")
-        return
-
     sorted_ids = sorted(low_recall.items(), key=lambda x: x[1])
-    print(f"\n[phantom] Found {len(sorted_ids)} phantom person_ids "
-          f"(recall < {args.recall_threshold:.0%}):\n")
-    print(f"  {'person_id':>12}  {'recall':>8}  {'note'}")
-    print(f"  {'─'*12}  {'─'*8}  {'─'*30}")
-    for pid, recall in sorted_ids:
-        note = "never detected" if recall == 0.0 else f"seen {recall:.1%} of frames"
-        print(f"  {pid:>12}  {recall:>8.3f}  {note}")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w") as f:
@@ -237,6 +228,19 @@ def main() -> None:
         f.write(f"# person_id  recall\n")
         for pid, recall in sorted_ids:
             f.write(f"{pid}  # recall={recall:.4f}\n")
+
+    if not low_recall:
+        print("[phantom] No phantom person_ids found — all GT persons were detected "
+              "at least once.")
+        print(f"[phantom] Written empty exclusion list → {out_path}")
+        return
+    print(f"\n[phantom] Found {len(sorted_ids)} phantom person_ids "
+          f"(recall < {args.recall_threshold:.0%}):\n")
+    print(f"  {'person_id':>12}  {'recall':>8}  {'note'}")
+    print(f"  {'─'*12}  {'─'*8}  {'─'*30}")
+    for pid, recall in sorted_ids:
+        note = "never detected" if recall == 0.0 else f"seen {recall:.1%} of frames"
+        print(f"  {pid:>12}  {recall:>8.3f}  {note}")
 
     print(f"\n[phantom] Written {len(sorted_ids)} IDs → {out_path}")
     print(f"\n[phantom] To re-eval with clean GT:")

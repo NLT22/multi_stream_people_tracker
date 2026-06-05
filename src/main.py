@@ -245,6 +245,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         gt_snap_frames: int | None = None,
         gt_scale: tuple[float, float] = (1.0, 1.0),
         no_sync: bool = False,
+        loop_video: bool = False,
         geometry=None):
     # pretiler=True guarantees exact source_id and frame_number — no geometric
     # guessing from tile coordinates.  Force it whenever:
@@ -335,6 +336,8 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         src_props = {"uri": uri, "gpu-id": gpu_id}
         if is_live:
             src_props["live-source"] = 1
+        if loop_video and not is_live:
+            src_props["file-loop"] = 1
         pipeline.add("nvurisrcbin", name, src_props)
         pipeline.link((name, "mux"), ("", "sink_%u"))
 
@@ -691,6 +694,10 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--sync", action="store_false", dest="no_sync",
                         help="Use sink clock sync even if the selected YAML "
                              "sets runtime.no_sync.")
+    parser.add_argument("--loop-video", action="store_true", default=False,
+                        help="Loop file sources indefinitely (file-loop=1 on nvurisrcbin). "
+                             "Useful for benchmarking so short videos do not end "
+                             "before the FPS probe fires.")
     parser.add_argument("--mta-dataset", default=None, metavar="PATH",
                         help="Path to an MTA split folder (e.g. dataset/mta/MTA_ext_short/test). "
                              "Auto-loads all cam_*.mp4 files as sources, overriding --sources.")
@@ -873,6 +880,7 @@ def main(argv: list[str] | None = None) -> None:
         gt_snap_frames=gt_snap_frames,
         gt_scale=gt_scale,
         no_sync=args.no_sync,
+        loop_video=args.loop_video,
         geometry=geometry)
 
 

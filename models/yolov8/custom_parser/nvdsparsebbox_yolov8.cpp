@@ -1,9 +1,10 @@
 /*
  * Custom bounding box parser for YOLOv8 / YOLOv11 pre-NMS output.
  *
- * Supports any number of classes (nc). The output tensor shape is [4+nc, 8400]:
- *   - dim 0: 4+nc  (4 bbox coords + nc class scores)
- *   - dim 1: 8400  anchor predictions
+ * Supports any number of classes (nc) and any input resolution.
+ * The output tensor shape is [4+nc, num_anchors]:
+ *   - dim 0: 4+nc       (4 bbox coords + nc class scores)
+ *   - dim 1: num_anchors (depends on input resolution, e.g. 8400 for 640px, 3549 for 416px)
  *
  * Works for both COCO-pretrained (nc=80 → [84,8400]) and fine-tuned
  * single-class models (nc=1 → [5,8400]).  num_classes is inferred from
@@ -23,8 +24,7 @@
 
 #include "nvdsinfer_custom_impl.h"
 
-static const int NUM_ANCHORS = 8400;
-static const int BBOX_DIM    = 4;
+static const int BBOX_DIM = 4;
 
 extern "C" bool NvDsInferParseYoloV8(
     std::vector<NvDsInferLayerInfo> const& outputLayersInfo,
@@ -56,16 +56,16 @@ extern "C" bool NvDsInferParseYoloV8(
         return false;
     }
 
-    // Validate dims: expect [4+nc, 8400] for any nc >= 1
+    // Validate dims: expect [4+nc, num_anchors] for any nc >= 1 and any resolution
     const auto& dims = output_layer->inferDims;
-    if (dims.numDims < 2 || dims.d[0] <= BBOX_DIM || dims.d[1] != NUM_ANCHORS) {
+    if (dims.numDims < 2 || dims.d[0] <= BBOX_DIM || dims.d[1] <= 0) {
         std::cerr << "[YoloV8 parser] ERROR: unexpected output dims ["
                   << dims.d[0] << ", " << dims.d[1] << "]. "
-                  << "Expected [4+nc, " << NUM_ANCHORS << "] with nc>=1." << std::endl;
+                  << "Expected [4+nc, num_anchors] with nc>=1." << std::endl;
         return false;
     }
 
-    // Infer num_classes from actual tensor dims (supports nc=1..N)
+    const int NUM_ANCHORS = dims.d[1];
     const int NUM_CLASSES = dims.d[0] - BBOX_DIM;
 
     const float* data = static_cast<const float*>(output_layer->buffer);
