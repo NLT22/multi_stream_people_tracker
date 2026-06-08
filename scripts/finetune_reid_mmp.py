@@ -103,6 +103,7 @@ class MMPReidDataset(Dataset):
         min_h: int = 40,
         min_imgs_per_pid: int = 4,
         split_name: str = "data",
+        prefer_clean_gt: bool = False,
     ) -> None:
         self.transform = transform
         # (frame_array_or_path, global_pid, cam_id)
@@ -126,8 +127,15 @@ class MMPReidDataset(Dataset):
 
             found_csv = False
             for csv_path in sorted(scene_dir.glob("gt_cam*.csv")):
+                stem_tail = csv_path.stem.replace("gt_cam", "")
+                if not stem_tail.isdigit():
+                    continue
+                cam_id = int(stem_tail)
+                if prefer_clean_gt:
+                    clean_path = scene_dir / f"gt_cam{cam_id}_clean.csv"
+                    if clean_path.exists():
+                        csv_path = clean_path
                 found_csv = True
-                cam_id = int(csv_path.stem.replace("gt_cam", ""))
                 vid_path = scene_dir / f"cam{cam_id}.mp4"
                 if not vid_path.exists():
                     print(f"  [WARN] video not found: {vid_path}")
@@ -525,6 +533,10 @@ def main() -> None:
                    help="Train on ALL non-retail scenes (incl. the usual val "
                         "scenes). Legitimate for a fixed-camera deployment where "
                         "the target scenes are known. Val monitors the same set.")
+    p.add_argument("--train-all", action="store_true",
+                   help="Train on ALL scenes including retail.")
+    p.add_argument("--prefer-clean-gt", action="store_true",
+                   help="Use gt_cam<N>_clean.csv instead of gt_cam<N>.csv when available.")
     p.add_argument("--no-pretrained", action="store_true")
     p.add_argument("--resume",      default=None, metavar="CKPT",
                    help="Resume from checkpoint (.pth). If from MTA model, "
@@ -535,7 +547,11 @@ def main() -> None:
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.train_all_nonretail:
+    if args.train_all:
+        all_scenes = [s for scenes in ENVS.values() for s in scenes]
+        train_scenes, val_scenes = all_scenes, list(all_scenes)
+        print("[reid] train-all: training on every scene including retail")
+    elif args.train_all_nonretail:
         nonretail = [s for env, scenes in ENVS.items() if env != "retail"
                      for s in scenes]
         train_scenes, val_scenes = nonretail, list(nonretail)
@@ -554,6 +570,7 @@ def main() -> None:
         min_w=args.min_w, min_h=args.min_h,
         min_imgs_per_pid=args.min_imgs_pid,
         split_name="train",
+        prefer_clean_gt=args.prefer_clean_gt,
     )
 
     if train_ds.num_classes == 0:
@@ -567,6 +584,7 @@ def main() -> None:
         min_w=args.min_w, min_h=args.min_h,
         min_imgs_per_pid=args.min_imgs_pid,
         split_name="val",
+        prefer_clean_gt=args.prefer_clean_gt,
     )
     if val_ds.num_classes == 0:
         print("[ERROR] No valid validation persons found. Check MMPTracking_short val scenes.")
