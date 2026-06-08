@@ -561,13 +561,50 @@ def main() -> None:
 
     results: list[dict] = []
 
-    for iv in args.inference_intervals:
-        if len(args.inference_intervals) > 1:
-            infer_every = iv + 1
-            print(f"\n{'='*60}")
-            print(f" Inference interval={iv}  (infer every {infer_every} frame(s))")
-            print(f"{'='*60}")
+    # auto-escalate mode: when >1 interval given, try next interval on fail
+    # instead of running full independent sweeps per interval.
+    auto_escalate = len(args.inference_intervals) > 1
 
+    if auto_escalate:
+        print(f"[bench] Mode: auto-escalate — retry with next interval on FAIL "
+              f"(intervals: {args.inference_intervals})")
+
+        for n in args.cam_counts:
+            best_r = None
+            for iv in args.inference_intervals:
+                r = _run_single(
+                    source             = source,
+                    n_cams             = n,
+                    duration           = args.duration,
+                    warmup             = args.warmup,
+                    nvinfer_config     = args.nvinfer_config,
+                    tracker_config     = args.tracker_config,
+                    gpu_id             = args.gpu_id,
+                    inference_interval = iv,
+                )
+                results.append(r)
+                ok = "PASS" if r["fps_per_cam"] >= args.target_fps else "FAIL"
+                vram = (f"  VRAM peak={r.get('vram_used_peak_mb',0)}MB"
+                        f"  GPU={r.get('gpu_util_mean_pct',0):.0f}%"
+                        f"  {r.get('temp_peak_c',0)}°C"
+                        if "vram_used_peak_mb" in r else "")
+                print(f"\n  → iv={iv} cams={n}  FPS/cam={r['fps_per_cam']:.1f}"
+                      f"  total={r['fps_total_mean']:.1f}  [{ok}]{vram}\n")
+                best_r = r
+                if r["fps_per_cam"] >= args.target_fps:
+                    break  # passed — no need to try higher intervals
+                if iv == args.inference_intervals[-1]:
+                    print(f"[bench] cams={n}: all intervals exhausted, still FAIL.")
+                else:
+                    next_iv = args.inference_intervals[args.inference_intervals.index(iv) + 1]
+                    print(f"[bench] cams={n} iv={iv} FAIL — escalating to iv={next_iv} "
+                          f"(infer every {next_iv+1}f)")
+
+            if args.stop_on_fail and best_r and best_r["fps_per_cam"] < args.target_fps:
+                print(f"[bench] All intervals failed for cams={n} — stopping sweep.")
+                break
+    else:
+        iv = args.inference_intervals[0]
         for n in args.cam_counts:
             r = _run_single(
                 source             = source,
@@ -581,7 +618,6 @@ def main() -> None:
             )
             results.append(r)
 
-            # Intermediate summary
             ok = "PASS" if r["fps_per_cam"] >= args.target_fps else "FAIL"
             vram = (f"  VRAM peak={r.get('vram_used_peak_mb',0)}MB"
                     f"  GPU={r.get('gpu_util_mean_pct',0):.0f}%"
