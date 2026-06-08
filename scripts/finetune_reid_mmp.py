@@ -521,6 +521,10 @@ def main() -> None:
                    help="PK batches per epoch. Use 0 to cover roughly all crops once "
                         "(default 200; old behavior was only num_persons // P batches).")
     p.add_argument("--grad-ckpt",   action="store_true")
+    p.add_argument("--train-all-nonretail", action="store_true",
+                   help="Train on ALL non-retail scenes (incl. the usual val "
+                        "scenes). Legitimate for a fixed-camera deployment where "
+                        "the target scenes are known. Val monitors the same set.")
     p.add_argument("--no-pretrained", action="store_true")
     p.add_argument("--resume",      default=None, metavar="CKPT",
                    help="Resume from checkpoint (.pth). If from MTA model, "
@@ -531,7 +535,13 @@ def main() -> None:
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    train_scenes, val_scenes = _train_val_scenes()
+    if args.train_all_nonretail:
+        nonretail = [s for env, scenes in ENVS.items() if env != "retail"
+                     for s in scenes]
+        train_scenes, val_scenes = nonretail, list(nonretail)
+        print("[reid] train-all-nonretail: training on every non-retail scene")
+    else:
+        train_scenes, val_scenes = _train_val_scenes()
     short_root = _resolve_short_root(Path(args.short_root), train_scenes + val_scenes)
     print(f"Train scenes ({len(train_scenes)}): {train_scenes}")
     print(f"Val   scenes ({len(val_scenes)}):   {val_scenes}")
@@ -590,10 +600,14 @@ def main() -> None:
             print(f"[train] Loaded checkpoint: {args.resume}")
         except RuntimeError:
             # Head size mismatch (different number of classes) — replace classifier
+            # and drop the old classifier weights (strict=False does NOT ignore
+            # size mismatches, only missing/unexpected keys).
             model.replace_classifier(train_ds.num_classes)
             model.to(device)
+            state = {k: v for k, v in state.items()
+                     if not k.startswith("classifier.")}
             model.load_state_dict(state, strict=False)
-            print(f"[train] Loaded checkpoint (head replaced for {train_ds.num_classes} classes): {args.resume}")
+            print(f"[train] Loaded checkpoint (head dropped+replaced for {train_ds.num_classes} classes): {args.resume}")
         if "epoch" in ckpt:
             start_epoch = ckpt["epoch"] + 1
             print(f"[train] Resuming from epoch {start_epoch}")

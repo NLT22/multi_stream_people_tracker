@@ -1,0 +1,37 @@
+# =============================================================================
+# Secondary GIE — Swin-Tiny ReID feature extractor (REALTIME cross-camera gallery)
+# =============================================================================
+# Decouples ReID from the tracker. The tracker runs reidType:0 (no in-tracker
+# ReID, ~22 FPS/cam @20cam); this SGIE extracts a 256-d embedding per person
+# crop and attaches it as output-tensor-meta, which CrossCameraGalleryProbe
+# reads via obj_meta.tensor_items.
+#
+# Why SGIE instead of in-tracker ReID: the tracker's ReID association path is
+# fixed-cost per frame and collapses 20cam throughput 22->5 FPS/cam regardless
+# of batchSize/interval. nvinfer SGIE batches ALL person crops in the mux batch
+# into one TensorRT call and supports `interval` frame-skipping.
+#
+# Preprocessing mirrors the tracker ReID block (ImageNet norm, RGB, NCHW,
+# keep-aspect 256x128) so embeddings are identical to the trained model space.
+# =============================================================================
+property:
+  gpu-id: 0
+  onnx-file: ../../models/reid/swin_tiny_mmp_reid.onnx
+  net-scale-factor: 0.01735207
+  offsets: 123.675;116.28;103.53
+  model-color-format: 0          # 0 = RGB (matches tracker colorFormat:0)
+  infer-dims: 3;256;128
+  maintain-aspect-ratio: 1       # matches tracker keepAspc:1
+  symmetric-padding: 1
+  batch-size: 64                 # batch many crops per TRT call
+  network-mode: 2                # FP16 (DeepStream: 0=FP32, 1=INT8, 2=FP16)
+  process-mode: 2                # secondary (operate on detected objects)
+  network-type: 100              # "other" — raw feature output, no clustering
+  output-tensor-meta: 1          # attach embedding tensor to obj user meta
+  gie-unique-id: 2
+  operate-on-gie-id: 1           # operate on PGIE (detector) objects
+  operate-on-class-ids: 0        # person class only
+  input-object-min-width: 8
+  input-object-min-height: 16
+  interval: 0                    # 0 = every frame (tune up to reduce load)
+  output-blob-names: features

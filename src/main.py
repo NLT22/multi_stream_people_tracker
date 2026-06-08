@@ -85,6 +85,7 @@ def _load_defaults(config_path: str) -> dict:
     defaults = {
         "sources": ["configs/sources/video_files.txt"],
         "nvinfer_config": "configs/models/nvinfer_yolov11_people.yml",
+        "reid_sgie_config": None,
         "tracker_config": "configs/tracker/nvdeepsort_reid_swin.yaml",
         "tracker_width": 640,
         "tracker_height": 384,
@@ -151,6 +152,8 @@ def _load_defaults(config_path: str) -> dict:
 
     defaults["nvinfer_config"] = detection.get(
         "config_file", defaults["nvinfer_config"])
+    defaults["reid_sgie_config"] = detection.get(
+        "reid_sgie_config", defaults["reid_sgie_config"])
     defaults["tracker_config"] = tracker.get(
         "config_file", defaults["tracker_config"])
     defaults["tracker_width"] = tracker.get(
@@ -246,6 +249,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         gt_scale: tuple[float, float] = (1.0, 1.0),
         no_sync: bool = False,
         loop_video: bool = False,
+        reid_sgie_config: str | None = None,
         geometry=None):
     # pretiler=True guarantees exact source_id and frame_number — no geometric
     # guessing from tile coordinates.  Force it whenever:
@@ -357,6 +361,29 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         tracker_props["sub-batches"] = tracker_sub_batches
     pipeline.add("nvtracker", "tracker", tracker_props)
 
+    # Optional decoupled ReID: a secondary nvinfer (SGIE) extracts a per-person
+    # embedding and attaches it as output-tensor-meta. This keeps the tracker on
+    # the fast reidType:0 path — in-tracker ReID (reidType:2) collapses 20-cam
+    # throughput 22->5 FPS/cam regardless of tuning. The gallery probe attaches
+    # to this SGIE so it sees the embedding tensor on each object.
+    # `reid_src_element` is the element whose objects carry ReID embeddings.
+    reid_src_element = "tracker"
+    if reid_sgie_config:
+        import yaml as _yaml
+        _sgie_raw = _yaml.safe_load(Path(reid_sgie_config).read_text()) or {}
+        _sgie_batch = int(_sgie_raw.get("property", {}).get("batch-size", 64))
+        runtime_sgie_config = prepare_nvinfer_config(
+            reid_sgie_config, _sgie_batch, gpu_id, force_rebuild_engine)
+        pipeline.add("nvinfer", "sgie_reid", {
+            "config-file-path": runtime_sgie_config,
+            "batch-size": _sgie_batch,
+            "gpu-id": gpu_id,
+            "process-mode": 2,
+        })
+        reid_src_element = "sgie_reid"
+        print(f"[reid] decoupled ReID SGIE enabled "
+              f"(batch={_sgie_batch}): {runtime_sgie_config}")
+
     trajectory_visualizer = None
     if show_trajectories:
         trajectory_visualizer = TrajectoryVisualizer(
@@ -394,14 +421,16 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         if pretiler:
             # One pre-tiler probe on the tracker: exact source_id (no geometric
             # guessing), extracts embeddings + matches + sets labels in one pass.
-            print("[reid] pretiler mode: gallery runs on tracker (no src guessing)")
-            pipeline.attach("tracker", psm.Probe("reid_probe", gallery_probe))
+            print(f"[reid] pretiler mode: gallery runs on {reid_src_element} "
+                  f"(no src guessing)")
+            pipeline.attach(reid_src_element,
+                            psm.Probe("reid_probe", gallery_probe))
         else:
             # Two-probe path: SourceIdCollectorProbe fills id_map pre-tiler
             # (source_id exact), CrossCameraGalleryProbe reads id_map post-tiler.
             # source_id is resolved from id_map — no geometric tile guessing.
             print("[reid] two-probe mode: source_id via id_map (pre-tiler exact)")
-            pipeline.attach("tracker", psm.Probe(
+            pipeline.attach(reid_src_element, psm.Probe(
                 "src_collector",
                 gallery.SourceIdCollectorProbe(
                     id_map, embeddings, person_class_id, debug=debug_similarity,
@@ -429,12 +458,18 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
 
     pipeline.link("mux", "pgie")
     pipeline.link("pgie", "tracker")
-    visual_tail = "tracker"
+    # Insert the ReID SGIE into the data path (tracker -> sgie_reid -> ...) so it
+    # runs on tracked objects and downstream elements see the embedding tensors.
+    tracker_tail = "tracker"
+    if reid_src_element == "sgie_reid":
+        pipeline.link("tracker", "sgie_reid")
+        tracker_tail = "sgie_reid"
+    visual_tail = tracker_tail
     if no_tiler:
         # Headless throughput: skip the tiler entirely.
-        visual_tail = "tracker"
+        visual_tail = tracker_tail
     else:
-        pipeline.link("tracker", "tiler")
+        pipeline.link(tracker_tail, "tiler")
         visual_tail = "tiler"
 
     if osd_enabled:
@@ -541,6 +576,12 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "configs/models/nvinfer_yolov11_people.yml, "
                              "configs/models/nvinfer_peoplenet.yml, "
                              "configs/models/nvinfer_trafficcamnet.yml")
+    parser.add_argument("--reid-sgie-config", default=defaults["reid_sgie_config"],
+                        help="Optional secondary nvinfer (SGIE) config that "
+                             "extracts per-person ReID embeddings as "
+                             "output-tensor-meta. Use with a reidType:0 perf "
+                             "tracker for realtime cross-camera ReID. "
+                             "E.g. configs/models/nvinfer_reid_swin_sgie.yml")
     parser.add_argument("--tracker-config", default=defaults["tracker_config"],
                         help="Tracker config. Default comes from pipeline.yaml. "
                              "Recommended demo: nvdeepsort_reid_swin.yaml. "
@@ -881,6 +922,7 @@ def main(argv: list[str] | None = None) -> None:
         gt_scale=gt_scale,
         no_sync=args.no_sync,
         loop_video=args.loop_video,
+        reid_sgie_config=args.reid_sgie_config,
         geometry=geometry)
 
 
