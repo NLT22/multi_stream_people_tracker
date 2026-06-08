@@ -19,7 +19,7 @@ TODO_NEXT.md
 configs/models/*_iv[0-9]*.yml
 models/**/*.engine
 models/**/*.static_b1.onnx
-models/**/*.onnx
+# *.onnx tracked via Git LFS (see .gitattributes) — not ignored
 models/**/*.etlt
 models/**/*.pt
 models/**/*.pth
