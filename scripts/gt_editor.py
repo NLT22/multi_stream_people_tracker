@@ -372,11 +372,39 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Visual GT editor for MMPTracking retail scenes")
     p.add_argument("--scene", required=True,
                    help="Scene directory, e.g. dataset/MMPTracking_short/retail_0")
-    p.add_argument("--cam", required=True, help="Camera name, e.g. cam1")
+    p.add_argument("--cam", default=None,
+                   help="Camera name to start from, e.g. cam1 (default: first cam in folder)")
     p.add_argument("--use-clean", action="store_true",
                    help="Load gt_<cam>_clean.csv instead of original")
     args = p.parse_args()
-    run_editor(Path(args.scene), args.cam, args.use_clean)
+
+    scene_dir = Path(args.scene)
+
+    # Discover all cameras in the scene (sorted: cam1, cam2, ...)
+    all_cams = sorted(
+        p.stem for p in scene_dir.glob("cam*.mp4")
+        if (scene_dir / f"gt_{p.stem}.csv").exists()
+                    or (scene_dir / f"gt_{p.stem}_clean.csv").exists()
+    )
+    if not all_cams:
+        print(f"[gt_editor] No cam*.mp4 + gt_cam*.csv found in {scene_dir}")
+        return
+
+    start_cam = args.cam if args.cam else all_cams[0]
+    if start_cam not in all_cams:
+        print(f"[gt_editor] Camera '{start_cam}' not found. Available: {all_cams}")
+        return
+
+    start_idx = all_cams.index(start_cam)
+    print(f"[gt_editor] Scene: {scene_dir.name}  —  cameras: {all_cams}")
+    print(f"[gt_editor] Starting from {start_cam}  ({start_idx+1}/{len(all_cams)})")
+
+    for cam in all_cams[start_idx:]:
+        print(f"\n{'='*60}")
+        print(f"  Camera {cam}  ({all_cams.index(cam)+1}/{len(all_cams)})")
+        print(f"{'='*60}")
+        run_editor(scene_dir, cam, args.use_clean)
+        print(f"  [gt_editor] Done with {cam}.")
 
 
 if __name__ == "__main__":
