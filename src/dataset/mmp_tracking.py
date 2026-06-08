@@ -334,9 +334,10 @@ class MMPTrackingShortDataset:
     IMG_W = 640
     IMG_H = 360
 
-    def __init__(self, root: str, scene: str) -> None:
+    def __init__(self, root: str, scene: str, gt_suffix: str = "") -> None:
         self.root = Path(root)
         self.scene = scene
+        self._gt_suffix = gt_suffix
         self._scene_dir = self.root / scene
         if not self._scene_dir.exists():
             raise FileNotFoundError(
@@ -379,7 +380,7 @@ class MMPTrackingShortDataset:
 
     def load_gt(self, cam_id: int) -> pd.DataFrame:
         """Load pre-built GT CSV for one camera."""
-        csv_path = self._scene_dir / f"gt_cam{cam_id}.csv"
+        csv_path = self._scene_dir / f"gt_cam{cam_id}{self._gt_suffix}.csv"
         if not csv_path.exists():
             raise FileNotFoundError(f"GT CSV not found: {csv_path}")
         df = pd.read_csv(csv_path)

@@ -301,9 +301,10 @@ def _eval_scene(
     pred_width: float | None,
     pred_height: float | None,
     exclude_person_ids: set | None = None,
+    gt_suffix: str = "",
 ) -> dict:
     try:
-        ds = MMPTrackingShortDataset(str(short_root), scene)
+        ds = MMPTrackingShortDataset(str(short_root), scene, gt_suffix=gt_suffix)
     except FileNotFoundError as e:
         print(f"[{scene}] ERROR: {e}")
         return {}
@@ -448,6 +449,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--pred-height", type=float, default=None,
                    help=f"Prediction coordinate height before scaling to GT "
                         f"(default: auto; current tile height is {PRED_H}).")
+    p.add_argument("--gt-suffix", default="", metavar="SUFFIX",
+                   help="GT file suffix, e.g. '_clean' loads gt_cam1_clean.csv (default: '')")
     p.add_argument("--exclude-person-ids", default=None, metavar="FILE",
                    help="Path to a text file with person_ids (one per line) to "
                         "remove from GT before evaluation. Use detect_phantom_gt.py "
@@ -497,6 +500,7 @@ def main() -> None:
             args.cameras,
             args.pred_width, args.pred_height,
             exclude_person_ids=exclude_person_ids,
+            gt_suffix=args.gt_suffix,
         )
         _print_scene_summary(args.scene, result)
         return
@@ -525,6 +529,7 @@ def main() -> None:
             args.cameras,
             args.pred_width, args.pred_height,
             exclude_person_ids=exclude_person_ids,
+            gt_suffix=args.gt_suffix,
         )
         _print_scene_summary(scene, result)
 
