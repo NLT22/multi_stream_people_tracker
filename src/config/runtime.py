@@ -2,28 +2,11 @@
 YAML preset + the gallery module's tuning constants.
 Extracted from src/main.py (see also src/config/args.py)."""
 
-import argparse
-import sys
 from pathlib import Path
 
-import pyservicemaker as psm
 import yaml
 
-from src.pipeline.model_utils import (
-    deepstream_tracker_lib_path,
-    infer_person_class_id,
-)
-from src.pipeline.engine_prep import prepare_nvinfer_config
-from src.pipeline.recording import add_recording_branch, compute_grid
-from src.dataset.mta import MtaDataset
-from src.dataset.mmp_tracking import MMPTrackingDataset, MMPTrackingShortDataset
-from src.dataset.wildtrack import WildtrackDataset
-from src.eval.export import PredictionExporter
-from src.eval.gt_overlay import GtOverlayProbe
-from src.pipeline.sources import resolve_sources, trim_sources
 from src.reid import gallery
-from src.reid.visualization import TrajectoryVisualizer
-from src.utils.platform_utils import get_sink_element
 
 
 DEFAULT_CONFIG_PATH = "configs/pipeline.yaml"

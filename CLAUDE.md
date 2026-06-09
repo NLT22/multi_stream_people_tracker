@@ -115,12 +115,15 @@ See `Old materials/COMMANDS.md` for full commands including MTA, Wildtrack, swee
 
 ### Key Source Files
 
-- `src/main.py` — entry point, argument parsing, pipeline wiring
-- `src/pipeline/builder.py` — assembles all GStreamer/pyservicemaker elements
+- `src/main.py` — thin entry point (`main()` orchestration only)
+- `src/config/args.py` — CLI argument parsing
+- `src/config/runtime.py` — build defaults dict from YAML preset + gallery tuning
+- `src/pipeline/runner.py` — assembles all GStreamer/pyservicemaker elements + `run()` (the production builder; replaced the old unused `builder.py`)
 - `src/pipeline/probes.py` — metadata probe callbacks (BatchMetadataOperator subclasses)
 - `src/pipeline/sources.py` — URI loading for video files, folders, RTSP
 - `src/pipeline/engine_prep.py` — dynamic TensorRT engine generation per batch size
 - `src/reid/gallery.py` — CrossCameraGalleryProbe + SourceIdCollectorProbe + all ReID tuning constants
+- `src/reid/matching.py` — pure cosine / mean-embedding / Hungarian helpers
 - `src/reid/geometry.py` — ground-plane geometry from MMPTracking calibration JSONs
 - `src/config/loader.py` — PipelineConfig YAML loader
 - `src/eval/metrics_mmp.py` — MOTA/IDF1/Global IDF1 for MMPTracking_short
