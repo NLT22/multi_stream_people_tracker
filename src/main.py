@@ -21,14 +21,14 @@ from src.pipeline.runner import run
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    # Apply all ReID/Global-ID tuning overrides onto the gallery module.
-    gallery.configure_from_args(args)
+    # Build the typed ReID/Global-ID config from CLI args.
+    reid_config = gallery.configure_from_args(args)
     enforce_unique = (
-        gallery.ENFORCE_UNIQUE_GLOBAL_PER_STREAM
+        reid_config.enforce_unique_global_per_stream
         and not args.allow_duplicate_gid_per_stream
     )
     use_hungarian = (
-        gallery.USE_HUNGARIAN_ASSIGNMENT and not args.disable_hungarian
+        reid_config.use_hungarian_assignment and not args.disable_hungarian
     )
 
     sources = args.sources
@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> None:
                     geometry = GroundPlaneGeometry(calib)
                     n_cams = len(calib.get("Cameras", []))
                     print(f"[reid] Ground-plane geometry loaded: {n_cams} camera(s), "
-                          f"geo_weight={gallery.GEO_WEIGHT}")
+                          f"geo_weight={reid_config.geo_weight}")
                 except FileNotFoundError as cal_err:
                     print(f"[reid] Calibration not found ({cal_err}); "
                           f"running without geometry assistance.")
@@ -155,7 +155,8 @@ def main(argv: list[str] | None = None) -> None:
         no_sync=args.no_sync,
         loop_video=args.loop_video,
         reid_sgie_config=args.reid_sgie_config,
-        geometry=geometry)
+        geometry=geometry,
+        reid_config=reid_config)
 
 
 

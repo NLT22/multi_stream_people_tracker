@@ -52,7 +52,11 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
         no_sync: bool = False,
         loop_video: bool = False,
         reid_sgie_config: str | None = None,
-        geometry=None):
+        geometry=None,
+        reid_config=None):
+    if reid_config is None:
+        from src.reid.config import ReIDConfig
+        reid_config = ReIDConfig()
     # pretiler=True guarantees exact source_id and frame_number — no geometric
     # guessing from tile coordinates.  Force it whenever:
     #   - --no-tiler: tiler absent, only pre-tiler position makes sense
@@ -112,7 +116,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     print(f"[reid] enforce_unique_per_stream={enforce_unique_per_stream}")
     print(f"[reid] show_trajectories={show_trajectories}")
     print(f"[reid] gallery_enabled={not disable_gallery} osd_enabled={osd_enabled}")
-    print(gallery.config_summary())
+    print(gallery.config_summary(reid_config))
     if save_video:
         print(f"[reid] save_video={save_video}")
     if export_predictions:
@@ -133,7 +137,7 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     #   clips; for very long / 20-cam production streams prefer the bounded
     #   `src.eval.online_fusion` post-pass instead.
     export_delay_frames = (
-        10 ** 9 if gallery.USE_MICRO_BATCH_FUSION else 0
+        10 ** 9 if reid_config.use_micro_batch_fusion else 0
     )
     exporter = (
         PredictionExporter(export_predictions, delay_frames=export_delay_frames)
@@ -230,7 +234,8 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
             exporter=exporter,
             frame_numbers=frame_numbers if not pretiler else None,
             frame_sizes=frame_sizes if not pretiler else None,
-            geometry=geometry)
+            geometry=geometry,
+            config=reid_config)
 
         if pretiler:
             # One pre-tiler probe on the tracker: exact source_id (no geometric

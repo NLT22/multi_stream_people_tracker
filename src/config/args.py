@@ -4,6 +4,7 @@ Extracted from src/main.py."""
 import argparse
 
 from src.reid import gallery
+from src.reid.config import ReIDConfig
 from src.config.runtime import DEFAULT_CONFIG_PATH, _load_defaults
 
 
@@ -97,7 +98,7 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--similarity-threshold", type=float,
                         default=defaults["similarity_threshold"],
                         help="Min cosine similarity to accept a gallery match "
-                             f"(default: {gallery.SIMILARITY_THRESHOLD})")
+                             f"(default: {ReIDConfig().similarity_threshold})")
     parser.add_argument("--gallery-max-age", type=int,
                         default=defaults["gallery_max_age"],
                         help="Drop inactive Global IDs after this many batches")

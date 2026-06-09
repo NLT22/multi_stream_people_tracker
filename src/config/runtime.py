@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 
 from src.reid import gallery
+from src.reid.config import ReIDConfig
 
 
 DEFAULT_CONFIG_PATH = "configs/pipeline.yaml"
@@ -14,6 +15,7 @@ DEFAULT_CONFIG_PATH = "configs/pipeline.yaml"
 
 def _load_defaults(config_path: str) -> dict:
     """Read pipeline.yaml and turn it into CLI defaults for this app."""
+    _c = ReIDConfig()
     defaults = {
         "sources": ["configs/sources/video_files.txt"],
         "nvinfer_config": "configs/models/nvinfer_yolov11_people.yml",
@@ -40,30 +42,30 @@ def _load_defaults(config_path: str) -> dict:
         "trajectory_sample_interval": 20,
         "trajectory_max_segments": 24,
         # ReID/gallery tuning — mirrors gallery.py module defaults
-        "similarity_threshold":              gallery.SIMILARITY_THRESHOLD,
-        "gallery_max_age":                   gallery.GALLERY_MAX_AGE,
-        "assignment_max_candidates":         gallery.GLOBAL_ASSIGNMENT_MAX_CANDIDATES,
-        "disable_id_stickiness":             not gallery.ENABLE_ID_STICKINESS,
-        "id_switch_margin":                  gallery.ID_SWITCH_MARGIN,
-        "allow_ambiguous_match":             not gallery.ENABLE_AMBIGUOUS_MATCH_REJECTION,
-        "match_ambiguity_margin":            gallery.MATCH_AMBIGUITY_MARGIN,
-        "disable_global_merge":              not gallery.ENABLE_GLOBAL_ID_MERGE,
-        "global_merge_threshold":            gallery.GLOBAL_ID_MERGE_THRESHOLD,
-        "global_merge_min_embeddings":       gallery.GLOBAL_ID_MERGE_MIN_TRACKLET_EMBEDDINGS,
-        "global_merge_margin":              gallery.GLOBAL_ID_MERGE_MARGIN,
-        "global_merge_interval":             gallery.GLOBAL_ID_MERGE_INTERVAL,
-        "global_merge_max_candidates":       gallery.GLOBAL_ID_MERGE_MAX_CANDIDATES,
-        "micro_batch_fusion":                gallery.USE_MICRO_BATCH_FUSION,
-        "fusion_interval":                   gallery.MICRO_BATCH_FUSION_INTERVAL,
-        "fusion_threshold":                  gallery.MICRO_BATCH_FUSION_THRESHOLD,
-        "disable_tracklet":                  not gallery.USE_TRACKLET_EMBEDDING,
-        "tracklet_embedding_interval":       gallery.TRACKLET_EMBEDDING_INTERVAL,
-        "disable_embedding_quality_gate":    not gallery.ENABLE_EMBEDDING_QUALITY_GATE,
-        "tracklet_window":                   gallery.TRACKLET_MAX_EMBEDDINGS,
-        "tracklet_min_embeddings":           gallery.TRACKLET_MIN_EMBEDDINGS_FOR_MATCH,
-        "tracklet_max_age":                  gallery.TRACKLET_MAX_AGE,
-        "geometry_assignment_mode":          gallery.GEO_ASSIGNMENT_MODE,
-        "geometry_reid_margin":              gallery.GEO_REID_MARGIN,
+        "similarity_threshold":              _c.similarity_threshold,
+        "gallery_max_age":                   _c.gallery_max_age,
+        "assignment_max_candidates":         _c.global_assignment_max_candidates,
+        "disable_id_stickiness":             not _c.enable_id_stickiness,
+        "id_switch_margin":                  _c.id_switch_margin,
+        "allow_ambiguous_match":             not _c.enable_ambiguous_match_rejection,
+        "match_ambiguity_margin":            _c.match_ambiguity_margin,
+        "disable_global_merge":              not _c.enable_global_id_merge,
+        "global_merge_threshold":            _c.global_id_merge_threshold,
+        "global_merge_min_embeddings":       _c.global_id_merge_min_tracklet_embeddings,
+        "global_merge_margin":              _c.global_id_merge_margin,
+        "global_merge_interval":             _c.global_id_merge_interval,
+        "global_merge_max_candidates":       _c.global_id_merge_max_candidates,
+        "micro_batch_fusion":                _c.use_micro_batch_fusion,
+        "fusion_interval":                   _c.micro_batch_fusion_interval,
+        "fusion_threshold":                  _c.micro_batch_fusion_threshold,
+        "disable_tracklet":                  not _c.use_tracklet_embedding,
+        "tracklet_embedding_interval":       _c.tracklet_embedding_interval,
+        "disable_embedding_quality_gate":    not _c.enable_embedding_quality_gate,
+        "tracklet_window":                   _c.tracklet_max_embeddings,
+        "tracklet_min_embeddings":           _c.tracklet_min_embeddings_for_match,
+        "tracklet_max_age":                  _c.tracklet_max_age,
+        "geometry_assignment_mode":          _c.geo_assignment_mode,
+        "geometry_reid_margin":              _c.geo_reid_margin,
     }
 
     path = Path(config_path)
