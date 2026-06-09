@@ -139,3 +139,45 @@ class GroundPlaneGeometry:
         u = left + width / 2.0
         v = top + height
         return self.foot_to_world(cam_id, u, v)
+
+    # --- Pose-based foot point (#2, NOT wired into the live pipeline yet) -------
+    # The bbox bottom-centre is a biased foot estimate under occlusion, bbox
+    # jitter, or frame-edge truncation. When ankle keypoints are available
+    # (e.g. from a YOLO11n-pose SGIE — see src/reid/pose.py), the midpoint of the
+    # confident ankles is a far better foot pixel. Falls back to bbox-bottom when
+    # no ankle clears the confidence gate, so it is always at least as good.
+    @staticmethod
+    def foot_pixel(
+        left: float, top: float, width: float, height: float,
+        keypoints: "list[tuple[float, float, float]] | None" = None,
+        conf_thresh: float = 0.3,
+    ) -> tuple[float, float]:
+        """Foot pixel (u, v): mean of confident ankles, else bbox bottom-centre.
+
+        keypoints: COCO-17 [(x, y, conf), ...] in image pixels;
+        ankle indices are 15 (left) and 16 (right).
+        """
+        if keypoints is not None:
+            ankles = [
+                (keypoints[i][0], keypoints[i][1])
+                for i in (15, 16)
+                if i < len(keypoints) and keypoints[i][2] >= conf_thresh
+            ]
+            if ankles:
+                return (
+                    sum(a[0] for a in ankles) / len(ankles),
+                    sum(a[1] for a in ankles) / len(ankles),
+                )
+        return left + width / 2.0, top + height
+
+    def bbox_foot_pose(
+        self,
+        cam_id: int,
+        left: float, top: float,
+        width: float, height: float,
+        keypoints: "list[tuple[float, float, float]] | None" = None,
+        conf_thresh: float = 0.3,
+    ) -> Optional[tuple[float, float]]:
+        """Pose-aware variant of bbox_foot: ankle-based foot pixel → world."""
+        u, v = self.foot_pixel(left, top, width, height, keypoints, conf_thresh)
+        return self.foot_to_world(cam_id, u, v)

@@ -51,10 +51,12 @@ ENVS = {
 }
 
 
-def _split_scenes() -> tuple[list[str], list[str]]:
-    """Last 1 scene per env → val; rest → train."""
+def _split_scenes(envs: list[str] | None = None) -> tuple[list[str], list[str]]:
+    """Last 1 scene per env → val; rest → train. Optionally limit to `envs`."""
     train, val = [], []
-    for scenes in ENVS.values():
+    for env, scenes in ENVS.items():
+        if envs is not None and env not in envs:
+            continue
         val.append(scenes[-1])
         train.extend(scenes[:-1])
     return train, val
@@ -84,17 +86,29 @@ def _filter_box(row, min_h, min_w, min_vis) -> tuple[float,float,float,float] | 
 
 
 def process_scene(scene: str, split: str, short_root: Path, out_root: Path,
-                  sample_rate: int, min_h: int, min_w: int, min_vis: float) -> dict:
+                  sample_rate: int, min_h: int, min_w: int, min_vis: float,
+                  prefer_clean_gt: bool = False) -> dict:
     scene_dir = short_root / scene
     imgs_out  = out_root / "images" / split
     lbls_out  = out_root / "labels" / split
     imgs_out.mkdir(parents=True, exist_ok=True)
     lbls_out.mkdir(parents=True, exist_ok=True)
 
-    stats = {"images": 0, "labels": 0, "skipped_frames": 0}
+    stats = {"images": 0, "labels": 0, "skipped_frames": 0, "clean_cams": 0}
 
     for csv_path in sorted(scene_dir.glob("gt_cam*.csv")):
-        cam_id  = int(csv_path.stem.replace("gt_cam", ""))
+        # Skip _clean / _original variants here; resolve the canonical cam below.
+        stem_tail = csv_path.stem.replace("gt_cam", "")
+        if not stem_tail.isdigit():
+            continue
+        cam_id = int(stem_tail)
+        # Prefer the human-cleaned GT when available (removes phantom / behind-shelf
+        # boxes that teach the detector to fire on product shelves).
+        if prefer_clean_gt:
+            clean_path = scene_dir / f"gt_cam{cam_id}_clean.csv"
+            if clean_path.exists():
+                csv_path = clean_path
+                stats["clean_cams"] += 1
         vid_path = scene_dir / f"cam{cam_id}.mp4"
         if not vid_path.exists():
             print(f"  [WARN] video not found: {vid_path}")
@@ -145,6 +159,13 @@ def main() -> None:
     p.add_argument("--min-height", type=int, default=DEFAULT_MIN_H)
     p.add_argument("--min-width",  type=int, default=DEFAULT_MIN_W)
     p.add_argument("--min-vis",    type=float, default=DEFAULT_MIN_VIS)
+    p.add_argument("--prefer-clean-gt", action="store_true",
+                   help="Use gt_cam<N>_clean.csv when present (retail). Removes "
+                        "phantom / behind-shelf boxes so the detector stops "
+                        "learning to fire on product shelves.")
+    p.add_argument("--envs", nargs="+", default=None,
+                   help="Limit to these environments (e.g. --envs retail). "
+                        "Default: all environments.")
     args = p.parse_args()
 
     short_root = Path(args.short_root)
@@ -154,7 +175,7 @@ def main() -> None:
         print(f"[ERROR] Short root not found: {short_root}")
         sys.exit(1)
 
-    train_scenes, val_scenes = _split_scenes()
+    train_scenes, val_scenes = _split_scenes(args.envs)
     known_scenes = train_scenes + val_scenes
     if not any((short_root / scene).exists() for scene in known_scenes):
         print(f"[ERROR] No known MMPTracking_short scenes found under: {short_root}.")
@@ -174,11 +195,13 @@ def main() -> None:
             st = process_scene(
                 scene, split, short_root, out_root,
                 args.sample_rate, args.min_height, args.min_width, args.min_vis,
+                prefer_clean_gt=args.prefer_clean_gt,
             )
             split_imgs += st["images"]
             split_lbls += st["labels"]
+            clean_note = f", clean GT on {st['clean_cams']} cam(s)" if st.get("clean_cams") else ""
             print(f"    → {st['images']} images, {st['labels']} boxes, "
-                  f"{st['skipped_frames']} frames skipped (no GT)")
+                  f"{st['skipped_frames']} frames skipped (no GT){clean_note}")
         print(f"  [{split}] total: {split_imgs} images, {split_lbls} boxes\n")
         total["images"] += split_imgs
         total["labels"] += split_lbls

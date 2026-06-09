@@ -1,0 +1,41 @@
+# =============================================================================
+# YOLO11n-pose — Secondary GIE scaffold for pose-based foot points (#2)
+# =============================================================================
+# NOT WIRED into any active pipeline preset. This is the prepared-but-inactive
+# config for improvement #2: run a pose model on each tracked person to get ankle
+# keypoints, then feed GroundPlaneGeometry.bbox_foot_pose() a better foot pixel
+# than the bbox bottom-centre (see src/reid/pose.py, src/reid/geometry.py).
+#
+# To activate later you must ALSO provide a YOLO-pose keypoint output parser:
+# the raw output tensor (1x56x... : 4 box + 1 conf + 17*3 keypoints) needs a
+# custom parser to populate keypoint metadata, OR read the raw tensor in a Python
+# probe (output-tensor-meta: 1) and decode the 17 (x,y,conf) triplets there.
+# The Python-probe route is simplest and matches how the ReID SGIE is consumed.
+#
+# Export the ONNX first:  python scripts/export_yolo_pose.py
+# =============================================================================
+
+property:
+  gpu-id: 0
+  gie-unique-id: 3                 # PGIE=1 (detector), tracker ReID, this SGIE=3
+  process-mode: 2                  # 2 = operate on objects from the tracker (SGIE)
+  operate-on-gie-id: 1             # run on the primary detector's person objects
+  operate-on-class-ids: 0          # person class only
+  network-type: 100                # other / raw output (decoded in probe)
+  output-tensor-meta: 1            # expose raw output tensor to the probe
+  network-mode: 2                  # 2 = FP16
+  batch-size: 16                   # crops per batch
+  interval: 0                      # every frame (raise to amortize cost)
+  maintain-aspect-ratio: 1
+  symmetric-padding: 1
+
+  # Preprocessing — YOLO pose: RGB, 0-1 scale, NCHW.
+  model-color-format: 0            # 0 = RGB
+  net-scale-factor: 0.0039215697   # 1/255
+  infer-dims: 3;256;256
+
+  onnx-file: ../../models/pose/yolo11n-pose.onnx
+  model-engine-file: ../../models/pose/yolo11n-pose.onnx_b16_gpu0_fp16.engine
+
+  # No custom bbox parser: keypoints are decoded from the raw tensor in the probe
+  # (output-tensor-meta above), so the standard parser is bypassed.

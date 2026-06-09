@@ -50,6 +50,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--geo-weight", type=float, default=0.25)
     p.add_argument("--geo-sample-step", type=int, default=5)
     p.add_argument("--geo-min-overlaps", type=int, default=8)
+    p.add_argument("--geo-mode", choices=["cooccur", "trajectory"],
+                   default="cooccur",
+                   help="cooccur = per-frame floor co-location (default); "
+                        "trajectory = co-location + velocity consistency + "
+                        "cross-camera hand-off prediction over temporal gaps")
     p.add_argument("--mmp-short-root", default=None)
     p.add_argument("--scene", default=None)
     p.add_argument("--dry-run", action="store_true")
@@ -98,6 +103,7 @@ def main() -> None:
         geo_weight=args.geo_weight,
         geo_min_overlaps=args.geo_min_overlaps,
         geometry_points=geometry_points,
+        geo_mode=args.geo_mode,
     )
 
     # Stream tracklets in the order perception would complete them (by end_frame).

@@ -77,6 +77,7 @@ class MicroBatchFusion:
         geo_weight: float = 0.0,
         geo_min_overlaps: int = 8,
         geometry_points: dict | None = None,
+        geo_mode: str = "cooccur",
     ) -> None:
         self.interval_frames = max(1, interval_frames)
         self.delay_frames = max(0, delay_frames)
@@ -89,6 +90,7 @@ class MicroBatchFusion:
         self.geo_weight = max(0.0, min(1.0, geo_weight))
         self.geo_min_overlaps = max(1, geo_min_overlaps)
         self.geometry_points = geometry_points or {}
+        self.geo_mode = geo_mode
 
         # Rolling perception evidence, keyed by tracklet_id.
         self._tracklets: dict[int, dict] = {}
@@ -167,6 +169,7 @@ class MicroBatchFusion:
             geometry_points=self.geometry_points,
             geo_weight=self.geo_weight,
             geo_min_overlaps=self.geo_min_overlaps,
+            geo_mode=self.geo_mode,
         )
         _, accepted = offline_merge._merge_map(
             gids,
@@ -235,6 +238,7 @@ class MicroBatchFusion:
             geometry_points=self.geometry_points,
             geo_weight=self.geo_weight,
             geo_min_overlaps=self.geo_min_overlaps,
+            geo_mode=self.geo_mode,
         )
         remap, _ = offline_merge._merge_map(
             gids, pairs, intervals, temporal_tolerance=self.temporal_tolerance,

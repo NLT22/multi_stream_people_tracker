@@ -119,7 +119,15 @@ def main() -> None:
     p.add_argument("--patience", type=int, default=10,
                    help="Early stopping: stop after N epochs with no mAP50 improvement "
                         "(default 10). Set 0 to disable.")
+    p.add_argument("--onnx-dest", default=str(ONNX_DEST),
+                   help="Where to copy the exported ONNX (default overwrites the "
+                        "deployed yolo11n_mmp.onnx).")
+    p.add_argument("--cache", default=None, choices=[None, "ram", "disk"],
+                   help="Cache decoded images to avoid re-reading the dataset "
+                        "from disk every epoch. Use 'ram' when the dataset lives "
+                        "on a slow/external drive (removes per-epoch I/O stalls).")
     args = p.parse_args()
+    onnx_dest = Path(args.onnx_dest)
 
     data_path   = Path(args.data).resolve()
     project_dir = Path(args.project).resolve()
@@ -133,7 +141,7 @@ def main() -> None:
     data_path = _resolve_yolo_data_yaml(data_path)
     _fail_if_unwritable(save_dir, "Training output directory")
     _fail_if_unwritable(data_path.parent / "labels", "YOLO labels/cache directory")
-    _fail_if_unwritable(ONNX_DEST.parent.resolve(), "ONNX destination directory")
+    _fail_if_unwritable(onnx_dest.parent.resolve(), "ONNX destination directory")
 
     if args.resume:
         last_ckpt = project_dir / args.name / "weights" / "last.pt"
@@ -159,6 +167,7 @@ def main() -> None:
         exist_ok=True,
         freeze=freeze_arg,
         patience=args.patience,
+        cache=args.cache if args.cache else False,
         verbose=True,
         # Augmentation: conservative for real-world indoor
         hsv_h=0.01, hsv_s=0.4, hsv_v=0.3,
@@ -183,9 +192,9 @@ def main() -> None:
         simplify=True,
     )
     exported_onnx = Path(str(export_path))
-    ONNX_DEST.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(exported_onnx, ONNX_DEST)
-    print(f"[export] Copied to {ONNX_DEST}")
+    onnx_dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(exported_onnx, onnx_dest)
+    print(f"[export] Copied to {onnx_dest}")
     print(HINT)
 
 

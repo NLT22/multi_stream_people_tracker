@@ -249,6 +249,105 @@ def _geometry_pair_score(
     return float(np.median(scores)), len(scores)
 
 
+# --- Ground-plane TRAJECTORY matching -----------------------------------------
+# Beyond instantaneous co-location, compare the whole floor path of two Global
+# IDs. Two signals:
+#   1. Co-visible overlap + VELOCITY consistency — when both IDs are seen at the
+#      same frames (different cameras), require not only that their feet coincide
+#      but that they MOVE the same way. This rejects two different people who
+#      momentarily stand near each other (same spot, different motion).
+#   2. Hand-off prediction — when the two IDs are temporally adjacent (one leaves
+#      a camera, the other appears shortly after), use constant-velocity
+#      prediction on the floor to test whether one is the continuation of the
+#      other. This links the same person across NON-overlapping camera views,
+#      which the per-frame co-location score (which needs shared frames) cannot.
+_GEO_CLOSE_MM = 300.0
+_GEO_FAR_MM = 2000.0
+
+
+def _decay(dist: float) -> float:
+    t = max(0.0, (dist - _GEO_CLOSE_MM) / (_GEO_FAR_MM - _GEO_CLOSE_MM))
+    return float(np.exp(-3.0 * t * t))
+
+
+def _build_gid_trajectories(
+    points: dict[int, dict[int, list[tuple[int, float, float]]]],
+) -> dict[int, list[tuple[int, float, float]]]:
+    """gid -> sorted [(frame, x, y)] using one averaged world position per frame."""
+    traj: dict[int, list[tuple[int, float, float]]] = {}
+    for gid, frames in points.items():
+        seq = []
+        for frame, obs in frames.items():
+            xs = [o[1] for o in obs]
+            ys = [o[2] for o in obs]
+            seq.append((int(frame), float(np.mean(xs)), float(np.mean(ys))))
+        seq.sort(key=lambda r: r[0])
+        traj[gid] = seq
+    return traj
+
+
+def _seq_velocity(seq: list[tuple[int, float, float]], window: int,
+                  at_end: bool) -> tuple[float, float]:
+    if len(seq) < 2:
+        return 0.0, 0.0
+    seg = seq[-window:] if at_end else seq[:window]
+    f0, x0, y0 = seg[0]
+    f1, x1, y1 = seg[-1]
+    df = f1 - f0
+    if df <= 0:
+        return 0.0, 0.0
+    return (x1 - x0) / df, (y1 - y0) / df
+
+
+def _trajectory_pair_score(
+    gid_a: int,
+    gid_b: int,
+    traj: dict[int, list[tuple[int, float, float]]],
+    min_overlaps: int,
+    max_gap: int = 125,
+    vel_window: int = 8,
+) -> float:
+    a = traj.get(gid_a, [])
+    b = traj.get(gid_b, [])
+    if len(a) < 2 or len(b) < 2:
+        return 0.0
+
+    # 1. Co-visible overlap + velocity consistency.
+    b_at = {f: (x, y) for f, x, y in b}
+    co = [
+        _decay(float(np.hypot(x - b_at[f][0], y - b_at[f][1])))
+        for f, x, y in a if f in b_at
+    ]
+    if len(co) >= min_overlaps:
+        co_score = float(np.median(co))
+        va = _seq_velocity(a, vel_window, at_end=True)
+        vb = _seq_velocity(b, vel_window, at_end=True)
+        na = float(np.hypot(*va))
+        nb = float(np.hypot(*vb))
+        if na > 1e-3 and nb > 1e-3:
+            cosv = (va[0] * vb[0] + va[1] * vb[1]) / (na * nb)
+            vel_factor = 0.5 + 0.5 * max(0.0, cosv)   # 0.5 (opposed) .. 1.0 (aligned)
+        else:
+            vel_factor = 1.0                          # near-stationary: don't penalize
+        return co_score * vel_factor
+
+    # 2. Hand-off across a temporal gap (non-overlapping cameras).
+    if a[-1][0] <= b[0][0]:
+        first, second = a, b
+    elif b[-1][0] <= a[0][0]:
+        first, second = b, a
+    else:
+        return 0.0   # overlapping in time but not co-located -> different people
+    gap = second[0][0] - first[-1][0]
+    if gap < 0 or gap > max_gap:
+        return 0.0
+    vx, vy = _seq_velocity(first, vel_window, at_end=True)
+    px = first[-1][1] + vx * gap
+    py = first[-1][2] + vy * gap
+    d = float(np.hypot(px - second[0][1], py - second[0][2]))
+    return _decay(d) * 0.85   # discount a predicted match vs an observed one
+
+
 def _component_conflict(
     root_a: int,
     root_b: int,
@@ -274,6 +373,8 @@ def _candidate_pairs(
     geometry_points: dict[int, dict[int, list[tuple[int, float, float]]]] | None = None,
     geo_weight: float = 0.0,
     geo_min_overlaps: int = 20,
+    geo_mode: str = "cooccur",
+    gid_trajectories: dict[int, list[tuple[int, float, float]]] | None = None,
 ) -> list[tuple[float, int, int]]:
     if len(gids) < 2:
         return []
@@ -281,6 +382,9 @@ def _candidate_pairs(
     sim = vectors @ vectors.T
     np.fill_diagonal(sim, -1.0)
     use_geo = bool(geometry_points) and geo_weight > 0.0
+    use_traj = use_geo and geo_mode == "trajectory"
+    if use_traj and gid_trajectories is None:
+        gid_trajectories = _build_gid_trajectories(geometry_points)
     pairs = {}
     for i, gid in enumerate(gids):
         scores = sim[i].copy()
@@ -292,8 +396,12 @@ def _candidate_pairs(
                     intervals.get(gid, []), intervals.get(other_gid, []), 0
                 ):
                     continue
-                geo_score, _ = _geometry_pair_score(
-                    gid, other_gid, geometry_points, geo_min_overlaps)
+                if use_traj:
+                    geo_score = _trajectory_pair_score(
+                        gid, other_gid, gid_trajectories, geo_min_overlaps)
+                else:
+                    geo_score, _ = _geometry_pair_score(
+                        gid, other_gid, geometry_points, geo_min_overlaps)
                 scores[j] = (1.0 - geo_weight) * scores[j] + geo_weight * geo_score
         order = np.argsort(scores)[::-1]
         top = [
