@@ -15,6 +15,7 @@ import numpy as np
 
 from src.eval import offline_merge as om
 from src.reid.micro_batch_fusion import MicroBatchFusion, _compress_remap
+from src.reid import fusion_bridge
 
 
 def _tracklet(tid, cam, gid, start, end, ndet, nemb):
@@ -131,6 +132,41 @@ def test_recluster_matches_streaming():
     f1.step(100); f1.flush(100)
     f2.recluster()
     assert f1.resolve(2) == f2.resolve(2) == 1
+
+
+# ------------------------------------------------------------- fusion_bridge
+def test_build_records_from_exporter():
+    exp = {(0, 5, 1): {"sum_embedding": [2.0, 0.0], "num_embeddings": 2,
+                       "start_frame": 0, "end_frame": 100, "num_detections": 20}}
+    tid_by_key = {}
+    recs = fusion_bridge.build_records(exp, {}, {}, tid_by_key, 100)
+    assert len(recs) == 1
+    tid, cam, local, gid, start, end, ndet, nemb, emb = recs[0]
+    assert (cam, local, gid, ndet, nemb) == (0, 5, 1, 20, 2)
+    assert abs(float(emb[0]) - 1.0) < 1e-6        # mean [1,0] then L2-normalized
+
+
+def test_build_records_skips_negative_gid():
+    exp = {(0, 5, -1): {"sum_embedding": [1.0], "num_embeddings": 1,
+                        "start_frame": 0, "end_frame": 10, "num_detections": 5}}
+    assert fusion_bridge.build_records(exp, {}, {}, {}, 10) == []
+
+
+def test_build_records_gallery_fallback():
+    gal = {(0, 5): {"tracklet_id": 7, "gid": 3, "fusion_emb_sum": None,
+                    "fusion_emb_count": 0, "start_frame": 0, "end_frame": 50,
+                    "num_detections": 12}}
+    recs = fusion_bridge.build_records(None, gal, {(0, 5): 3}, {}, 50)
+    assert len(recs) == 1 and recs[0][3] == 3 and recs[0][8] is None
+
+
+def test_accumulate_geo_samples():
+    pts = {}
+    rows = [{"gid": 1, "src": 0, "foot_world": (100.0, 200.0)}]
+    fusion_bridge.accumulate_geo(rows, None, 10, 10, pts, 5)   # 10 % 5 == 0 -> kept
+    assert pts[1][10] == [(0, 100.0, 200.0)]
+    fusion_bridge.accumulate_geo(rows, None, 7, 7, pts, 5)     # 7 % 5 != 0 -> skipped
+    assert 7 not in pts.get(1, {})
 
 
 # ----------------------------------------------------------------- run standalone

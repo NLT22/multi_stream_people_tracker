@@ -24,6 +24,9 @@ from src.pipeline.model_utils import (
 from src.reid.visualization import style_object_by_id
 from src.reid.geometry import GroundPlaneGeometry
 from src.reid import quality
+from src.reid import fusion_bridge
+from src.reid.tracklet_store import TrackletStore
+from src.reid.gallery_store import GalleryStore
 from src.reid.config import ReIDConfig
 
 # Tuning constants now live in ReIDConfig (src/reid/config.py).
@@ -91,11 +94,11 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         # here too, so no separate SourceIdCollectorProbe / shared dict is needed.
         self._pretiler = pretiler
         self._extract_embeddings = extract_embeddings
-        self._gallery: dict[int, dict] = {}      # global_id → gallery entry
+        self._gs = GalleryStore(self._cfg)        # owns the Global-ID memory
+        self._gallery = self._gs.gallery          # alias (only mutated, never rebound)
         self._track_to_gid: dict[tuple, int] = {}  # (src, track_id) → global_id
-        self._tracklets: dict[tuple, dict] = {}   # (src, track_id) → state
-        self._next_gid = 1
-        self._next_tracklet_id = 1
+        self._ts = TrackletStore(self._cfg)       # owns the tracklet memory
+        self._tracklets = self._ts.tracklets      # alias (only mutated, never rebound)
         self._frame_count = 0
 
         # Micro-batch cross-camera fusion (opt-in). When enabled, a live
@@ -145,6 +148,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
     def _handle_metadata(self, batch_meta):
         self._frame_count += 1
+        self._gs.frame_count = self._frame_count
         log = self._frame_count % 60 == 0
 
         # Expire stale gallery entries
@@ -228,13 +232,16 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
             self._annotate_embedding_quality(rows)
             for row in rows:
-                tracklet = self._update_tracklet(
+                tracklet = self._ts.update(
                     row["track_key"], row["src"], row["track_id"],
-                    row["raw_embedding"], row["embedding_quality_ok"],
+                    row["raw_embedding"], self._frame_count,
+                    initial_gid=self._track_to_gid.get(row["track_key"]),
+                    use_fusion=self._use_fusion,
+                    quality_ok=row["embedding_quality_ok"],
                     foot_world=row.get("foot_world"))
                 row["tracklet_len"] = len(tracklet["embeddings"])
                 row["update_gallery"] = tracklet.get("sampled_this_frame", False)
-                match_embedding = self._tracklet_embedding(
+                match_embedding = self._ts.tracklet_embedding(
                     tracklet,
                     # Matching is allowed to be softer than memory update:
                     # a border/back-view/overlap crop may still be enough to
@@ -280,7 +287,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                         row.get("gallery_updated") is not True
                         and not row.get("suppress_gallery_update")
                     ):
-                        self._update_gallery(
+                        self._gs._update_gallery(
                             gid,
                             row["raw_embedding"]
                             if row.get("update_gallery") else [],
@@ -378,7 +385,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             print(f"[reid] frame={self._frame_count:06d}  "
                   f"gallery={active}  tracklets={active_tracklets}  "
                   f"active_gids={active}  "
-                  f"total_gids_ever_assigned={self._next_gid - 1}")
+                  f"total_gids_ever_assigned={self._gs._next_gid - 1}")
 
     def _display_gid(self, gid: int | None) -> int | None:
         """Apply the micro-batch fusion remap to a raw gid (no-op when off)."""
@@ -387,115 +394,28 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         return self._fusion_remap.get(gid, gid)
 
     def _accumulate_fusion_geo(self, rows: list[dict], frame_meta) -> None:
-        """Accumulate per-(gid, frame) foot positions for geometry-assisted fusion.
-
-        Mirrors offline_merge._load_geometry_points but built live: keyed by the
-        raw Global ID (same as the exporter), sampled every GEO_SAMPLE_STEP
-        frames. Lets the fusion engine boost true cross-camera duplicates while
-        same-camera look-alikes stay blocked by temporal conflict.
-        """
-        for row in rows:
-            gid = row["gid"]
-            foot = row.get("foot_world")
-            if gid is None or gid < 0 or foot is None:
-                continue
-            src = row["src"]
-            if self._frame_numbers is not None:
-                frame_no = self._frame_numbers.get(src, self._frame_count)
-            else:
-                frame_no = frame_meta.frame_number
-            if frame_no % self._cfg.micro_batch_fusion_geo_sample_step != 0:
-                continue
-            self._fusion_geo_points.setdefault(gid, {}).setdefault(
-                frame_no, []).append((src, float(foot[0]), float(foot[1])))
+        """Accumulate per-(gid, frame) foot positions for geometry-assisted fusion."""
+        fusion_bridge.accumulate_geo(
+            rows, self._frame_numbers, frame_meta.frame_number,
+            self._frame_count, self._fusion_geo_points,
+            self._cfg.micro_batch_fusion_geo_sample_step)
 
     def _run_micro_batch_fusion(self) -> None:
         """One micro-batch pass: cluster tracklet embeddings across cameras.
 
-        Ingests every active tracklet's mean embedding (keyed by its current raw
-        Global ID) into the streaming engine, advances the engine clock to the
-        current frame, and refreshes the raw->stable remap table. This is the
-        in-pipeline equivalent of `src.eval.online_fusion`.
-
-        Evidence source: the exporter's live-accumulating per-(cam, local, gid)
-        tracklet summaries when available — these are the exact same vectors the
-        offline pass clusters (a track that changed Global ID over time is split
-        into clean single-gid segments, which is what lets a cross-camera merge
-        be found). Falls back to the gallery's own end-state tracklets when not
-        exporting (OSD-only live mode).
+        In-pipeline equivalent of `src.eval.online_fusion`. Record-building and
+        the fresh-engine replay live in src/reid/fusion_bridge.py (testable).
         """
-        from src.reid.micro_batch_fusion import MicroBatchFusion
-
-        # Build the tracklet evidence list (one entry per clean single-gid
-        # segment), preferring the exporter's per-(cam, local, gid) summaries —
-        # the exact vectors the offline pass clusters.
-        records: list[tuple] = []  # (tid, cam, local, gid, start, end, ndet, nemb, emb)
         exporter_tracklets = (
             getattr(self._exporter, "_tracklets", None)
             if self._exporter is not None else None
         )
-        if exporter_tracklets:
-            for key, entry in exporter_tracklets.items():
-                cam_id, local_track_id, gid = key
-                if gid < 0:
-                    continue
-                tid = self._fusion_tid_by_key.setdefault(
-                    key, len(self._fusion_tid_by_key))
-                emb_sum = entry.get("sum_embedding")
-                emb_count = entry.get("num_embeddings", 0)
-                mean = None
-                if emb_sum is not None and emb_count > 0:
-                    v = np.asarray(emb_sum, dtype=np.float32) / emb_count
-                    norm = float(np.linalg.norm(v))
-                    if norm > 0.0:
-                        mean = (v / norm).astype(np.float32)
-                records.append((
-                    tid, cam_id, local_track_id, gid,
-                    entry.get("start_frame", 0),
-                    entry.get("end_frame", self._frame_count),
-                    entry.get("num_detections", 0), emb_count, mean,
-                ))
-        else:
-            for (src, tid_key), tracklet in self._tracklets.items():
-                raw_gid = self._track_to_gid.get((src, tid_key), tracklet.get("gid"))
-                if raw_gid is None:
-                    continue
-                emb_sum = tracklet.get("fusion_emb_sum")
-                emb_count = tracklet.get("fusion_emb_count", 0)
-                mean = None
-                if emb_sum is not None and emb_count > 0:
-                    norm = float(np.linalg.norm(emb_sum))
-                    if norm > 0.0:
-                        mean = (emb_sum / norm).astype(np.float32)
-                records.append((
-                    tracklet["tracklet_id"], src, tid_key, raw_gid,
-                    tracklet.get("start_frame", 0),
-                    tracklet.get("end_frame", self._frame_count),
-                    tracklet.get("num_detections", 0), emb_count, mean,
-                ))
-
-        # Replay through a FRESH engine in end_frame order with delayed step()
-        # decisions — identical to the validated `src.eval.online_fusion` path,
-        # which fires sticky merges at the moment evidence completes (before a
-        # later same-camera look-alike can block them). A fresh engine each tick
-        # re-derives the authoritative remap over all evidence-so-far.
-        engine = MicroBatchFusion(
-            interval_frames=self._cfg.micro_batch_fusion_interval,
-            threshold=self._cfg.micro_batch_fusion_threshold,
-            margin=self._cfg.micro_batch_fusion_margin,
-            min_gid_embeddings=self._cfg.micro_batch_fusion_min_gid_embeddings,
-            min_tracklet_detections=self._cfg.micro_batch_fusion_min_tracklet_detections,
-            geo_weight=self._fusion.geo_weight,
-            geo_min_overlaps=self._fusion.geo_min_overlaps,
-            geometry_points=self._fusion_geo_points,
-        )
-        for rec in sorted(records, key=lambda r: r[5]):  # by end_frame
-            tid, cam, local, gid, start, end, ndet, nemb, emb = rec
-            engine.ingest_tracklet(tid, cam, local, gid, start, end, ndet, nemb, emb)
-            engine.step(end)
-        if records:
-            engine.flush(max(r[5] for r in records))
-        self._fusion_remap = engine.final_remap()
+        records = fusion_bridge.build_records(
+            exporter_tracklets, self._tracklets, self._track_to_gid,
+            self._fusion_tid_by_key, self._frame_count)
+        self._fusion_remap = fusion_bridge.run_fusion_pass(
+            records, self._cfg, self._fusion_geo_points,
+            self._fusion.geo_weight, self._fusion.geo_min_overlaps)
         if self._debug_similarity:
             print(f"  [fusion] frame={self._frame_count} "
                   f"tracklets={len(records)} "
@@ -506,7 +426,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                         tracklet_len: int = 0,
                         previous_gid: int | None = None) -> int:
         """Match embedding against gallery; return existing or new global_id."""
-        ranked = self._rank_gallery(embedding)
+        ranked = self._gs._rank_gallery(embedding)
         best_gid = ranked[0][0] if ranked else -1
         best_score = ranked[0][1] if ranked else 0.0
         allowed, block_reason = self._is_gid_match_allowed(
@@ -551,8 +471,8 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             return previous_gid
 
         # New person
-        gid = self._allocate_new_gid()
-        self._gallery[gid] = self._new_gallery_entry()
+        gid = self._gs._allocate_new_gid()
+        self._gallery[gid] = self._gs._new_gallery_entry()
         return gid
 
     def _mark_duplicate_known_conflicts(self, rows: list[dict]) -> None:
@@ -575,8 +495,8 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 active[key] = row
                 continue
 
-            existing_score = self._score_gid(gid, existing["embedding"])
-            row_score = self._score_gid(gid, row["embedding"])
+            existing_score = self._gs._score_gid(gid, existing["embedding"])
+            row_score = self._gs._score_gid(gid, row["embedding"])
 
             if self._prefer_conflict_gallery_update(
                 row, row_score, existing, existing_score
@@ -597,8 +517,8 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     f"  [Re-ID conflict] Cam{suppressed['src']}#{suppressed['track_id']} "
                     f"duplicate_known_gid=G{gid} "
                     f"held_by=Cam{active[key]['src']}#{active[key]['track_id']} "
-                    f"suppressed_gallery_update_score={self._score_gid(gid, suppressed['embedding']):.3f} "
-                    f"held_score={self._score_gid(gid, active[key]['embedding']):.3f}"
+                    f"suppressed_gallery_update_score={self._gs._score_gid(gid, suppressed['embedding']):.3f} "
+                    f"held_score={self._gs._score_gid(gid, active[key]['embedding']):.3f}"
                 )
 
     @staticmethod
@@ -622,7 +542,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                         row["embedding"], row["src"], row["track_id"], log,
                         row["tracklet_len"], row.get("previous_gid"))
                 else:
-                    ranked = self._rank_gallery(row["embedding"])
+                    ranked = self._gs._rank_gallery(row["embedding"])
                     best_gid = ranked[0][0] if ranked else -1
                     allowed, _ = self._is_gid_match_allowed(
                         row["embedding"], best_gid, row.get("previous_gid"),
@@ -633,7 +553,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                         continue
                 # Greedy fallback: once a new track is assigned, later
                 # detections in the same tiled frame can match it.
-                self._update_gallery(
+                self._gs._update_gallery(
                     row["gid"],
                     row["raw_embedding"] if row.get("update_gallery") else [],
                     row["src"],
@@ -676,7 +596,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 # Without this, ranked is recomputed for every (row, gid) pair
                 # → O(rows × gids²) calls to _score_gid instead of O(rows × gids).
                 scores_for_row = {
-                    gid: self._score_gid(gid, row["embedding"])
+                    gid: self._gs._score_gid(gid, row["embedding"])
                     for gid in existing_gids
                 }
                 ranked = sorted(scores_for_row.items(),
@@ -702,7 +622,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 kind, value = columns[col_idx]
                 if kind == "gid":
                     gid = value
-                    score = self._score_gid(gid, row["embedding"])
+                    score = self._gs._score_gid(gid, row["embedding"])
                     row["gid"] = gid
                     occupied.add(gid)
                     status = "MATCH"
@@ -718,7 +638,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                         )
                         if self._debug_similarity:
                             ranked = [
-                                (gid, self._score_gid(gid, row["embedding"]))
+                                (gid, self._gs._score_gid(gid, row["embedding"]))
                                 for gid in existing_gids
                             ]
                             ranked.sort(key=lambda item: item[1], reverse=True)
@@ -736,17 +656,17 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                             )
                         continue
 
-                    gid = self._allocate_new_gid()
-                    self._gallery[gid] = self._new_gallery_entry()
+                    gid = self._gs._allocate_new_gid()
+                    self._gallery[gid] = self._gs._new_gallery_entry()
                     row["gid"] = gid
                     occupied.add(gid)
-                    score = self._score_gid(gid, row["embedding"])
+                    score = self._gs._score_gid(gid, row["embedding"])
                     status = "NEW"
                     reason = "new_slot"
 
                 if self._debug_similarity:
                     ranked = [
-                        (gid, self._score_gid(gid, row["embedding"]))
+                        (gid, self._gs._score_gid(gid, row["embedding"]))
                         for gid in existing_gids
                     ]
                     ranked.sort(key=lambda item: item[1], reverse=True)
@@ -764,7 +684,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
             for row in new_rows:
                 if row["gid"] is not None:
-                    self._update_gallery(
+                    self._gs._update_gallery(
                         row["gid"],
                         row["raw_embedding"] if row.get("update_gallery") else [],
                         row["src"],
@@ -821,7 +741,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
         scores = []
         for target_gid in candidates:
-            reid_score = self._score_gid(target_gid, row["embedding"])
+            reid_score = self._gs._score_gid(target_gid, row["embedding"])
             scores.append((
                 target_gid,
                 self._blend_geo_score(reid_score, row, target_gid),
@@ -859,9 +779,9 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         if source_gid == target_gid or source_gid not in self._gallery:
             return
         if target_gid not in self._gallery:
-            self._gallery[target_gid] = self._new_gallery_entry()
+            self._gallery[target_gid] = self._gs._new_gallery_entry()
 
-        self._merge_gallery_entries(source_gid, target_gid)
+        self._gs._merge_gallery_entries(source_gid, target_gid)
         for track_key, gid in list(self._track_to_gid.items()):
             if gid == source_gid:
                 self._track_to_gid[track_key] = target_gid
@@ -870,23 +790,6 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 tracklet["gid"] = target_gid
         del self._gallery[source_gid]
 
-    def _merge_gallery_entries(self, source_gid: int, target_gid: int) -> None:
-        source = self._gallery.get(source_gid, self._new_gallery_entry())
-        target = self._gallery.setdefault(target_gid, self._new_gallery_entry())
-        target["age"] = min(target.get("age", 0), source.get("age", 0))
-
-        if not self._use_prototypes():
-            source_embedding = source.get("embedding", [])
-            # len() not truthiness: source_embedding may be an np array now.
-            if len(source_embedding) > 0:
-                target["embedding"] = source_embedding
-            return
-
-        target_prototypes = target.setdefault("prototypes", [])
-        target_prototypes.extend(source.get("prototypes", []))
-        target_prototypes.sort(key=lambda p: p.get("last_seen", 0))
-        if len(target_prototypes) > self._cfg.gallery_max_prototypes:
-            del target_prototypes[:-self._cfg.gallery_max_prototypes]
 
     def _local_rect(self, rect_params, src: int, frame_meta) -> dict:
         """Return bbox coordinates in source-local/tile-local space."""
@@ -974,87 +877,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
     def _rect_iou(a: dict, b: dict) -> float:
         return quality.rect_iou(a, b)
 
-    def _update_tracklet(self, track_key: tuple, src: int, track_id: int,
-                         embedding: list[float],
-                         quality_ok: bool = True,
-                         foot_world=None) -> dict:
-        tracklet = self._tracklets.get(track_key)
-        if tracklet is None:
-            tracklet = {
-                "src": src,
-                "track_id": track_id,
-                "embeddings": [],
-                "age": 0,
-                "gid": self._track_to_gid.get(track_key),
-                "last_embedding_frame": -self._cfg.tracklet_embedding_interval,
-                "foot_world": None,
-                # Fields below feed the micro-batch fusion engine. Cheap to keep
-                # even when fusion is off.
-                "tracklet_id": self._next_tracklet_id,
-                "start_frame": self._frame_count,
-                "end_frame": self._frame_count,
-                "num_detections": 0,
-                # Running (uncapped) embedding sum+count for the fusion engine.
-                # The rolling "embeddings" list above is capped for matching
-                # stability; fusion wants the full-tracklet mean like the
-                # offline exporter, so accumulate separately.
-                "fusion_emb_sum": None,
-                "fusion_emb_count": 0,
-            }
-            self._tracklets[track_key] = tracklet
-            self._next_tracklet_id += 1
-        tracklet["age"] = 0
-        tracklet["src"] = src
-        tracklet["track_id"] = track_id
-        tracklet["end_frame"] = self._frame_count
-        tracklet["num_detections"] += 1
-        if foot_world is not None:
-            tracklet["foot_world"] = foot_world
-        should_sample = self._should_sample_tracklet_embedding(tracklet)
-        tracklet["sampled_this_frame"] = bool(embedding and quality_ok and should_sample)
-        if tracklet["sampled_this_frame"]:
-            tracklet["embeddings"].append(embedding)
-            tracklet["last_embedding_frame"] = self._frame_count
-            if len(tracklet["embeddings"]) > self._cfg.tracklet_max_embeddings:
-                del tracklet["embeddings"][:-self._cfg.tracklet_max_embeddings]
-            if self._use_fusion:
-                v = np.asarray(embedding, dtype=np.float32)
-                if tracklet["fusion_emb_sum"] is None:
-                    tracklet["fusion_emb_sum"] = v.copy()
-                else:
-                    tracklet["fusion_emb_sum"] += v
-                tracklet["fusion_emb_count"] += 1
-        return tracklet
 
-    def _should_sample_tracklet_embedding(self, tracklet: dict) -> bool:
-        if len(tracklet["embeddings"]) < self._cfg.tracklet_min_embeddings_for_match:
-            return True
-        interval = max(1, self._cfg.tracklet_embedding_interval)
-        return self._frame_count - tracklet.get("last_embedding_frame", -interval) >= interval
-
-    def _tracklet_embedding(self, tracklet: dict,
-                            fallback: list[float] | None = None) -> list[float]:
-        if not self._cfg.use_tracklet_embedding:
-            return fallback or []
-
-        embeddings = tracklet.get("embeddings", [])
-        if len(embeddings) < self._cfg.tracklet_min_embeddings_for_match:
-            return fallback or []
-        return _mean_embedding(embeddings) or (fallback or [])
-
-    def _rank_gallery(self, embedding: list[float]) -> list[tuple[int, float]]:
-        """Return global IDs ranked by single embedding or prototype similarity."""
-        if not embedding:
-            return []
-
-        scores = []
-        for gid, entry in self._gallery.items():
-            if self._use_prototypes():
-                score = self._best_prototype_score(embedding, entry)
-            else:
-                score = _cosine_similarity(embedding, entry.get("embedding", []))
-            scores.append((gid, score))
-        return sorted(scores, key=lambda item: item[1], reverse=True)
 
     def _is_gid_match_allowed(self, embedding: list[float],
                               candidate_gid: int | None,
@@ -1068,7 +891,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         if candidate_gid not in self._gallery:
             return False, "stale_candidate"
 
-        candidate_score = self._score_gid(candidate_gid, embedding)
+        candidate_score = self._gs._score_gid(candidate_gid, embedding)
         if candidate_score < self._cfg.similarity_threshold:
             return False, "below_threshold"
 
@@ -1078,7 +901,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             and previous_gid in self._gallery
             and candidate_gid != previous_gid
         ):
-            previous_score = self._score_gid(previous_gid, embedding)
+            previous_score = self._gs._score_gid(previous_gid, embedding)
             if candidate_score < previous_score + self._cfg.id_switch_margin:
                 return (
                     False,
@@ -1099,20 +922,6 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
 
         return True, "ok"
 
-    def _allocate_new_gid(self) -> int:
-        while self._next_gid in self._gallery:
-            self._next_gid += 1
-        gid = self._next_gid
-        self._next_gid += 1
-        return gid
-
-    def _score_gid(self, gid: int, embedding: list[float]) -> float:
-        if not embedding or gid not in self._gallery:
-            return 0.0
-        entry = self._gallery[gid]
-        if self._use_prototypes():
-            return self._best_prototype_score(embedding, entry)
-        return _cosine_similarity(embedding, entry.get("embedding", []))
 
     def _blend_geo_score(self, reid_score: float, row: dict,
                          candidate_gid: int) -> float:
@@ -1155,73 +964,7 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 return reid_score
         return self._blend_geo_score(reid_score, row, candidate_gid)
 
-    def _use_prototypes(self) -> bool:
-        return self._cfg.gallery_max_prototypes > 0
 
-    def _new_gallery_entry(self) -> dict:
-        if self._use_prototypes():
-            return {"prototypes": [], "age": 0}
-        return {"embedding": [], "age": 0}
-
-    @staticmethod
-    def _best_prototype_score(embedding, entry: dict,
-                              src: int | None = None) -> float:
-        prototypes = entry.get("prototypes", [])
-        if src is not None:
-            prototypes = [p for p in prototypes if p.get("src") == src]
-        if not prototypes or embedding is None or len(embedding) == 0:
-            return 0.0
-
-        # Vectorized cosine against all prototypes at once: one (k, d) @ (d,)
-        # matmul instead of k separate Python-level cosine calls. Prototype
-        # embeddings are stored as np.float32 by _update_gallery, so stacking
-        # is cheap and matching cost scales with a single BLAS call.
-        q = np.asarray(embedding, dtype=np.float32)
-        q_norm = np.linalg.norm(q)
-        if q_norm == 0.0:
-            return 0.0
-        mat = np.asarray([p["embedding"] for p in prototypes], dtype=np.float32)
-        denom = np.linalg.norm(mat, axis=1) * q_norm
-        sims = np.where(denom > 0.0, (mat @ q) / np.where(denom > 0.0, denom, 1.0), 0.0)
-        best = float(sims.max())
-        return best if math.isfinite(best) else 0.0
-
-    def _update_gallery(self, gid: int, embedding: list[float], src: int) -> None:
-        """Refresh a global identity using single-vector or prototype mode."""
-        entry = self._gallery.setdefault(gid, self._new_gallery_entry())
-        entry["age"] = 0
-        if not embedding:
-            return
-
-        if not self._use_prototypes():
-            # Store as np.float32 so repeated comparisons skip list→array
-            # reconversion. Query embeddings stay lists (sentinel-safe), and
-            # _cosine_similarity accepts either type.
-            entry["embedding"] = np.asarray(embedding, dtype=np.float32)
-            return
-
-        prototypes = entry["prototypes"]
-        same_src_score = self._best_prototype_score(embedding, entry, src=src)
-        all_score = self._best_prototype_score(embedding, entry)
-        has_src = any(p.get("src") == src for p in prototypes)
-        should_add = (
-            not prototypes
-            or not has_src
-            or same_src_score < self._cfg.prototype_add_threshold
-            or all_score < self._cfg.prototype_add_threshold
-        )
-        if not should_add:
-            return
-
-        prototypes.append({
-            "embedding": np.asarray(embedding, dtype=np.float32),
-            "src": src,
-            "last_seen": self._frame_count,
-        })
-        if len(prototypes) > self._cfg.gallery_max_prototypes:
-            # Keep the most recent prototypes so the gallery can adapt without
-            # collapsing to a single latest embedding.
-            del prototypes[:-self._cfg.gallery_max_prototypes]
 
 
 
