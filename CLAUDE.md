@@ -36,7 +36,7 @@ python -m pytest tests/test_geometry.py -v
 python -m pytest tests/test_geometry.py::test_foot_to_world -v
 ```
 
-There are no other automated tests — the main validation workflow is the pipeline eval loop described in COMMANDS.md.
+There are no other automated tests — the main validation workflow is the pipeline eval loop described in `Old materials/COMMANDS.md`.
 
 ## Docker
 
@@ -88,7 +88,7 @@ python -m src.eval.metrics_mmp \
     --pred-dir output/eval/mmp_lobby0_nearline
 ```
 
-See `COMMANDS.md` for full commands including MTA, Wildtrack, sweeps, and benchmarks.
+See `Old materials/COMMANDS.md` for full commands including MTA, Wildtrack, sweeps, and benchmarks.
 
 ## Architecture
 

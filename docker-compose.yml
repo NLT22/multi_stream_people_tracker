@@ -149,7 +149,6 @@ services:
       # immediately inside the container; rebuild only when dependencies change.
       - ./configs:/app/configs
       - ./src:/app/src
-      - ./milestones:/app/milestones
       - ./scripts:/app/scripts
 
       # Models are writable so TensorRT engines persist next to each model.
@@ -172,10 +171,13 @@ services:
       # - ${X11_SOCKET_DIR:-/tmp/.X11-unix}:/tmp/.X11-unix
 
     # Default: run the pipeline on the docker source list (edit video_files_docker.txt first).
-    # Common overrides:
-    #   docker compose run --rm tracker python3 -m src.main --sources dataset/mtmc_4cam/videos --trim-seconds 30 --no-display --save-video
-    #   docker compose run --rm tracker python3 -m src.main --sources dataset/mtmc_12cam/videos --no-tiler --no-display --save-video
-    #   docker compose run --rm tracker python3 milestones/05_multi_stream_tracking.py --sources configs/sources/video_files_docker.txt
+    # Production MMPTracking_short run with live micro-batch cross-camera fusion:
+    #   docker compose run --rm tracker python3 -m src.main \
+    #     --config configs/pipeline_mmp_10cam_quality.yaml \
+    #     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
+    #     --no-display --no-sync --micro-batch-fusion \
+    #     --save-video output/video/lobby_0.mp4 \
+    #     --export-predictions output/eval/lobby_0
     command: python3 -m src.main --sources configs/sources/video_files_docker.txt --no-display --save-video --show-trajectories
 
     network_mode: host

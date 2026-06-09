@@ -139,6 +139,31 @@ GEO_WEIGHT = 0.35
 GEO_ASSIGNMENT_MODE = "weight_only"  # weight_only | close_reid_only
 GEO_REID_MARGIN = 1.0                # only used by close_reid_only
 
+# --- 10. Micro-batch cross-camera fusion (production-correct Global ID) -------
+#   The real-world MTMC architecture (NVIDIA Metropolis MTMC/RTLS, AICity
+#   winners): perception runs per-frame on the GPU; a SEPARATE fusion stage
+#   clusters tracklet embeddings across cameras on a micro-batch cadence (not
+#   per-frame online gallery matching). When enabled, a live MicroBatchFusion
+#   engine runs every FUSION_INTERVAL frames over the gallery's tracklet
+#   evidence and remaps the displayed/exported Global ID. This is the in-pipeline
+#   equivalent of the offline `src.eval.online_fusion` pass (validated to exact
+#   IDF1 parity with nearline_merge). Default off — the gallery's own online
+#   matching is unchanged; fusion is an authoritative cross-camera merge on top.
+USE_MICRO_BATCH_FUSION = False
+MICRO_BATCH_FUSION_INTERVAL = 125          # frames between fusion passes (~5s @25fps)
+MICRO_BATCH_FUSION_THRESHOLD = 0.55
+MICRO_BATCH_FUSION_MARGIN = 0.02
+MICRO_BATCH_FUSION_MIN_GID_EMBEDDINGS = 4
+MICRO_BATCH_FUSION_MIN_TRACKLET_DETECTIONS = 6
+#   Ground-plane geometry is REQUIRED for correct cross-camera merges: two people
+#   who look alike but coexist in one camera must NOT merge (temporal conflict),
+#   while the same person seen from two cameras at the same floor location must.
+#   Appearance alone cannot tell these apart; geometry disambiguates. Only used
+#   when calibration (GroundPlaneGeometry) is available.
+MICRO_BATCH_FUSION_GEO_WEIGHT = 0.25
+MICRO_BATCH_FUSION_GEO_MIN_OVERLAPS = 8
+MICRO_BATCH_FUSION_GEO_SAMPLE_STEP = 5
+
 
 def _cosine_similarity(a, b) -> float:
     """Cosine similarity between two embedding vectors. Returns 0.0–1.0.
@@ -491,7 +516,36 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         self._track_to_gid: dict[tuple, int] = {}  # (src, track_id) → global_id
         self._tracklets: dict[tuple, dict] = {}   # (src, track_id) → state
         self._next_gid = 1
+        self._next_tracklet_id = 1
         self._frame_count = 0
+
+        # Micro-batch cross-camera fusion (opt-in). When enabled, a live
+        # MicroBatchFusion engine periodically clusters tracklet embeddings
+        # across cameras and remaps raw gids -> stable Global IDs at draw/export
+        # time. See module constants above.
+        self._use_fusion = USE_MICRO_BATCH_FUSION
+        self._fusion = None
+        self._fusion_remap: dict[int, int] = {}
+        self._fusion_tid_by_key: dict[tuple, int] = {}  # (cam,local,gid) -> tracklet_id
+        # gid -> frame -> [(cam_id, world_x_mm, world_y_mm)] for geometry scoring,
+        # accumulated live (mirrors offline_merge._load_geometry_points).
+        self._fusion_geo_points: dict[int, dict[int, list]] = {}
+        if self._use_fusion:
+            from src.reid.micro_batch_fusion import MicroBatchFusion
+            geo_on = geometry is not None
+            self._fusion = MicroBatchFusion(
+                interval_frames=MICRO_BATCH_FUSION_INTERVAL,
+                threshold=MICRO_BATCH_FUSION_THRESHOLD,
+                margin=MICRO_BATCH_FUSION_MARGIN,
+                min_gid_embeddings=MICRO_BATCH_FUSION_MIN_GID_EMBEDDINGS,
+                min_tracklet_detections=MICRO_BATCH_FUSION_MIN_TRACKLET_DETECTIONS,
+                geo_weight=MICRO_BATCH_FUSION_GEO_WEIGHT if geo_on else 0.0,
+                geo_min_overlaps=MICRO_BATCH_FUSION_GEO_MIN_OVERLAPS,
+                geometry_points=self._fusion_geo_points,
+            )
+            print(f"[reid] micro-batch fusion ON: interval="
+                  f"{MICRO_BATCH_FUSION_INTERVAL}f thr={MICRO_BATCH_FUSION_THRESHOLD} "
+                  f"geo={'on' if geo_on else 'off'}")
         self._debug_similarity = debug_similarity
         self._use_hungarian_assignment = use_hungarian_assignment
         self._enforce_unique_per_stream = enforce_unique_per_stream
@@ -533,6 +587,15 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
         for key in stale_tracks:
             del self._tracklets[key]
             self._track_to_gid.pop(key, None)
+
+        # Micro-batch cross-camera fusion: run once per batch on the cadence,
+        # over tracklet evidence accumulated so far. Refreshes self._fusion_remap
+        # which is applied to displayed/exported Global IDs below.
+        if (
+            self._use_fusion
+            and self._frame_count % MICRO_BATCH_FUSION_INTERVAL == 0
+        ):
+            self._run_micro_batch_fusion()
 
         for frame_meta in batch_meta.frame_items:
             rows = []
@@ -654,6 +717,9 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             ):
                 self._merge_duplicate_global_ids(rows, log)
 
+            if self._use_fusion and self._geometry is not None:
+                self._accumulate_fusion_geo(rows, frame_meta)
+
             row_by_key = {
                 (row["src"], row["track_id"]): row
                 for row in rows
@@ -672,12 +738,13 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 row = row_by_key.get((src, obj_meta.object_id))
                 if row is None:
                     continue
+                draw_gid = self._display_gid(row["gid"])
                 label = (
-                    f"GID:{row['gid'] if row['gid'] is not None else '?'} "
+                    f"GID:{draw_gid if draw_gid is not None else '?'} "
                     # f"LID:{row['track_id']}"
                 )
                 set_object_label(obj_meta, label)
-                style_object_by_id(obj_meta, row["gid"])
+                style_object_by_id(obj_meta, draw_gid)
 
             if self._exporter is not None:
                 for row in rows:
@@ -689,6 +756,9 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                     fn = (self._frame_numbers.get(src, 0)
                           if self._frame_numbers is not None
                           else frame_meta.frame_number)
+                    # Export the RAW gid; the exporter applies the (delayed)
+                    # fusion remap at flush time so early frames still get
+                    # cross-camera merge correction within the delay window.
                     self._exporter.record(
                         frame_no=fn,
                         cam_id=src,
@@ -712,6 +782,11 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                 self._trajectory_visualizer.update_and_draw(
                     batch_meta, frame_meta, rows, self._frame_count)
 
+        # Flush exporter rows older than the delay window, applying the latest
+        # fusion remap. Once per batch (after all per-source frames handled).
+        if self._exporter is not None:
+            self._exporter.tick(self._frame_count, self._fusion_remap)
+
         # Age gallery once per batch
         for v in self._gallery.values():
             v["age"] += 1
@@ -725,6 +800,127 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                   f"gallery={active}  tracklets={active_tracklets}  "
                   f"active_gids={active}  "
                   f"total_gids_ever_assigned={self._next_gid - 1}")
+
+    def _display_gid(self, gid: int | None) -> int | None:
+        """Apply the micro-batch fusion remap to a raw gid (no-op when off)."""
+        if gid is None or not self._use_fusion:
+            return gid
+        return self._fusion_remap.get(gid, gid)
+
+    def _accumulate_fusion_geo(self, rows: list[dict], frame_meta) -> None:
+        """Accumulate per-(gid, frame) foot positions for geometry-assisted fusion.
+
+        Mirrors offline_merge._load_geometry_points but built live: keyed by the
+        raw Global ID (same as the exporter), sampled every GEO_SAMPLE_STEP
+        frames. Lets the fusion engine boost true cross-camera duplicates while
+        same-camera look-alikes stay blocked by temporal conflict.
+        """
+        for row in rows:
+            gid = row["gid"]
+            foot = row.get("foot_world")
+            if gid is None or gid < 0 or foot is None:
+                continue
+            src = row["src"]
+            if self._frame_numbers is not None:
+                frame_no = self._frame_numbers.get(src, self._frame_count)
+            else:
+                frame_no = frame_meta.frame_number
+            if frame_no % MICRO_BATCH_FUSION_GEO_SAMPLE_STEP != 0:
+                continue
+            self._fusion_geo_points.setdefault(gid, {}).setdefault(
+                frame_no, []).append((src, float(foot[0]), float(foot[1])))
+
+    def _run_micro_batch_fusion(self) -> None:
+        """One micro-batch pass: cluster tracklet embeddings across cameras.
+
+        Ingests every active tracklet's mean embedding (keyed by its current raw
+        Global ID) into the streaming engine, advances the engine clock to the
+        current frame, and refreshes the raw->stable remap table. This is the
+        in-pipeline equivalent of `src.eval.online_fusion`.
+
+        Evidence source: the exporter's live-accumulating per-(cam, local, gid)
+        tracklet summaries when available — these are the exact same vectors the
+        offline pass clusters (a track that changed Global ID over time is split
+        into clean single-gid segments, which is what lets a cross-camera merge
+        be found). Falls back to the gallery's own end-state tracklets when not
+        exporting (OSD-only live mode).
+        """
+        from src.reid.micro_batch_fusion import MicroBatchFusion
+
+        # Build the tracklet evidence list (one entry per clean single-gid
+        # segment), preferring the exporter's per-(cam, local, gid) summaries —
+        # the exact vectors the offline pass clusters.
+        records: list[tuple] = []  # (tid, cam, local, gid, start, end, ndet, nemb, emb)
+        exporter_tracklets = (
+            getattr(self._exporter, "_tracklets", None)
+            if self._exporter is not None else None
+        )
+        if exporter_tracklets:
+            for key, entry in exporter_tracklets.items():
+                cam_id, local_track_id, gid = key
+                if gid < 0:
+                    continue
+                tid = self._fusion_tid_by_key.setdefault(
+                    key, len(self._fusion_tid_by_key))
+                emb_sum = entry.get("sum_embedding")
+                emb_count = entry.get("num_embeddings", 0)
+                mean = None
+                if emb_sum is not None and emb_count > 0:
+                    v = np.asarray(emb_sum, dtype=np.float32) / emb_count
+                    norm = float(np.linalg.norm(v))
+                    if norm > 0.0:
+                        mean = (v / norm).astype(np.float32)
+                records.append((
+                    tid, cam_id, local_track_id, gid,
+                    entry.get("start_frame", 0),
+                    entry.get("end_frame", self._frame_count),
+                    entry.get("num_detections", 0), emb_count, mean,
+                ))
+        else:
+            for (src, tid_key), tracklet in self._tracklets.items():
+                raw_gid = self._track_to_gid.get((src, tid_key), tracklet.get("gid"))
+                if raw_gid is None:
+                    continue
+                emb_sum = tracklet.get("fusion_emb_sum")
+                emb_count = tracklet.get("fusion_emb_count", 0)
+                mean = None
+                if emb_sum is not None and emb_count > 0:
+                    norm = float(np.linalg.norm(emb_sum))
+                    if norm > 0.0:
+                        mean = (emb_sum / norm).astype(np.float32)
+                records.append((
+                    tracklet["tracklet_id"], src, tid_key, raw_gid,
+                    tracklet.get("start_frame", 0),
+                    tracklet.get("end_frame", self._frame_count),
+                    tracklet.get("num_detections", 0), emb_count, mean,
+                ))
+
+        # Replay through a FRESH engine in end_frame order with delayed step()
+        # decisions — identical to the validated `src.eval.online_fusion` path,
+        # which fires sticky merges at the moment evidence completes (before a
+        # later same-camera look-alike can block them). A fresh engine each tick
+        # re-derives the authoritative remap over all evidence-so-far.
+        engine = MicroBatchFusion(
+            interval_frames=MICRO_BATCH_FUSION_INTERVAL,
+            threshold=MICRO_BATCH_FUSION_THRESHOLD,
+            margin=MICRO_BATCH_FUSION_MARGIN,
+            min_gid_embeddings=MICRO_BATCH_FUSION_MIN_GID_EMBEDDINGS,
+            min_tracklet_detections=MICRO_BATCH_FUSION_MIN_TRACKLET_DETECTIONS,
+            geo_weight=self._fusion.geo_weight,
+            geo_min_overlaps=self._fusion.geo_min_overlaps,
+            geometry_points=self._fusion_geo_points,
+        )
+        for rec in sorted(records, key=lambda r: r[5]):  # by end_frame
+            tid, cam, local, gid, start, end, ndet, nemb, emb = rec
+            engine.ingest_tracklet(tid, cam, local, gid, start, end, ndet, nemb, emb)
+            engine.step(end)
+        if records:
+            engine.flush(max(r[5] for r in records))
+        self._fusion_remap = engine.final_remap()
+        if self._debug_similarity:
+            print(f"  [fusion] frame={self._frame_count} "
+                  f"tracklets={len(records)} "
+                  f"merges={len(self._fusion_remap)} remap={self._fusion_remap}")
 
     def _find_or_create(self, embedding: list[float], src: int,
                         track_id: int, log: bool,
@@ -1248,18 +1444,36 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
                          embedding: list[float],
                          quality_ok: bool = True,
                          foot_world=None) -> dict:
-        tracklet = self._tracklets.setdefault(track_key, {
-            "src": src,
-            "track_id": track_id,
-            "embeddings": [],
-            "age": 0,
-            "gid": self._track_to_gid.get(track_key),
-            "last_embedding_frame": -TRACKLET_EMBEDDING_INTERVAL,
-            "foot_world": None,
-        })
+        tracklet = self._tracklets.get(track_key)
+        if tracklet is None:
+            tracklet = {
+                "src": src,
+                "track_id": track_id,
+                "embeddings": [],
+                "age": 0,
+                "gid": self._track_to_gid.get(track_key),
+                "last_embedding_frame": -TRACKLET_EMBEDDING_INTERVAL,
+                "foot_world": None,
+                # Fields below feed the micro-batch fusion engine. Cheap to keep
+                # even when fusion is off.
+                "tracklet_id": self._next_tracklet_id,
+                "start_frame": self._frame_count,
+                "end_frame": self._frame_count,
+                "num_detections": 0,
+                # Running (uncapped) embedding sum+count for the fusion engine.
+                # The rolling "embeddings" list above is capped for matching
+                # stability; fusion wants the full-tracklet mean like the
+                # offline exporter, so accumulate separately.
+                "fusion_emb_sum": None,
+                "fusion_emb_count": 0,
+            }
+            self._tracklets[track_key] = tracklet
+            self._next_tracklet_id += 1
         tracklet["age"] = 0
         tracklet["src"] = src
         tracklet["track_id"] = track_id
+        tracklet["end_frame"] = self._frame_count
+        tracklet["num_detections"] += 1
         if foot_world is not None:
             tracklet["foot_world"] = foot_world
         should_sample = self._should_sample_tracklet_embedding(tracklet)
@@ -1269,6 +1483,13 @@ class CrossCameraGalleryProbe(psm.BatchMetadataOperator):
             tracklet["last_embedding_frame"] = self._frame_count
             if len(tracklet["embeddings"]) > TRACKLET_MAX_EMBEDDINGS:
                 del tracklet["embeddings"][:-TRACKLET_MAX_EMBEDDINGS]
+            if self._use_fusion:
+                v = np.asarray(embedding, dtype=np.float32)
+                if tracklet["fusion_emb_sum"] is None:
+                    tracklet["fusion_emb_sum"] = v.copy()
+                else:
+                    tracklet["fusion_emb_sum"] += v
+                tracklet["fusion_emb_count"] += 1
         return tracklet
 
     def _should_sample_tracklet_embedding(self, tracklet: dict) -> bool:
@@ -1488,6 +1709,8 @@ def configure_from_args(args) -> None:
     global TRACKLET_MIN_EMBEDDINGS_FOR_MATCH, TRACKLET_MAX_AGE
     global TRACKLET_EMBEDDING_INTERVAL, ENABLE_EMBEDDING_QUALITY_GATE
     global GEO_WEIGHT, GEO_ASSIGNMENT_MODE, GEO_REID_MARGIN
+    global USE_MICRO_BATCH_FUSION, MICRO_BATCH_FUSION_INTERVAL
+    global MICRO_BATCH_FUSION_THRESHOLD
 
     SIMILARITY_THRESHOLD = max(0.0, args.similarity_threshold)
     GALLERY_MAX_AGE = max(1, args.gallery_max_age)
@@ -1518,6 +1741,13 @@ def configure_from_args(args) -> None:
     _margin = getattr(args, "geometry_reid_margin", None)
     if _margin is not None:
         GEO_REID_MARGIN = max(0.0, float(_margin))
+    USE_MICRO_BATCH_FUSION = bool(getattr(args, "micro_batch_fusion", False))
+    _fi = getattr(args, "fusion_interval", None)
+    if _fi is not None:
+        MICRO_BATCH_FUSION_INTERVAL = max(1, int(_fi))
+    _ft = getattr(args, "fusion_threshold", None)
+    if _ft is not None:
+        MICRO_BATCH_FUSION_THRESHOLD = max(0.0, float(_ft))
 
 
 def config_summary() -> str:
@@ -1547,4 +1777,7 @@ def config_summary() -> str:
         (f"[reid] geo_weight={GEO_WEIGHT} "
          f"assignment_mode={GEO_ASSIGNMENT_MODE} "
          f"reid_margin={GEO_REID_MARGIN}"),
+        (f"[reid] micro_batch_fusion={USE_MICRO_BATCH_FUSION} "
+         f"interval={MICRO_BATCH_FUSION_INTERVAL} "
+         f"threshold={MICRO_BATCH_FUSION_THRESHOLD}"),
     ])

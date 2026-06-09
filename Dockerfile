@@ -22,7 +22,6 @@ RUN PSMAKER_WHL="$(find /opt/nvidia/deepstream -path '*/service-maker/python/pys
 # TensorRT engines built in the container persist next to their source model.
 COPY configs/       configs/
 COPY src/           src/
-COPY milestones/    milestones/
 COPY models/        models/
 COPY scripts/       scripts/
 

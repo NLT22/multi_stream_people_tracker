@@ -121,6 +121,9 @@ def _load_defaults(config_path: str) -> dict:
         "global_merge_margin":              gallery.GLOBAL_ID_MERGE_MARGIN,
         "global_merge_interval":             gallery.GLOBAL_ID_MERGE_INTERVAL,
         "global_merge_max_candidates":       gallery.GLOBAL_ID_MERGE_MAX_CANDIDATES,
+        "micro_batch_fusion":                gallery.USE_MICRO_BATCH_FUSION,
+        "fusion_interval":                   gallery.MICRO_BATCH_FUSION_INTERVAL,
+        "fusion_threshold":                  gallery.MICRO_BATCH_FUSION_THRESHOLD,
         "disable_tracklet":                  not gallery.USE_TRACKLET_EMBEDDING,
         "tracklet_embedding_interval":       gallery.TRACKLET_EMBEDDING_INTERVAL,
         "disable_embedding_quality_gate":    not gallery.ENABLE_EMBEDDING_QUALITY_GATE,
@@ -208,9 +211,13 @@ def _load_defaults(config_path: str) -> dict:
         ("tracklet_max_age",               "tracklet_max_age"),
         ("geometry_assignment_mode",       "geometry_assignment_mode"),
         ("geometry_reid_margin",           "geometry_reid_margin"),
+        ("fusion_interval",                "fusion_interval"),
+        ("fusion_threshold",               "fusion_threshold"),
     ]:
         if yaml_key in reid:
             defaults[key] = reid[yaml_key]
+    if "micro_batch_fusion" in reid:
+        defaults["micro_batch_fusion"] = bool(reid["micro_batch_fusion"])
     # Boolean toggles stored as positive flags in YAML for readability
     if "id_stickiness" in reid:
         defaults["disable_id_stickiness"] = not reid["id_stickiness"]
@@ -321,8 +328,20 @@ def run(sources: list[str], nvinfer_config: str, tracker_config: str,
     id_map: dict[int, int] = {}
     embeddings: dict[tuple, list] = {}  # (source_id, object_id) → embedding vector
 
+    # With micro-batch fusion on, the export represents the CONVERGED
+    # authoritative Global IDs: rows are buffered and the final cross-camera
+    # remap is applied at close (analytics-export semantics — the same result a
+    # post-pass would produce). The live OSD still shows near-realtime
+    # provisional IDs. delay_frames is set effectively unbounded so a merge
+    # decided late still corrects all of a track's earlier frames.
+    #   NOTE: buffers all rows in memory until close — fine for evaluation
+    #   clips; for very long / 20-cam production streams prefer the bounded
+    #   `src.eval.online_fusion` post-pass instead.
+    export_delay_frames = (
+        10 ** 9 if gallery.USE_MICRO_BATCH_FUSION else 0
+    )
     exporter = (
-        PredictionExporter(export_predictions)
+        PredictionExporter(export_predictions, delay_frames=export_delay_frames)
         if export_predictions and not disable_gallery else None
     )
 
@@ -668,6 +687,21 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--global-merge-max-candidates", type=int,
                         default=defaults["global_merge_max_candidates"],
                         help="Limit older Global IDs scanned per merge candidate")
+    parser.add_argument("--micro-batch-fusion", action="store_true",
+                        default=defaults["micro_batch_fusion"],
+                        help="Enable live micro-batch cross-camera fusion: a "
+                             "MicroBatchFusion engine clusters tracklet embeddings "
+                             "across cameras every --fusion-interval frames and "
+                             "remaps displayed/exported Global IDs. This is the "
+                             "production MTMC architecture (decoupled perception + "
+                             "delayed fusion), replacing per-frame online merge.")
+    parser.add_argument("--fusion-interval", type=int,
+                        default=defaults["fusion_interval"],
+                        help="Frames between micro-batch fusion passes "
+                             "(125 = 5s at 25 FPS)")
+    parser.add_argument("--fusion-threshold", type=float,
+                        default=defaults["fusion_threshold"],
+                        help="Cosine similarity gate for cross-camera fusion merges")
     parser.add_argument("--disable-tracklet", action="store_true",
                         default=defaults["disable_tracklet"],
                         help="Use only current-frame embeddings, without local "
