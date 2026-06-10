@@ -302,63 +302,9 @@ class CrossCameraGalleryProbe(
             if self._use_fusion and self._geometry is not None:
                 self._accumulate_fusion_geo(rows, frame_meta)
 
-            row_by_key = {
-                (row.src, row.track_id): row
-                for row in rows
-            }
-            for obj_meta in frame_meta.object_items:
-                if obj_meta.class_id != self._person_class_id:
-                    continue
-                if self._pretiler:
-                    src = frame_meta.source_id
-                else:
-                    src = self._id_map.get(obj_meta.object_id)
-                    if src is None:
-                        src = infer_source_id_from_tiled_box(
-                            obj_meta.rect_params, self._tile_w, self._tile_h,
-                            self._cols, self._num_sources)
-                row = row_by_key.get((src, obj_meta.object_id))
-                if row is None:
-                    continue
-                draw_gid = self._display_gid(row.gid)
-                label = (
-                    f"GID:{draw_gid if draw_gid is not None else '?'} "
-                    # f"LID:{row['track_id']}"
-                )
-                set_object_label(obj_meta, label)
-                style_object_by_id(obj_meta, draw_gid)
-
+            self._draw_labels(frame_meta, rows)
             if self._exporter is not None:
-                for row in rows:
-                    rect = row.rect
-                    src = row.src
-                    # In post-tiler mode frame_meta.frame_number is the batch
-                    # counter (same for all sources). Use the per-source frame
-                    # number collected by SourceIdCollectorProbe pre-tiler.
-                    fn = (self._frame_numbers.get(src, 0)
-                          if self._frame_numbers is not None
-                          else frame_meta.frame_number)
-                    # Export the RAW gid; the exporter applies the (delayed)
-                    # fusion remap at flush time so early frames still get
-                    # cross-camera merge correction within the delay window.
-                    self._exporter.record(
-                        frame_no=fn,
-                        cam_id=src,
-                        local_track_id=row.track_id,
-                        global_id=row.gid,
-                        left=rect["left"],
-                        top=rect["top"],
-                        width=rect["width"],
-                        height=rect["height"],
-                        embedding=(
-                            row.raw_embedding
-                            if (
-                                row.get("update_gallery")
-                                and not row.get("suppress_gallery_update")
-                            )
-                            else None
-                        ),
-                    )
+                self._export_rows(frame_meta, rows)
 
             if self._trajectory_visualizer is not None:
                 self._trajectory_visualizer.update_and_draw(
@@ -382,6 +328,56 @@ class CrossCameraGalleryProbe(
                   f"gallery={active}  tracklets={active_tracklets}  "
                   f"active_gids={active}  "
                   f"total_gids_ever_assigned={self._gs._next_gid - 1}")
+
+    def _draw_labels(self, frame_meta, rows: list[DetectionRow]) -> None:
+        """Write the Global-ID label + style onto each person's OSD box."""
+        row_by_key = {(row.src, row.track_id): row for row in rows}
+        for obj_meta in frame_meta.object_items:
+            if obj_meta.class_id != self._person_class_id:
+                continue
+            if self._pretiler:
+                src = frame_meta.source_id
+            else:
+                src = self._id_map.get(obj_meta.object_id)
+                if src is None:
+                    src = infer_source_id_from_tiled_box(
+                        obj_meta.rect_params, self._tile_w, self._tile_h,
+                        self._cols, self._num_sources)
+            row = row_by_key.get((src, obj_meta.object_id))
+            if row is None:
+                continue
+            draw_gid = self._display_gid(row.gid)
+            label = f"GID:{draw_gid if draw_gid is not None else '?'} "
+            set_object_label(obj_meta, label)
+            style_object_by_id(obj_meta, draw_gid)
+
+    def _export_rows(self, frame_meta, rows: list[DetectionRow]) -> None:
+        """Record each row to the prediction exporter (RAW gid; fusion remap is
+        applied at flush time so late merges still correct earlier frames)."""
+        for row in rows:
+            rect = row.rect
+            # Post-tiler frame_meta.frame_number is the batch counter (shared by
+            # all sources); use the per-source frame number from the pre-tiler
+            # SourceIdCollectorProbe when available.
+            fn = (self._frame_numbers.get(row.src, 0)
+                  if self._frame_numbers is not None
+                  else frame_meta.frame_number)
+            self._exporter.record(
+                frame_no=fn,
+                cam_id=row.src,
+                local_track_id=row.track_id,
+                global_id=row.gid,
+                left=rect["left"],
+                top=rect["top"],
+                width=rect["width"],
+                height=rect["height"],
+                embedding=(
+                    row.raw_embedding
+                    if (row.get("update_gallery")
+                        and not row.get("suppress_gallery_update"))
+                    else None
+                ),
+            )
 
     def _display_gid(self, gid: int | None) -> int | None:
         """Apply the micro-batch fusion remap to a raw gid (no-op when off)."""
