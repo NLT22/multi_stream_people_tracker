@@ -10,7 +10,7 @@ from src.reid import gallery
 from src.reid.config import ReIDConfig
 
 
-DEFAULT_CONFIG_PATH = "configs/pipeline.yaml"
+DEFAULT_CONFIG_PATH = "configs/pipelines/pipeline.yaml"
 
 
 def _load_defaults(config_path: str) -> dict:

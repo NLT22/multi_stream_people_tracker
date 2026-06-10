@@ -20,7 +20,7 @@ echo "Retrained-ReID (all non-retail) IDF1, $(date)" > $RES
 for SC in lobby_0 lobby_3 cafe_shop_0 cafe_shop_3 industry_safety_0 industry_safety_4 office_0 office_2; do
   ED=output/eval/rt_$SC; rm -rf $ED ${ED}_nl
   python -u -m src.main \
-    --config configs/pipeline_mmp_nvdcf_realtime_baseline.yaml \
+    --config configs/pipelines/pipeline_mmp_nvdcf_realtime_baseline.yaml \
     --mmp-short-dataset dataset/MMPTracking_short:$SC --no-display --no-sync \
     --tracker-config configs/tracker/nvdcf_accuracy_mmp_recall_all.yaml \
     --export-predictions $ED > /dev/null 2>&1

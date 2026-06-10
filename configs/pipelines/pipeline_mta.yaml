@@ -2,7 +2,7 @@
 # Pipeline preset — MTA dataset (MTA_ext_short, 6 cameras, 41fps, GTA V)
 #
 # Usage:
-#   python -m src.main --config configs/pipeline_mta.yaml \
+#   python -m src.main --config configs/pipelines/pipeline_mta.yaml \
 #       --mta-dataset dataset/mta/MTA_ext_short/test \
 #       [--export-predictions output/eval/mta_run1] \
 #       [--no-sync]

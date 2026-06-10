@@ -2,7 +2,7 @@
 Pipeline configuration loader.
 
 WHY THIS EXISTS:
-  All milestones and the main pipeline read from configs/pipeline.yaml.
+  All milestones and the main pipeline read from configs/pipelines/pipeline.yaml.
   This module parses that YAML into a typed PipelineConfig dataclass so
   the rest of the code gets IDE autocompletion and clear field names
   instead of raw dict["key"] access everywhere.

@@ -3,7 +3,7 @@
 # Tuned for the indoor 4-camera synthetic MTMC scenario.
 #
 # Usage:
-#   python -m src.main --config configs/pipeline_mtmc4cam.yaml \
+#   python -m src.main --config configs/pipelines/pipeline_mtmc4cam.yaml \
 #       --sources dataset/mtmc_4cam/videos
 # =============================================================================
 

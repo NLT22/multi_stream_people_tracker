@@ -20,7 +20,7 @@ python -m src.main
 
 # Run with MMP dataset scene
 python -m src.main \
-    --config configs/pipeline_mmp.yaml \
+    --config configs/pipelines/pipeline_mmp.yaml \
     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
     --no-display --no-sync \
     --export-predictions output/eval/mmp_lobby0
@@ -47,7 +47,7 @@ docker compose build tracker
 # Run pipeline scene
 docker compose run --rm tracker \
     python3 -m src.main \
-        --config configs/pipeline_mmp.yaml \
+        --config configs/pipelines/pipeline_mmp.yaml \
         --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
         --no-display --no-sync \
         --export-predictions output/eval/mmp_lobby0
@@ -72,7 +72,7 @@ The typical workflow for one scene:
 
 ```bash
 # 1. Export predictions
-python -m src.main --config configs/pipeline_mmp_nvdcf_realtime_baseline.yaml \
+python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_realtime_baseline.yaml \
     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
     --no-display --no-sync --export-predictions output/eval/mmp_lobby0
 
@@ -133,11 +133,11 @@ See `Old materials/COMMANDS.md` for full commands including MTA, Wildtrack, swee
 
 | File | Dataset | Notes |
 |------|---------|-------|
-| `configs/pipeline.yaml` | mtmc_4cam | default |
-| `configs/pipeline_mta.yaml` | MTA 6-cam | NvDeepSORT Swin-MTA |
-| `configs/pipeline_mmp.yaml` | MMPTracking_short | MMP fine-tuned detector + Swin ReID |
-| `configs/pipeline_mmp_nvdcf_realtime_baseline.yaml` | MMPTracking_short | NvDCF realtime, no online merge |
-| `configs/pipeline_mmp_nvdcf_online.yaml` | MMPTracking_short | NvDCF + online global merge |
+| `configs/pipelines/pipeline.yaml` | mtmc_4cam | default |
+| `configs/pipelines/pipeline_mta.yaml` | MTA 6-cam | NvDeepSORT Swin-MTA |
+| `configs/pipelines/pipeline_mmp.yaml` | MMPTracking_short | MMP fine-tuned detector + Swin ReID |
+| `configs/pipelines/pipeline_mmp_nvdcf_realtime_baseline.yaml` | MMPTracking_short | NvDCF realtime, no online merge |
+| `configs/pipelines/pipeline_mmp_nvdcf_online.yaml` | MMPTracking_short | NvDCF + online global merge |
 
 ### Metadata Iteration
 

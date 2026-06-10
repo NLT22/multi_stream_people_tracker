@@ -5,7 +5,7 @@ Thin orchestration only:
   - src/config/runtime.py  : defaults from YAML + gallery tuning
   - src/pipeline/runner.py : pipeline assembly + run()
 
-  python -m src.main --config configs/pipeline_mmp_10cam_quality.yaml \
+  python -m src.main --config configs/pipelines/pipeline_mmp_10cam_quality.yaml \
       --mmp-short-dataset dataset/MMPTracking_short:lobby_0 --no-display"""
 
 from src.reid import gallery

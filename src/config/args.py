@@ -14,7 +14,7 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                     "auto engine/config per batch)")
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH,
                         help="Pipeline YAML used for default values. CLI flags "
-                             "override it. Default: configs/pipeline.yaml")
+                             "override it. Default: configs/pipelines/pipeline.yaml")
     parser.add_argument(
         "--sources", nargs="+", default=defaults["sources"],
         help="One .txt list file, OR one folder of videos, OR one/more "

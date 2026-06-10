@@ -2,7 +2,7 @@
 # MMPTracking_short Preset — YOLO MMP + Swin-Tiny ReID MMP
 # =============================================================================
 # Use with:
-#   python -m src.main --config configs/pipeline_mmp.yaml \
+#   python -m src.main --config configs/pipelines/pipeline_mmp.yaml \
 #     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
 #     --no-display --no-sync --export-predictions output/eval/mmp_lobby0
 # =============================================================================

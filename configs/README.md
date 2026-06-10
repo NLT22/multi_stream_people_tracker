@@ -1,6 +1,6 @@
 # Config reference
 
-Presets (`configs/pipeline_*.yaml`) pick a detector (`configs/models/*.yml`),
+Presets (`configs/pipelines/pipeline_*.yaml`) pick a detector (`configs/models/*.yml`),
 a tracker (`configs/tracker/*.yaml`), sources, and ReID/gallery tuning. CLI flags
 override any value. Paths inside an nvinfer/tracker YAML are **relative to that
 file's directory**, not the shell CWD.

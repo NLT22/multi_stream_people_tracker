@@ -40,7 +40,7 @@ Python 3.12, TensorRT 10.14.
 ```bash
 docker compose build tracker
 docker compose run --rm tracker python3 -m src.main \
-    --config configs/pipeline_mmp_10cam_quality.yaml \
+    --config configs/pipelines/pipeline_mmp_10cam_quality.yaml \
     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
     --no-display --no-sync --micro-batch-fusion \
     --save-video output/video/lobby_0.mp4 \
@@ -58,7 +58,7 @@ The first run builds TensorRT `.engine` files (1–3 min); they persist under
 source venv/bin/activate
 
 python -m src.main \
-    --config configs/pipeline_mmp_10cam_quality.yaml \
+    --config configs/pipelines/pipeline_mmp_10cam_quality.yaml \
     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
     --no-display --no-sync \
     --micro-batch-fusion \

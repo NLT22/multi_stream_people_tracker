@@ -7,7 +7,7 @@ ONNX files used by the DeepStream pipeline. `.engine` files are **not** committe
 through the config chain:
 
 ```
-configs/pipeline_mmp_nvdcf_realtime_baseline.yaml   (and ..._online.yaml)
+configs/pipelines/pipeline_mmp_nvdcf_realtime_baseline.yaml   (and ..._online.yaml)
   detector ->  configs/models/nvinfer_yolov11_mmp.yml      ->  yolo11n_mmp.onnx
   reid     ->  configs/tracker/nvdcf_accuracy_mmp_recall.yaml ->  swin_tiny_mmp_reid_all.onnx
 ```

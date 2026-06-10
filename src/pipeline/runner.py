@@ -26,7 +26,7 @@ from src.reid.visualization import TrajectoryVisualizer
 from src.utils.platform_utils import get_sink_element
 
 
-DEFAULT_CONFIG_PATH = "configs/pipeline.yaml"
+DEFAULT_CONFIG_PATH = "configs/pipelines/pipeline.yaml"
 
 
 def run(config: PipelineRunConfig):

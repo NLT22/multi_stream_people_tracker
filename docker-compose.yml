@@ -173,7 +173,7 @@ services:
     # Default: run the pipeline on the docker source list (edit video_files_docker.txt first).
     # Production MMPTracking_short run with live micro-batch cross-camera fusion:
     #   docker compose run --rm tracker python3 -m src.main \
-    #     --config configs/pipeline_mmp_10cam_quality.yaml \
+    #     --config configs/pipelines/pipeline_mmp_10cam_quality.yaml \
     #     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
     #     --no-display --no-sync --micro-batch-fusion \
     #     --save-video output/video/lobby_0.mp4 \
