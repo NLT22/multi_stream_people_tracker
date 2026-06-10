@@ -229,14 +229,14 @@ class CrossCameraGalleryProbe(
             self._annotate_embedding_quality(rows)
             for row in rows:
                 tracklet = self._ts.update(
-                    row["track_key"], row["src"], row["track_id"],
-                    row["raw_embedding"], self._frame_count,
-                    initial_gid=self._track_to_gid.get(row["track_key"]),
+                    row.track_key, row.src, row.track_id,
+                    row.raw_embedding, self._frame_count,
+                    initial_gid=self._track_to_gid.get(row.track_key),
                     use_fusion=self._use_fusion,
-                    quality_ok=row["embedding_quality_ok"],
+                    quality_ok=row.embedding_quality_ok,
                     foot_world=row.get("foot_world"))
-                row["tracklet_len"] = len(tracklet["embeddings"])
-                row["update_gallery"] = tracklet.get("sampled_this_frame", False)
+                row.tracklet_len = len(tracklet["embeddings"])
+                row.update_gallery = tracklet.get("sampled_this_frame", False)
                 match_embedding = self._ts.tracklet_embedding(
                     tracklet,
                     # Matching is allowed to be softer than memory update:
@@ -244,25 +244,25 @@ class CrossCameraGalleryProbe(
                     # match an existing cross-camera GID, but it must not be
                     # stored into the long-term gallery unless it passes the
                     # stricter quality gate.
-                    fallback=row["raw_embedding"],
+                    fallback=row.raw_embedding,
                 )
-                previous_gid = self._track_to_gid.get(row["track_key"])
+                previous_gid = self._track_to_gid.get(row.track_key)
                 if previous_gid is None:
                     previous_gid = tracklet.get("gid")
                 if previous_gid not in self._gallery:
                     previous_gid = None
-                row["previous_gid"] = previous_gid
-                row["gid"] = previous_gid
-                row["had_previous_gid"] = previous_gid is not None
-                row["embedding"] = match_embedding
-                row["allow_new_gid"] = row["embedding_quality_ok"]
-                row["identity_conflict"] = False
-                row["suppress_gallery_update"] = False
-                row["release_previous_gid"] = False
+                row.previous_gid = previous_gid
+                row.gid = previous_gid
+                row.had_previous_gid = previous_gid is not None
+                row.embedding = match_embedding
+                row.allow_new_gid = row.embedding_quality_ok
+                row.identity_conflict = False
+                row.suppress_gallery_update = False
+                row.release_previous_gid = False
                 # Known tracks keep their GID through low-quality frames, but
                 # low-quality new tracks may only match existing IDs. They wait
                 # for a cleaner crop before creating a brand-new Global ID.
-                row["defer_assignment"] = (
+                row.defer_assignment = (
                     previous_gid is None
                     and (not match_embedding)
                 )
@@ -275,23 +275,23 @@ class CrossCameraGalleryProbe(
                 self._assign_new_tracks_greedy(rows, log)
 
             for row in rows:
-                gid = row["gid"]
+                gid = row.gid
                 if gid is not None:
-                    self._track_to_gid[row["track_key"]] = gid
-                    self._tracklets[row["track_key"]]["gid"] = gid
+                    self._track_to_gid[row.track_key] = gid
+                    self._tracklets[row.track_key]["gid"] = gid
                     if (
                         row.get("gallery_updated") is not True
                         and not row.get("suppress_gallery_update")
                     ):
                         self._gs.update(
                             gid,
-                            row["raw_embedding"]
+                            row.raw_embedding
                             if row.get("update_gallery") else [],
-                            row["src"],
+                            row.src,
                         )
                 elif row.get("release_previous_gid"):
-                    self._track_to_gid.pop(row["track_key"], None)
-                    self._tracklets[row["track_key"]]["gid"] = None
+                    self._track_to_gid.pop(row.track_key, None)
+                    self._tracklets[row.track_key]["gid"] = None
 
             if (
                 self._cfg.enable_global_id_merge
@@ -303,7 +303,7 @@ class CrossCameraGalleryProbe(
                 self._accumulate_fusion_geo(rows, frame_meta)
 
             row_by_key = {
-                (row["src"], row["track_id"]): row
+                (row.src, row.track_id): row
                 for row in rows
             }
             for obj_meta in frame_meta.object_items:
@@ -320,7 +320,7 @@ class CrossCameraGalleryProbe(
                 row = row_by_key.get((src, obj_meta.object_id))
                 if row is None:
                     continue
-                draw_gid = self._display_gid(row["gid"])
+                draw_gid = self._display_gid(row.gid)
                 label = (
                     f"GID:{draw_gid if draw_gid is not None else '?'} "
                     # f"LID:{row['track_id']}"
@@ -330,8 +330,8 @@ class CrossCameraGalleryProbe(
 
             if self._exporter is not None:
                 for row in rows:
-                    rect = row["rect"]
-                    src = row["src"]
+                    rect = row.rect
+                    src = row.src
                     # In post-tiler mode frame_meta.frame_number is the batch
                     # counter (same for all sources). Use the per-source frame
                     # number collected by SourceIdCollectorProbe pre-tiler.
@@ -344,14 +344,14 @@ class CrossCameraGalleryProbe(
                     self._exporter.record(
                         frame_no=fn,
                         cam_id=src,
-                        local_track_id=row["track_id"],
-                        global_id=row["gid"],
+                        local_track_id=row.track_id,
+                        global_id=row.gid,
                         left=rect["left"],
                         top=rect["top"],
                         width=rect["width"],
                         height=rect["height"],
                         embedding=(
-                            row["raw_embedding"]
+                            row.raw_embedding
                             if (
                                 row.get("update_gallery")
                                 and not row.get("suppress_gallery_update")

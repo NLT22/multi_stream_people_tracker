@@ -75,8 +75,8 @@ class GalleryRowsMixin:
     def _annotate_embedding_quality(self, rows: list[dict]) -> None:
         for row in rows:
             ok, reason = self._embedding_quality(row, rows)
-            row["embedding_quality_ok"] = ok
-            row["embedding_quality_reason"] = reason
+            row.embedding_quality_ok = ok
+            row.embedding_quality_reason = reason
 
     def _embedding_quality(self, row: dict,
                            rows: list[dict]) -> tuple[bool, str]:

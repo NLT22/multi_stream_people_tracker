@@ -67,29 +67,29 @@ class GalleryAssignmentMixin:
 
     def _assign_new_tracks_greedy(self, rows: list[dict], log: bool) -> None:
         for row in rows:
-            if row["gid"] is None and not row.get("defer_assignment"):
+            if row.gid is None and not row.get("defer_assignment"):
                 if row.get("allow_new_gid"):
-                    row["gid"] = self._find_or_create(
-                        row["embedding"], row["src"], row["track_id"], log,
-                        row["tracklet_len"], row.get("previous_gid"))
+                    row.gid = self._find_or_create(
+                        row.embedding, row.src, row.track_id, log,
+                        row.tracklet_len, row.get("previous_gid"))
                 else:
-                    ranked = self._gs.rank(row["embedding"])
+                    ranked = self._gs.rank(row.embedding)
                     best_gid = ranked[0][0] if ranked else -1
                     allowed, _ = self._is_gid_match_allowed(
-                        row["embedding"], best_gid, row.get("previous_gid"),
+                        row.embedding, best_gid, row.get("previous_gid"),
                         ranked)
                     if allowed:
-                        row["gid"] = best_gid
+                        row.gid = best_gid
                     else:
                         continue
                 # Greedy fallback: once a new track is assigned, later
                 # detections in the same tiled frame can match it.
                 self._gs.update(
-                    row["gid"],
-                    row["raw_embedding"] if row.get("update_gallery") else [],
-                    row["src"],
+                    row.gid,
+                    row.raw_embedding if row.get("update_gallery") else [],
+                    row.src,
                 )
-                row["gallery_updated"] = True
+                row.gallery_updated = True
 
     def _assign_new_tracks_with_hungarian(self, rows: list[dict],
                                           log: bool) -> None:
@@ -105,12 +105,12 @@ class GalleryAssignmentMixin:
         rows_by_src: dict[int, list[dict]] = {}
         occupied_by_src: dict[int, set[int]] = {}
         for row in rows:
-            src = row["src"]
-            if row["gid"] is None and not row.get("defer_assignment"):
+            src = row.src
+            if row.gid is None and not row.get("defer_assignment"):
                 rows_by_src.setdefault(src, []).append(row)
             else:
-                if row["gid"] is not None:
-                    occupied_by_src.setdefault(src, set()).add(row["gid"])
+                if row.gid is not None:
+                    occupied_by_src.setdefault(src, set()).add(row.gid)
 
         for src, new_rows in rows_by_src.items():
             occupied = occupied_by_src.setdefault(src, set())
@@ -127,7 +127,7 @@ class GalleryAssignmentMixin:
                 # Without this, ranked is recomputed for every (row, gid) pair
                 # → O(rows × gids²) calls to score instead of O(rows × gids).
                 scores_for_row = {
-                    gid: self._gs.score(gid, row["embedding"])
+                    gid: self._gs.score(gid, row.embedding)
                     for gid in existing_gids
                 }
                 ranked = sorted(scores_for_row.items(),
@@ -140,7 +140,7 @@ class GalleryAssignmentMixin:
                         assignment_score = self._assignment_score(
                             reid_score, best_reid_score, row, value)
                         allowed, _ = self._is_gid_match_allowed(
-                            row["embedding"], value, row.get("previous_gid"),
+                            row.embedding, value, row.get("previous_gid"),
                             ranked)
                         row_weights.append(assignment_score if allowed else -1.0)
                     else:
@@ -153,14 +153,14 @@ class GalleryAssignmentMixin:
                 kind, value = columns[col_idx]
                 if kind == "gid":
                     gid = value
-                    score = self._gs.score(gid, row["embedding"])
-                    row["gid"] = gid
+                    score = self._gs.score(gid, row.embedding)
+                    row.gid = gid
                     occupied.add(gid)
                     status = "MATCH"
                     reason = "hungarian"
                 else:
                     if not row.get("allow_new_gid"):
-                        row["gid"] = None
+                        row.gid = None
                         score = 0.0
                         status = "DEFER"
                         reason = row.get(
@@ -169,7 +169,7 @@ class GalleryAssignmentMixin:
                         )
                         if self._debug_similarity:
                             ranked = [
-                                (gid, self._gs.score(gid, row["embedding"]))
+                                (gid, self._gs.score(gid, row.embedding))
                                 for gid in existing_gids
                             ]
                             ranked.sort(key=lambda item: item[1], reverse=True)
@@ -189,15 +189,15 @@ class GalleryAssignmentMixin:
 
                     gid = self._gs.allocate_gid()
                     self._gallery[gid] = self._gs.new_entry()
-                    row["gid"] = gid
+                    row.gid = gid
                     occupied.add(gid)
-                    score = self._gs.score(gid, row["embedding"])
+                    score = self._gs.score(gid, row.embedding)
                     status = "NEW"
                     reason = "new_slot"
 
                 if self._debug_similarity:
                     ranked = [
-                        (gid, self._gs.score(gid, row["embedding"]))
+                        (gid, self._gs.score(gid, row.embedding))
                         for gid in existing_gids
                     ]
                     ranked.sort(key=lambda item: item[1], reverse=True)
@@ -214,13 +214,13 @@ class GalleryAssignmentMixin:
                     )
 
             for row in new_rows:
-                if row["gid"] is not None:
+                if row.gid is not None:
                     self._gs.update(
-                        row["gid"],
-                        row["raw_embedding"] if row.get("update_gallery") else [],
-                        row["src"],
+                        row.gid,
+                        row.raw_embedding if row.get("update_gallery") else [],
+                        row.src,
                     )
-                    row["gallery_updated"] = True
+                    row.gallery_updated = True
 
     def _is_gid_match_allowed(self, embedding: list[float],
                               candidate_gid: int | None,
@@ -287,7 +287,7 @@ class GalleryAssignmentMixin:
         for (t_src, _t_id), t_gid in self._track_to_gid.items():
             if t_gid != candidate_gid:
                 continue
-            if t_src == row["src"]:
+            if t_src == row.src:
                 continue   # same camera — skip
             foot_t = self._tracklets.get((t_src, _t_id), {}).get("foot_world")
             g = GroundPlaneGeometry.geo_score(foot_q, foot_t)

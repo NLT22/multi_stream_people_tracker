@@ -13,17 +13,17 @@ class GalleryMergeMixin:
         """Merge stable duplicate Global IDs created by difficult cross views."""
         active_by_src: dict[int, set[int]] = {}
         for row in rows:
-            active_by_src.setdefault(row["src"], set()).add(row["gid"])
+            active_by_src.setdefault(row.src, set()).add(row.gid)
 
         for row in rows:
-            source_gid = row["gid"]
+            source_gid = row.gid
             if source_gid is None or source_gid not in self._gallery:
                 continue
             if self._gallery[source_gid].get("age", 0) > 1:
                 continue
-            if row["tracklet_len"] < self._cfg.global_id_merge_min_tracklet_embeddings:
+            if row.tracklet_len < self._cfg.global_id_merge_min_tracklet_embeddings:
                 continue
-            if not row["embedding"]:
+            if not row.embedding:
                 continue
 
             candidate = self._best_merge_candidate(
@@ -34,11 +34,11 @@ class GalleryMergeMixin:
             target_gid, score, runner_up = candidate
             self._merge_gid(source_gid, target_gid)
             for update_row in rows:
-                if update_row["gid"] == source_gid:
-                    update_row["gid"] = target_gid
-                    update_row["previous_gid"] = target_gid
-                    self._track_to_gid[update_row["track_key"]] = target_gid
-                    self._tracklets[update_row["track_key"]]["gid"] = target_gid
+                if update_row.gid == source_gid:
+                    update_row.gid = target_gid
+                    update_row.previous_gid = target_gid
+                    self._track_to_gid[update_row.track_key] = target_gid
+                    self._tracklets[update_row.track_key]["gid"] = target_gid
 
             if self._debug_similarity or log:
                 print(
@@ -52,14 +52,14 @@ class GalleryMergeMixin:
                               active_by_src: dict[int, set[int]]
                               ) -> tuple[int, float, float] | None:
         candidates = self._candidate_gids(
-            exclude=active_by_src.get(row["src"], set()),
+            exclude=active_by_src.get(row.src, set()),
             max_count=self._cfg.global_id_merge_max_candidates,
             only_older_than=source_gid,
         )
 
         scores = []
         for target_gid in candidates:
-            reid_score = self._gs.score(target_gid, row["embedding"])
+            reid_score = self._gs.score(target_gid, row.embedding)
             scores.append((
                 target_gid,
                 self._blend_geo_score(reid_score, row, target_gid),

@@ -19,18 +19,18 @@ class GalleryConflictMixin:
         """
         active: dict[tuple[int, int], dict] = {}
         for row in rows:
-            gid = row["gid"]
+            gid = row.gid
             if gid is None:
                 continue
 
-            key = (row["src"], gid)
+            key = (row.src, gid)
             existing = active.get(key)
             if existing is None:
                 active[key] = row
                 continue
 
-            existing_score = self._gs.score(gid, existing["embedding"])
-            row_score = self._gs.score(gid, row["embedding"])
+            existing_score = self._gs.score(gid, existing.embedding)
+            row_score = self._gs.score(gid, row.embedding)
 
             if self._prefer_conflict_gallery_update(
                 row, row_score, existing, existing_score
@@ -40,12 +40,12 @@ class GalleryConflictMixin:
             else:
                 suppressed = row
 
-            active[key]["identity_conflict"] = True
-            suppressed["identity_conflict"] = True
-            suppressed["suppress_gallery_update"] = True
-            suppressed["release_previous_gid"] = True
-            suppressed["previous_gid"] = gid
-            suppressed["gid"] = None
+            active[key].identity_conflict = True
+            suppressed.identity_conflict = True
+            suppressed.suppress_gallery_update = True
+            suppressed.release_previous_gid = True
+            suppressed.previous_gid = gid
+            suppressed.gid = None
             if self._debug_similarity:
                 print(
                     f"  [Re-ID conflict] Cam{suppressed['src']}#{suppressed['track_id']} "
