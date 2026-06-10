@@ -29,8 +29,8 @@ class GalleryConflictMixin:
                 active[key] = row
                 continue
 
-            existing_score = self._gs._score_gid(gid, existing["embedding"])
-            row_score = self._gs._score_gid(gid, row["embedding"])
+            existing_score = self._gs.score(gid, existing["embedding"])
+            row_score = self._gs.score(gid, row["embedding"])
 
             if self._prefer_conflict_gallery_update(
                 row, row_score, existing, existing_score
@@ -51,8 +51,8 @@ class GalleryConflictMixin:
                     f"  [Re-ID conflict] Cam{suppressed['src']}#{suppressed['track_id']} "
                     f"duplicate_known_gid=G{gid} "
                     f"held_by=Cam{active[key]['src']}#{active[key]['track_id']} "
-                    f"suppressed_gallery_update_score={self._gs._score_gid(gid, suppressed['embedding']):.3f} "
-                    f"held_score={self._gs._score_gid(gid, active[key]['embedding']):.3f}"
+                    f"suppressed_gallery_update_score={self._gs.score(gid, suppressed['embedding']):.3f} "
+                    f"held_score={self._gs.score(gid, active[key]['embedding']):.3f}"
                 )
 
     @staticmethod

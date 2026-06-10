@@ -161,24 +161,14 @@ class CrossCameraGalleryProbe(
         self._gs.frame_count = self._frame_count
         log = self._frame_count % 60 == 0
 
-        # Expire stale gallery entries
-        stale = [gid for gid, v in self._gallery.items()
-                 if v["age"] > self._cfg.gallery_max_age]
-        for gid in stale:
-            del self._gallery[gid]
-            # Also clean stale track mappings pointing to this gid
+        # Expire stale gallery entries + tracklets (store-owned mutation). The
+        # probe owns track_to_gid, so it clears references to the expired gids
+        # and deleted tracklet keys the stores report back.
+        expired_gids = self._gs.expire(self._cfg.gallery_max_age)
+        for gid in expired_gids:
             self._track_to_gid = {k: v for k, v in self._track_to_gid.items()
-                                   if v != gid}
-            for tracklet in self._tracklets.values():
-                if tracklet.get("gid") == gid:
-                    tracklet["gid"] = None
-
-        stale_tracks = [
-            key for key, tracklet in self._tracklets.items()
-            if tracklet["age"] > self._cfg.tracklet_max_age
-        ]
-        for key in stale_tracks:
-            del self._tracklets[key]
+                                  if v != gid}
+        for key in self._ts.expire(self._cfg.tracklet_max_age, expired_gids):
             self._track_to_gid.pop(key, None)
 
         # Micro-batch cross-camera fusion: run once per batch on the cadence,
@@ -293,7 +283,7 @@ class CrossCameraGalleryProbe(
                         row.get("gallery_updated") is not True
                         and not row.get("suppress_gallery_update")
                     ):
-                        self._gs._update_gallery(
+                        self._gs.update(
                             gid,
                             row["raw_embedding"]
                             if row.get("update_gallery") else [],

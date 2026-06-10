@@ -26,7 +26,7 @@ class GalleryStore:
     def _use_prototypes(self) -> bool:
         return self._cfg.gallery_max_prototypes > 0
 
-    def _new_gallery_entry(self) -> dict:
+    def new_entry(self) -> dict:
         if self._use_prototypes():
             return {"prototypes": [], "age": 0}
         return {"embedding": [], "age": 0}
@@ -51,7 +51,7 @@ class GalleryStore:
         return best if math.isfinite(best) else 0.0
 
     # ------------------------------------------------------------- scoring
-    def _rank_gallery(self, embedding: list[float]) -> list[tuple[int, float]]:
+    def rank(self, embedding: list[float]) -> list[tuple[int, float]]:
         """Global IDs ranked by single-embedding or prototype similarity."""
         if not embedding:
             return []
@@ -64,7 +64,7 @@ class GalleryStore:
             scores.append((gid, score))
         return sorted(scores, key=lambda item: item[1], reverse=True)
 
-    def _score_gid(self, gid: int, embedding: list[float]) -> float:
+    def score(self, gid: int, embedding: list[float]) -> float:
         if not embedding or gid not in self.gallery:
             return 0.0
         entry = self.gallery[gid]
@@ -73,16 +73,16 @@ class GalleryStore:
         return _cosine_similarity(embedding, entry.get("embedding", []))
 
     # ------------------------------------------------------------- mutation
-    def _allocate_new_gid(self) -> int:
+    def allocate_gid(self) -> int:
         while self._next_gid in self.gallery:
             self._next_gid += 1
         gid = self._next_gid
         self._next_gid += 1
         return gid
 
-    def _merge_gallery_entries(self, source_gid: int, target_gid: int) -> None:
-        source = self.gallery.get(source_gid, self._new_gallery_entry())
-        target = self.gallery.setdefault(target_gid, self._new_gallery_entry())
+    def merge(self, source_gid: int, target_gid: int) -> None:
+        source = self.gallery.get(source_gid, self.new_entry())
+        target = self.gallery.setdefault(target_gid, self.new_entry())
         target["age"] = min(target.get("age", 0), source.get("age", 0))
 
         if not self._use_prototypes():
@@ -97,9 +97,9 @@ class GalleryStore:
         if len(target_prototypes) > self._cfg.gallery_max_prototypes:
             del target_prototypes[:-self._cfg.gallery_max_prototypes]
 
-    def _update_gallery(self, gid: int, embedding: list[float], src: int) -> None:
+    def update(self, gid: int, embedding: list[float], src: int) -> None:
         """Refresh a Global ID using single-vector or prototype mode."""
-        entry = self.gallery.setdefault(gid, self._new_gallery_entry())
+        entry = self.gallery.setdefault(gid, self.new_entry())
         entry["age"] = 0
         if not embedding:
             return
@@ -128,3 +128,16 @@ class GalleryStore:
         })
         if len(prototypes) > self._cfg.gallery_max_prototypes:
             del prototypes[:-self._cfg.gallery_max_prototypes]
+
+    # ------------------------------------------------------------- expiry
+    def expire(self, max_age: int) -> list[int]:
+        """Delete gallery entries older than max_age; return the removed gids.
+
+        The caller (probe) owns track_to_gid and clears its references to the
+        returned gids — this method only mutates the gallery dict it owns.
+        """
+        stale = [gid for gid, entry in self.gallery.items()
+                 if entry["age"] > max_age]
+        for gid in stale:
+            del self.gallery[gid]
+        return stale

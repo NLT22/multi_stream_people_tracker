@@ -84,3 +84,19 @@ class TrackletStore:
         if len(embeddings) < self._cfg.tracklet_min_embeddings_for_match:
             return fallback or []
         return _mean_embedding(embeddings) or (fallback or [])
+
+    def expire(self, max_age: int, expired_gids) -> list:
+        """Clear gids pointing to expired gallery entries, then delete tracklets
+        older than max_age. Returns the deleted tracklet keys so the probe can
+        drop them from track_to_gid.
+        """
+        expired = set(expired_gids)
+        if expired:
+            for tracklet in self.tracklets.values():
+                if tracklet.get("gid") in expired:
+                    tracklet["gid"] = None
+        stale_keys = [key for key, tracklet in self.tracklets.items()
+                      if tracklet["age"] > max_age]
+        for key in stale_keys:
+            del self.tracklets[key]
+        return stale_keys

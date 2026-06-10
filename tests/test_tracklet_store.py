@@ -64,6 +64,16 @@ def test_tracklet_embedding_mean_when_enough():
     assert abs(m[0] - 1.0) < 1e-6                           # normalized mean of [2,0]
 
 
+def test_expire_clears_expired_gid_and_deletes_old():
+    s = _store()
+    old = s.update((0, 5), 0, 5, [1.0], frame_count=0, initial_gid=9)
+    old["age"] = 10                                  # older than max_age
+    s.update((0, 6), 0, 6, [1.0], frame_count=0, initial_gid=9)  # young, gid 9
+    deleted = s.expire(max_age=5, expired_gids=[9])
+    assert deleted == [(0, 5)]                        # old one deleted
+    assert s.tracklets[(0, 6)]["gid"] is None         # young one: gid cleared
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

@@ -16,7 +16,7 @@ class GalleryAssignmentMixin:
                         tracklet_len: int = 0,
                         previous_gid: int | None = None) -> int:
         """Match embedding against gallery; return existing or new global_id."""
-        ranked = self._gs._rank_gallery(embedding)
+        ranked = self._gs.rank(embedding)
         best_gid = ranked[0][0] if ranked else -1
         best_score = ranked[0][1] if ranked else 0.0
         allowed, block_reason = self._is_gid_match_allowed(
@@ -61,8 +61,8 @@ class GalleryAssignmentMixin:
             return previous_gid
 
         # New person
-        gid = self._gs._allocate_new_gid()
-        self._gallery[gid] = self._gs._new_gallery_entry()
+        gid = self._gs.allocate_gid()
+        self._gallery[gid] = self._gs.new_entry()
         return gid
 
     def _assign_new_tracks_greedy(self, rows: list[dict], log: bool) -> None:
@@ -73,7 +73,7 @@ class GalleryAssignmentMixin:
                         row["embedding"], row["src"], row["track_id"], log,
                         row["tracklet_len"], row.get("previous_gid"))
                 else:
-                    ranked = self._gs._rank_gallery(row["embedding"])
+                    ranked = self._gs.rank(row["embedding"])
                     best_gid = ranked[0][0] if ranked else -1
                     allowed, _ = self._is_gid_match_allowed(
                         row["embedding"], best_gid, row.get("previous_gid"),
@@ -84,7 +84,7 @@ class GalleryAssignmentMixin:
                         continue
                 # Greedy fallback: once a new track is assigned, later
                 # detections in the same tiled frame can match it.
-                self._gs._update_gallery(
+                self._gs.update(
                     row["gid"],
                     row["raw_embedding"] if row.get("update_gallery") else [],
                     row["src"],
@@ -125,9 +125,9 @@ class GalleryAssignmentMixin:
             for row in new_rows:
                 # Pre-compute scores and ranked list once per row (not per cell).
                 # Without this, ranked is recomputed for every (row, gid) pair
-                # → O(rows × gids²) calls to _score_gid instead of O(rows × gids).
+                # → O(rows × gids²) calls to score instead of O(rows × gids).
                 scores_for_row = {
-                    gid: self._gs._score_gid(gid, row["embedding"])
+                    gid: self._gs.score(gid, row["embedding"])
                     for gid in existing_gids
                 }
                 ranked = sorted(scores_for_row.items(),
@@ -153,7 +153,7 @@ class GalleryAssignmentMixin:
                 kind, value = columns[col_idx]
                 if kind == "gid":
                     gid = value
-                    score = self._gs._score_gid(gid, row["embedding"])
+                    score = self._gs.score(gid, row["embedding"])
                     row["gid"] = gid
                     occupied.add(gid)
                     status = "MATCH"
@@ -169,7 +169,7 @@ class GalleryAssignmentMixin:
                         )
                         if self._debug_similarity:
                             ranked = [
-                                (gid, self._gs._score_gid(gid, row["embedding"]))
+                                (gid, self._gs.score(gid, row["embedding"]))
                                 for gid in existing_gids
                             ]
                             ranked.sort(key=lambda item: item[1], reverse=True)
@@ -187,17 +187,17 @@ class GalleryAssignmentMixin:
                             )
                         continue
 
-                    gid = self._gs._allocate_new_gid()
-                    self._gallery[gid] = self._gs._new_gallery_entry()
+                    gid = self._gs.allocate_gid()
+                    self._gallery[gid] = self._gs.new_entry()
                     row["gid"] = gid
                     occupied.add(gid)
-                    score = self._gs._score_gid(gid, row["embedding"])
+                    score = self._gs.score(gid, row["embedding"])
                     status = "NEW"
                     reason = "new_slot"
 
                 if self._debug_similarity:
                     ranked = [
-                        (gid, self._gs._score_gid(gid, row["embedding"]))
+                        (gid, self._gs.score(gid, row["embedding"]))
                         for gid in existing_gids
                     ]
                     ranked.sort(key=lambda item: item[1], reverse=True)
@@ -215,7 +215,7 @@ class GalleryAssignmentMixin:
 
             for row in new_rows:
                 if row["gid"] is not None:
-                    self._gs._update_gallery(
+                    self._gs.update(
                         row["gid"],
                         row["raw_embedding"] if row.get("update_gallery") else [],
                         row["src"],
@@ -234,7 +234,7 @@ class GalleryAssignmentMixin:
         if candidate_gid not in self._gallery:
             return False, "stale_candidate"
 
-        candidate_score = self._gs._score_gid(candidate_gid, embedding)
+        candidate_score = self._gs.score(candidate_gid, embedding)
         if candidate_score < self._cfg.similarity_threshold:
             return False, "below_threshold"
 
@@ -244,7 +244,7 @@ class GalleryAssignmentMixin:
             and previous_gid in self._gallery
             and candidate_gid != previous_gid
         ):
-            previous_score = self._gs._score_gid(previous_gid, embedding)
+            previous_score = self._gs.score(previous_gid, embedding)
             if candidate_score < previous_score + self._cfg.id_switch_margin:
                 return (
                     False,

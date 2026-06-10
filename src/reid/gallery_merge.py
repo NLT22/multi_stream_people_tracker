@@ -59,7 +59,7 @@ class GalleryMergeMixin:
 
         scores = []
         for target_gid in candidates:
-            reid_score = self._gs._score_gid(target_gid, row["embedding"])
+            reid_score = self._gs.score(target_gid, row["embedding"])
             scores.append((
                 target_gid,
                 self._blend_geo_score(reid_score, row, target_gid),
@@ -97,9 +97,9 @@ class GalleryMergeMixin:
         if source_gid == target_gid or source_gid not in self._gallery:
             return
         if target_gid not in self._gallery:
-            self._gallery[target_gid] = self._gs._new_gallery_entry()
+            self._gallery[target_gid] = self._gs.new_entry()
 
-        self._gs._merge_gallery_entries(source_gid, target_gid)
+        self._gs.merge(source_gid, target_gid)
         for track_key, gid in list(self._track_to_gid.items()):
             if gid == source_gid:
                 self._track_to_gid[track_key] = target_gid
