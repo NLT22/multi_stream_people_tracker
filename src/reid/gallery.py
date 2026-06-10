@@ -377,6 +377,7 @@ class CrossCameraGalleryProbe(
                         and not row.get("suppress_gallery_update"))
                     else None
                 ),
+                foot_world=row.foot_world,
             )
 
     def _display_gid(self, gid: int | None) -> int | None:

@@ -188,6 +188,10 @@ def _load_geometry_points(
     sample_step: int,
 ) -> dict[int, dict[int, list[tuple[int, float, float]]]]:
     """Return gid -> frame -> [(cam_id, world_x, world_y), ...]."""
+    exported = _load_exported_bev_points(pred_dir, sample_step)
+    if exported:
+        return exported
+
     if not short_root or not scene:
         return {}
 
@@ -225,6 +229,40 @@ def _load_geometry_points(
                     continue
                 points.setdefault(gid, {}).setdefault(frame, []).append(
                     (cam_id, foot[0], foot[1]))
+    return points
+
+
+def _load_exported_bev_points(
+    pred_dir: Path,
+    sample_step: int,
+) -> dict[int, dict[int, list[tuple[int, float, float]]]]:
+    """Load BEV/world trajectory samples exported by PredictionExporter.
+
+    This is preferred over reconstructing foot points from cam_* CSVs because it
+    preserves the live pipeline's actual calibrated foot projection. Older
+    prediction directories do not have this file, so callers fall back to
+    calibration-based reconstruction.
+    """
+    path = pred_dir / "tracklet_bev.csv"
+    if not path.exists():
+        return {}
+
+    step = max(1, sample_step)
+    points: dict[int, dict[int, list[tuple[int, float, float]]]] = {}
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            gid = int(float(row["global_id"]))
+            if gid < 0:
+                continue
+            frame = int(float(row["frame_no_cam"]))
+            if frame % step != 0:
+                continue
+            cam_id = int(float(row["cam_id"]))
+            points.setdefault(gid, {}).setdefault(frame, []).append((
+                cam_id,
+                float(row["world_x"]),
+                float(row["world_y"]),
+            ))
     return points
 
 
@@ -470,7 +508,7 @@ def _write_remapped_predictions(
                     row["global_id"] = remap.get(gid, gid)
                 writer.writerow(row)
 
-    for name in ("tracklets.csv", "tracklet_embeddings.npz"):
+    for name in ("tracklets.csv", "tracklet_embeddings.npz", "tracklet_bev.csv"):
         src = pred_dir / name
         if src.exists():
             shutil.copy2(src, out_dir / name)

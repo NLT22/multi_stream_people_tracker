@@ -163,7 +163,7 @@ def main() -> None:
     )
     _write_remap_events(out_dir, events)
 
-    for name in ("tracklets.csv", "tracklet_embeddings.npz"):
+    for name in ("tracklets.csv", "tracklet_embeddings.npz", "tracklet_bev.csv"):
         src = pred_dir / name
         if src.exists():
             shutil.copy2(src, out_dir / name)

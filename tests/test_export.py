@@ -78,6 +78,27 @@ def test_tracklet_summary_written():
         assert int(rows[0]["num_detections"]) == 30
 
 
+def test_tracklet_bev_written_when_foot_world_available():
+    with tempfile.TemporaryDirectory() as d:
+        e = PredictionExporter(d, delay_frames=0)
+        e.record(
+            10, 2, 7, 4, 10, 10, 20, 40,
+            embedding=[1.0, 0.0],
+            foot_world=(1234.5, 6789.0),
+        )
+        e.tick(10)
+        e.close()
+        path = os.path.join(d, "tracklet_bev.csv")
+        assert os.path.exists(path)
+        rows = list(csv.DictReader(open(path)))
+        assert len(rows) == 1
+        assert rows[0]["frame_no_cam"] == "10"
+        assert rows[0]["cam_id"] == "2"
+        assert rows[0]["global_id"] == "4"
+        assert rows[0]["world_x"] == "1234.5"
+        assert rows[0]["world_y"] == "6789.0"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

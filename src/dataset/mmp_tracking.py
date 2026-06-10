@@ -28,6 +28,15 @@ from typing import Iterator
 import pandas as pd
 
 
+def _scene_env(scene: str) -> str:
+    """Return calibration environment name for plain or session-prefixed scenes."""
+    env = scene.rsplit("_", 1)[0]
+    parts = env.split("_", 1)
+    if len(parts) == 2 and parts[0].endswith(("am", "pm")) and parts[0][:-2].isdigit():
+        return parts[1]
+    return env
+
+
 class MMPTrackingDataset:
     """
     Loader for one scene of the MMPTracking validation split.
@@ -186,7 +195,7 @@ class MMPTrackingDataset:
             { "Cameras": [ { "CameraId": N, "ExtrinsicParameters": {...},
                               "IntrinsicParameters": {...} }, ... ] }
         """
-        env = self.scene.rsplit("_", 1)[0]   # e.g. "lobby_0" → "lobby"
+        env = _scene_env(self.scene)   # e.g. "64pm_lobby_0" → "lobby"
         cal_path = self._calibrations_dir / env / "calibrations.json"
         if not cal_path.exists():
             raise FileNotFoundError(f"Calibration not found: {cal_path}")
@@ -394,7 +403,7 @@ class MMPTrackingShortDataset:
     # ------------------------------------------------------------------
 
     def load_calibration(self) -> dict:
-        env = self.scene.rsplit("_", 1)[0]
+        env = _scene_env(self.scene)
         cal_path = self.root / "calibrations" / env / "calibrations.json"
         if not cal_path.exists():
             raise FileNotFoundError(f"Calibration not found: {cal_path}")

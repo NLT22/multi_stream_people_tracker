@@ -62,6 +62,7 @@ class PredictionExporter:
         width: float,
         height: float,
         embedding: list[float] | None = None,
+        foot_world: tuple[float, float] | None = None,
     ) -> None:
         """Buffer one detection row for cam_id (raw Global ID)."""
         gid = global_id if global_id is not None else -1
@@ -77,7 +78,8 @@ class PredictionExporter:
             "height": round(height, 2),
         })
         self._update_tracklet_summary(
-            frame_no, cam_id, local_track_id, gid, width, height, embedding)
+            frame_no, cam_id, local_track_id, gid, width, height, embedding,
+            foot_world)
 
     def set_remap(self, remap: dict[int, int]) -> None:
         """Provide the latest Global-ID remap applied at flush time."""
@@ -153,6 +155,7 @@ class PredictionExporter:
         width: float,
         height: float,
         embedding: list[float] | None,
+        foot_world: tuple[float, float] | None,
     ) -> None:
         key = (cam_id, local_track_id, global_id)
         entry = self._tracklets.setdefault(key, {
@@ -164,6 +167,7 @@ class PredictionExporter:
             "sum_area": 0.0,
             "num_embeddings": 0,
             "sum_embedding": None,
+            "bev_points": [],
         })
         entry["start_frame"] = min(entry["start_frame"], frame_no)
         entry["end_frame"] = max(entry["end_frame"], frame_no)
@@ -180,6 +184,13 @@ class PredictionExporter:
                     entry["sum_embedding"][i] += float(value)
                 entry["num_embeddings"] += 1
 
+        if foot_world is not None:
+            entry["bev_points"].append((
+                int(frame_no),
+                float(foot_world[0]),
+                float(foot_world[1]),
+            ))
+
     def _write_tracklet_summaries(self) -> None:
         if not self._tracklets:
             return
@@ -192,6 +203,7 @@ class PredictionExporter:
 
         rows = []
         embeddings = []
+        bev_rows = []
         fieldnames = [
             "tracklet_id", "cam_id", "local_track_id", "global_id",
             "start_frame", "end_frame", "num_detections", "num_embeddings",
@@ -224,11 +236,34 @@ class PredictionExporter:
                     emb = emb / norm
                 embeddings.append((idx, emb))
 
+            for frame_no, world_x, world_y in entry.get("bev_points", []):
+                bev_rows.append({
+                    "tracklet_id": idx,
+                    "frame_no_cam": frame_no,
+                    "cam_id": cam_id,
+                    "local_track_id": local_track_id,
+                    "global_id": global_id,
+                    "world_x": round(world_x, 3),
+                    "world_y": round(world_y, 3),
+                })
+
         csv_path = self._output_dir / "tracklets.csv"
         with open(csv_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
+
+        if bev_rows:
+            with open(self._output_dir / "tracklet_bev.csv", "w", newline="") as f:
+                writer = csv.DictWriter(
+                    f,
+                    fieldnames=[
+                        "tracklet_id", "frame_no_cam", "cam_id",
+                        "local_track_id", "global_id", "world_x", "world_y",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerows(bev_rows)
 
         if np is None or not embeddings:
             return
