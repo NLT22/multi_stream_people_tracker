@@ -24,6 +24,7 @@ from src.reid import fusion_bridge
 from src.reid.tracklet_store import TrackletStore
 from src.reid.gallery_store import GalleryStore
 from src.reid.config import ReIDConfig
+from src.reid.detection_row import DetectionRow
 
 # Tuning constants now live in ReIDConfig (src/reid/config.py).
 
@@ -226,18 +227,14 @@ class CrossCameraGalleryProbe(
                         rect["left"], rect["top"],
                         rect["width"], rect["height"],
                     )
-                rows.append({
-                    "src": src,
-                    "track_id": oid,
-                    "track_key": track_key,
-                    "rect": rect,
-                    "embedding": [],
-                    "raw_embedding": embedding,
-                    "tracklet_len": 0,
-                    "gid": None,
-                    "previous_gid": None,
-                    "foot_world": foot_world,   # (X_mm, Y_mm) or None
-                })
+                rows.append(DetectionRow(
+                    src=src,
+                    track_id=oid,
+                    track_key=track_key,
+                    rect=rect,
+                    raw_embedding=embedding,
+                    foot_world=foot_world,   # (X_mm, Y_mm) or None
+                ))
 
             self._annotate_embedding_quality(rows)
             for row in rows:
