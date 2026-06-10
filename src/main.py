@@ -17,6 +17,7 @@ from src.dataset.wildtrack import WildtrackDataset
 from src.reid import gallery
 from src.config.args import parse_args
 from src.pipeline.runner import run
+from src.pipeline.run_config import PipelineRunConfig
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -131,17 +132,29 @@ def main(argv: list[str] | None = None) -> None:
         print("[WARNING] --show-gt requires --mta-dataset, --wildtrack-dataset, "
               "--mmp-dataset, or --mmp-short-dataset; ignoring.")
 
-    run(sources, args.nvinfer_config, args.tracker_config,
-        args.tile_w, args.tile_h, args.debug_similarity, use_hungarian,
-        enforce_unique, args.save_video, args.record_bitrate, args.no_display,
-        batch_size=args.batch_size, gpu_id=args.gpu_id,
+    run(PipelineRunConfig(
+        sources=sources,
+        nvinfer_config=args.nvinfer_config,
+        tracker_config=args.tracker_config,
+        tile_w=args.tile_w,
+        tile_h=args.tile_h,
+        debug_similarity=args.debug_similarity,
+        use_hungarian_assignment=use_hungarian,
+        enforce_unique_per_stream=enforce_unique,
+        save_video=args.save_video,
+        record_bitrate=args.record_bitrate,
+        no_display=args.no_display,
+        batch_size=args.batch_size,
+        gpu_id=args.gpu_id,
         tracker_width=args.tracker_width,
         tracker_height=args.tracker_height,
         tracker_sub_batches=args.tracker_sub_batches,
         max_sources=args.max_sources,
         force_rebuild_engine=args.force_rebuild_engine,
-        trim_seconds=args.trim_seconds, trim_start=args.trim_start,
-        pretiler=args.pretiler, no_tiler=args.no_tiler,
+        trim_seconds=args.trim_seconds,
+        trim_start=args.trim_start,
+        pretiler=args.pretiler,
+        no_tiler=args.no_tiler,
         show_trajectories=args.show_trajectories,
         trajectory_history=args.trajectory_history,
         trajectory_sample_interval=args.trajectory_sample_interval,
@@ -156,7 +169,8 @@ def main(argv: list[str] | None = None) -> None:
         loop_video=args.loop_video,
         reid_sgie_config=args.reid_sgie_config,
         geometry=geometry,
-        reid_config=reid_config)
+        reid_config=reid_config,
+    ))
 
 
 

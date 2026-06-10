@@ -91,5 +91,7 @@ ReID:
   addFeatureNormalization: 0
   outputReidTensor: 1
 
-  onnxFile: "models/reid/swin_tiny_mmp_reid.onnx"
+  # Retrained ReID (train-all-nonretail, warm-started) — lobby_0 0.85 -> ~0.88.
+  # Was swin_tiny_mmp_reid.onnx; see models/README.md.
+  onnxFile: "models/reid/swin_tiny_mmp_reid_all.onnx"
   modelEngineFile: ""

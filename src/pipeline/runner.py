@@ -14,6 +14,7 @@ from src.pipeline.model_utils import (
 )
 from src.pipeline.engine_prep import prepare_nvinfer_config
 from src.pipeline.recording import add_recording_branch, compute_grid
+from src.pipeline.run_config import PipelineRunConfig
 from src.dataset.mta import MtaDataset
 from src.dataset.mmp_tracking import MMPTrackingDataset, MMPTrackingShortDataset
 from src.dataset.wildtrack import WildtrackDataset
@@ -28,32 +29,47 @@ from src.utils.platform_utils import get_sink_element
 DEFAULT_CONFIG_PATH = "configs/pipeline.yaml"
 
 
-def run(sources: list[str], nvinfer_config: str, tracker_config: str,
-        tile_w: int, tile_h: int, debug_similarity: bool,
-        use_hungarian_assignment: bool, enforce_unique_per_stream: bool,
-        save_video: str | None, record_bitrate: int, no_display: bool,
-        batch_size: int | None = None, gpu_id: int = 0,
-        tracker_width: int = 640, tracker_height: int = 384,
-        tracker_sub_batches: str | None = None,
-        max_sources: int | None = None,
-        force_rebuild_engine: bool = False,
-        trim_seconds: float | None = None, trim_start: float = 0.0,
-        pretiler: bool = False, no_tiler: bool = False,
-        show_trajectories: bool = True,
-        trajectory_history: int = 96,
-        trajectory_sample_interval: int = 20,
-        trajectory_max_segments: int = 24,
-        export_predictions: str | None = None,
-        disable_gallery: bool = False,
-        osd_enabled: bool = True,
-        gt_by_cam: dict | None = None,
-        gt_snap_frames: int | None = None,
-        gt_scale: tuple[float, float] = (1.0, 1.0),
-        no_sync: bool = False,
-        loop_video: bool = False,
-        reid_sgie_config: str | None = None,
-        geometry=None,
-        reid_config=None):
+def run(config: PipelineRunConfig):
+    # Unpack into locals so the assembly body below is unchanged. Field names
+    # match the old positional parameters one-for-one.
+    sources = config.sources
+    nvinfer_config = config.nvinfer_config
+    tracker_config = config.tracker_config
+    tile_w = config.tile_w
+    tile_h = config.tile_h
+    debug_similarity = config.debug_similarity
+    use_hungarian_assignment = config.use_hungarian_assignment
+    enforce_unique_per_stream = config.enforce_unique_per_stream
+    save_video = config.save_video
+    record_bitrate = config.record_bitrate
+    no_display = config.no_display
+    batch_size = config.batch_size
+    gpu_id = config.gpu_id
+    tracker_width = config.tracker_width
+    tracker_height = config.tracker_height
+    tracker_sub_batches = config.tracker_sub_batches
+    max_sources = config.max_sources
+    force_rebuild_engine = config.force_rebuild_engine
+    trim_seconds = config.trim_seconds
+    trim_start = config.trim_start
+    pretiler = config.pretiler
+    no_tiler = config.no_tiler
+    show_trajectories = config.show_trajectories
+    trajectory_history = config.trajectory_history
+    trajectory_sample_interval = config.trajectory_sample_interval
+    trajectory_max_segments = config.trajectory_max_segments
+    export_predictions = config.export_predictions
+    disable_gallery = config.disable_gallery
+    osd_enabled = config.osd_enabled
+    gt_by_cam = config.gt_by_cam
+    gt_snap_frames = config.gt_snap_frames
+    gt_scale = config.gt_scale
+    no_sync = config.no_sync
+    loop_video = config.loop_video
+    reid_sgie_config = config.reid_sgie_config
+    geometry = config.geometry
+    reid_config = config.reid_config
+
     if reid_config is None:
         from src.reid.config import ReIDConfig
         reid_config = ReIDConfig()

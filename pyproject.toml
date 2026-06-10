@@ -1,0 +1,25 @@
+# Tooling configuration only. The project is NOT pip-installable as a package
+# (pyservicemaker is installed from the DeepStream SDK wheel via setup_venv.sh),
+# so there is intentionally no [project]/[build-system] table here.
+#
+# Ruff is opt-in — it is not in the venv by default. Run it without installing:
+#   pipx run ruff check .          # lint
+#   pipx run ruff check --fix .    # autofix the safe rules
+#   pipx run ruff format .         # format
+# line-length is set to 100; the codebase sits at p99 ~88, so existing code is
+# not reflowed. Review any --fix diff before committing (do not mass-rewrite).
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["old_stuff", "venv", "**/*.onnx", "dataset", "output", "models"]
+
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes, I import sorting, B bugbear, UP pyupgrade.
+select = ["E", "W", "F", "I", "B", "UP"]
+# E501 (line length) is handled by the formatter; ambiguous-name E741 is common
+# in math code (l, I, O) and not worth churn here.
+ignore = ["E501", "E741"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]

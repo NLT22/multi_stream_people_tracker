@@ -113,15 +113,13 @@ class MMPReidDataset(Dataset):
         self._pid_to_idxs: dict[int, list[int]] = {}
 
         total_raw = total_kept = 0
+        scene_pid_to_global: dict[tuple[str, int], int] = {}
 
-        for scene_idx, scene in enumerate(scenes):
+        for scene in scenes:
             scene_dir = short_root / scene
             if not scene_dir.exists():
                 print(f"  [SKIP] scene not found: {scene_dir}")
                 continue
-            # Assign a unique offset block per scene
-            scene_offset = scene_idx * 1000
-
             # Build crop list: load video, decode every sample_rate-th frame
             import pandas as pd
 
@@ -180,7 +178,10 @@ class MMPReidDataset(Dataset):
 
                             # Assign global pid
                             if local_pid not in local_to_global:
-                                local_to_global[local_pid] = scene_offset + local_pid
+                                key = (scene, local_pid)
+                                if key not in scene_pid_to_global:
+                                    scene_pid_to_global[key] = len(scene_pid_to_global)
+                                local_to_global[local_pid] = scene_pid_to_global[key]
                             gid = local_to_global[local_pid]
 
                             idx = len(self.samples)
@@ -535,6 +536,13 @@ def main() -> None:
                         "the target scenes are known. Val monitors the same set.")
     p.add_argument("--train-all", action="store_true",
                    help="Train on ALL scenes including retail.")
+    p.add_argument("--scan-root", default=None, metavar="DIR",
+                   help="Use a dataset laid out as DIR/{train,val}/<scene>/cam*.mp4 "
+                        "(e.g. MMPTracking_10minute). Overrides --short-root and the "
+                        "built-in scene split with the on-disk train/val dirs.")
+    p.add_argument("--exclude-retail", action="store_true",
+                   help="With --scan-root: drop scene dirs whose name contains "
+                        "'retail' from both train and val.")
     p.add_argument("--prefer-clean-gt", action="store_true",
                    help="Use gt_cam<N>_clean.csv instead of gt_cam<N>.csv when available.")
     p.add_argument("--no-pretrained", action="store_true")
@@ -547,18 +555,34 @@ def main() -> None:
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.train_all:
-        all_scenes = [s for scenes in ENVS.values() for s in scenes]
-        train_scenes, val_scenes = all_scenes, list(all_scenes)
-        print("[reid] train-all: training on every scene including retail")
-    elif args.train_all_nonretail:
-        nonretail = [s for env, scenes in ENVS.items() if env != "retail"
-                     for s in scenes]
-        train_scenes, val_scenes = nonretail, list(nonretail)
-        print("[reid] train-all-nonretail: training on every non-retail scene")
+    if args.scan_root:
+        root = Path(args.scan_root)
+
+        def _scan(split: str) -> list[str]:
+            d = root / split
+            names = sorted(s.name for s in d.iterdir() if s.is_dir()) if d.exists() else []
+            if args.exclude_retail:
+                names = [n for n in names if "retail" not in n]
+            return [f"{split}/{n}" for n in names]
+
+        train_scenes, val_scenes = _scan("train"), _scan("val")
+        short_root = root
+        print(f"[reid] scan-root: {root}"
+              f"{' (excluding retail)' if args.exclude_retail else ''}")
     else:
-        train_scenes, val_scenes = _train_val_scenes()
-    short_root = _resolve_short_root(Path(args.short_root), train_scenes + val_scenes)
+        if args.train_all:
+            all_scenes = [s for scenes in ENVS.values() for s in scenes]
+            train_scenes, val_scenes = all_scenes, list(all_scenes)
+            print("[reid] train-all: training on every scene including retail")
+        elif args.train_all_nonretail:
+            nonretail = [s for env, scenes in ENVS.items() if env != "retail"
+                         for s in scenes]
+            train_scenes, val_scenes = nonretail, list(nonretail)
+            print("[reid] train-all-nonretail: training on every non-retail scene")
+        else:
+            train_scenes, val_scenes = _train_val_scenes()
+        short_root = _resolve_short_root(Path(args.short_root),
+                                         train_scenes + val_scenes)
     print(f"Train scenes ({len(train_scenes)}): {train_scenes}")
     print(f"Val   scenes ({len(val_scenes)}):   {val_scenes}")
 
