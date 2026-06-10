@@ -2,11 +2,11 @@
 Fine-tune YOLO11n on MMPTracking_short and export ONNX for DeepStream.
 
 Two-step workflow:
-  1. Build YOLO dataset:   python scripts/mmp_to_yolo.py
-  2. Train + export ONNX:  python scripts/train_yolo_mmp.py
+  1. Build YOLO dataset:   python scripts/datasets/mmp_to_yolo.py
+  2. Train + export ONNX:  python scripts/train/train_yolo_mmp.py
 
 Run:
-    python scripts/train_yolo_mmp.py \\
+    python scripts/train/train_yolo_mmp.py \\
         [--data dataset/mmp_yolo/dataset.yaml] \\
         [--epochs 30] [--batch 16] [--imgsz 640] [--device 0] \\
         [--weights yolo11n.pt]   # or output/train/yolo11n_mta/weights/best.pt
@@ -60,7 +60,7 @@ def _fail_if_unwritable(path: Path, description: str) -> None:
     print("Fix ownership from the repo root:")
     print("  sudo chown -R $USER:$USER output dataset/mmp_yolo models/yolov11")
     print("Or choose a user-writable run directory, e.g.:")
-    print("  python scripts/train_yolo_mmp.py --project runs/train --name yolo11n_mmp")
+    print("  python scripts/train/train_yolo_mmp.py --project runs/train --name yolo11n_mmp")
     raise SystemExit(1)
 
 
@@ -135,7 +135,7 @@ def main() -> None:
 
     if not data_path.exists():
         print(f"[ERROR] dataset.yaml not found: {data_path}")
-        print("  Run first: python scripts/mmp_to_yolo.py")
+        print("  Run first: python scripts/datasets/mmp_to_yolo.py")
         raise SystemExit(1)
 
     data_path = _resolve_yolo_data_yaml(data_path)

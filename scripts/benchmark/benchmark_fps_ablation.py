@@ -87,7 +87,7 @@ def _probe_cmd(args: argparse.Namespace, variant: str, n_cams: int) -> list[str]
         if args.tracker_sub_batches else None
     )
     cmd = [
-        sys.executable, str(ROOT / "scripts" / "_run_fps_ablation_variant.py"),
+        sys.executable, str(ROOT / "scripts" / "benchmark" / "_run_fps_ablation_variant.py"),
         "--variant", variant,
         "--sources", *sources,
         "--nvinfer-config", args.nvinfer_config,

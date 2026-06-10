@@ -11,9 +11,9 @@
 #   dataset/Wildtrack/
 #
 # Usage:
-#   ./scripts/prepare_dataset.sh
-#   DATASET_DIR=/absolute/path/to/dataset ./scripts/prepare_dataset.sh
-#   ./scripts/prepare_dataset.sh --force
+#   ./scripts/datasets/prepare_dataset.sh
+#   DATASET_DIR=/absolute/path/to/dataset ./scripts/datasets/prepare_dataset.sh
+#   ./scripts/datasets/prepare_dataset.sh --force
 # =============================================================================
 
 set -euo pipefail

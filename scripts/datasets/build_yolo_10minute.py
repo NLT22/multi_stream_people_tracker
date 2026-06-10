@@ -7,7 +7,7 @@ exists on disk (train/ vs val/ subdirs) instead of the per-environment split.
     dataset/MMPTracking_10minute/val/<scene>/    -> images/val,   labels/val
 
 Run:
-    python scripts/build_yolo_10minute.py
+    python scripts/datasets/build_yolo_10minute.py
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import yaml
 
-from scripts.mmp_to_yolo import (
+from scripts.datasets.mmp_to_yolo import (
     DEFAULT_MIN_H, DEFAULT_MIN_W, DEFAULT_MIN_VIS, process_scene,
 )
 

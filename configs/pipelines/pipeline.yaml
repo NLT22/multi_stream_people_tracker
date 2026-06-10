@@ -49,7 +49,7 @@ detection:
   # PeopleNet v2.6.3 (recommended for people tracking, download required):
   #   3 classes: PERSON(0), bag(1), face(2)  — bag+face filtered automatically
   #   person class id is inferred from configs/labels/peoplenet_labels.txt
-  #   Download: bash scripts/download_peoplenet.sh
+  #   Download: bash scripts/setup/download_peoplenet.sh
   # config_file: configs/models/nvinfer_peoplenet.yml
 
 # ── Tracker ──────────────────────────────────────────────────────────────────

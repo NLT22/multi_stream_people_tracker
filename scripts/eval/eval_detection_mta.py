@@ -6,10 +6,10 @@ comparison table.
 
 Run:
     # After mta_to_yolo.py and train_yolo_mta.py:
-    python scripts/eval_detection_mta.py
+    python scripts/eval/eval_detection_mta.py
 
     # Custom paths:
-    python scripts/eval_detection_mta.py \\
+    python scripts/eval/eval_detection_mta.py \\
         --data  dataset/mta_yolo/dataset.yaml \\
         --baseline  yolo11n.pt \\
         --finetuned output/train/yolo11n_mta/weights/best.pt \\
@@ -55,13 +55,13 @@ def main() -> None:
     data_path = Path(args.data)
     if not data_path.exists():
         print(f"[ERROR] dataset.yaml not found: {data_path}")
-        print("  Run: python scripts/mta_to_yolo.py --mta-root dataset/mta/MTA_ext_short")
+        print("  Run: python scripts/datasets/mta_to_yolo.py --mta-root dataset/mta/MTA_ext_short")
         raise SystemExit(1)
 
     ft_path = Path(args.finetuned)
     if not ft_path.exists():
         print(f"[ERROR] Fine-tuned weights not found: {ft_path}")
-        print("  Run: python scripts/train_yolo_mta.py")
+        print("  Run: python scripts/train/train_yolo_mta.py")
         raise SystemExit(1)
 
     print(f"[eval] Dataset : {data_path}")

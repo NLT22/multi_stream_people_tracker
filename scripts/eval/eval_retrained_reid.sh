@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Re-evaluate all non-retail scenes with the retrained (all-non-retail) ReID model.
-# Run after scripts/finetune_reid_mmp.py --train-all-nonretail finishes.
+# Run after scripts/train/finetune_reid_mmp.py --train-all-nonretail finishes.
 set -e
 cd "$(dirname "$0")/.."
 source venv/bin/activate

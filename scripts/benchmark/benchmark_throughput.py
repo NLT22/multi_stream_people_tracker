@@ -6,7 +6,7 @@ sources (one real video looped N times) and parses the built-in FPS probe
 output to report per-stream and total FPS.
 
 Usage:
-    python scripts/benchmark_throughput.py \\
+    python scripts/benchmark/benchmark_throughput.py \\
         --source dataset/Wildtrack/cam1.mp4 \\
         [--cam-counts 1 2 4 6 8 10 12 16 20] \\
         [--duration 30]          # seconds per run

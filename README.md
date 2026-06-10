@@ -165,9 +165,9 @@ Model ONNX files are tracked via Git LFS; run `git lfs pull` after cloning.
 ## Training
 
 ```bash
-python scripts/mmp_to_yolo.py        # convert MMP → YOLO format
-python scripts/train_yolo_mmp.py     # fine-tune YOLO11n detector
-python scripts/finetune_reid_mmp.py --train-all-nonretail   # Swin-Tiny ReID
+python scripts/datasets/mmp_to_yolo.py        # convert MMP → YOLO format
+python scripts/train/train_yolo_mmp.py     # fine-tune YOLO11n detector
+python scripts/train/finetune_reid_mmp.py --train-all-nonretail   # Swin-Tiny ReID
 ```
 
 Docker training services: `yolo_train`, `reid_train_mmp` (see `docker-compose.yml`).

@@ -39,8 +39,8 @@ services:
         pip uninstall -y opencv-python opencv-contrib-python >/dev/null 2>&1 || true
         pip install --force-reinstall --no-deps opencv-python-headless -q &&
         rm -f /app/dataset/mmp_yolo/labels/*.cache &&
-        python scripts/mmp_to_yolo.py &&
-        python scripts/train_yolo_mmp.py \
+        python scripts/datasets/mmp_to_yolo.py &&
+        python scripts/train/train_yolo_mmp.py \
           --epochs $$YOLO_EPOCHS \
           --batch $$YOLO_BATCH \
           --patience $$YOLO_PATIENCE \
@@ -74,7 +74,7 @@ services:
       - |
         trap 'chown -R "$$HOST_UID:$$HOST_GID" /app/output/reid 2>/dev/null || true' EXIT
         pip install timm tqdm albumentations -q &&
-        python scripts/finetune_reid_mta.py \
+        python scripts/train/finetune_reid_mta.py \
           --epochs 50 --batch 32 --accum-steps 1 \
           --workers 4 --output output/reid
     stdin_open: true
@@ -115,7 +115,7 @@ services:
         pip uninstall -y opencv-python opencv-contrib-python opencv-contrib-python-headless >/dev/null 2>&1 || true
         pip install "numpy<2" timm tqdm pandas -q &&
         pip install --force-reinstall --no-deps opencv-python-headless -q &&
-        python scripts/finetune_reid_mmp.py \
+        python scripts/train/finetune_reid_mmp.py \
           --epochs $$REID_EPOCHS \
           --pk-p $$REID_PKP \
           --pk-k $$REID_PKK \

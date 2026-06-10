@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
-source "$ROOT_DIR/scripts/docker_cmd.sh"
+source "$ROOT_DIR/scripts/setup/docker_cmd.sh"
 
 DO_BUILD=0
 DO_RUN=0
@@ -41,7 +41,7 @@ for path in "${required[@]}"; do
     echo "Missing $path"
     if [[ "$path" == "models/yolov11/yolo11n.onnx" || "$path" == "models/reid/swin_tiny_market1501_aicity156_featuredim256.onnx" ]]; then
       echo "Prepare it with:"
-      echo "  ./scripts/prepare_models.sh"
+      echo "  ./scripts/setup/prepare_models.sh"
     fi
     exit 1
   fi
@@ -54,7 +54,7 @@ VIDEO_DIR="${VIDEO_DIR:-$ROOT_DIR/dataset/mtmc_4cam/videos}"
 if [[ ! -d "$VIDEO_DIR" ]]; then
   echo "VIDEO_DIR does not exist: $VIDEO_DIR"
   echo "Prepare the default dataset with:"
-  echo "  ./scripts/prepare_dataset.sh"
+  echo "  ./scripts/datasets/prepare_dataset.sh"
   echo "Or set it with:"
   echo "  VIDEO_DIR=/absolute/path/to/videos $0 --all"
   exit 1

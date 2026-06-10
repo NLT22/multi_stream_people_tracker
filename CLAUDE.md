@@ -160,11 +160,11 @@ Config file paths inside nvinfer YAML configs are **relative to the config file'
 
 ```bash
 # YOLO detector on MMPTracking_short
-python scripts/mmp_to_yolo.py          # convert dataset
-python scripts/train_yolo_mmp.py       # fine-tune YOLO11n
+python scripts/datasets/mmp_to_yolo.py          # convert dataset
+python scripts/train/train_yolo_mmp.py       # fine-tune YOLO11n
 
 # Swin-Tiny ReID on MMPTracking_short
-python scripts/finetune_reid_mmp.py    # outputs output/reid_mmp/swin_tiny_mmp_reid.onnx
+python scripts/train/finetune_reid_mmp.py    # outputs output/reid_mmp/swin_tiny_mmp_reid.onnx
 ```
 
 Best YOLO warm-start: use MTA model (`output/train/yolo11n_mta/weights/best.pt`).

@@ -2,9 +2,9 @@
 
 This wrapper keeps the remote-machine workflow in one place:
 
-    python scripts/train_fastreid_mmp.py prepare
-    python scripts/train_fastreid_mmp.py train --num-gpus 1
-    python scripts/train_fastreid_mmp.py export
+    python scripts/train/train_fastreid_mmp.py prepare
+    python scripts/train/train_fastreid_mmp.py train --num-gpus 1
+    python scripts/train/train_fastreid_mmp.py export
 
 The default config is deployment-friendly ResNet50 without IBN.  The IBN model
 can train, but its ONNX uses Split/InstanceNorm patterns that failed inside
@@ -107,7 +107,7 @@ def prepare(args: argparse.Namespace) -> None:
 
     cmd = [
         _python(),
-        "scripts/mmp_to_fastreid_market.py",
+        "scripts/datasets/mmp_to_fastreid_market.py",
         "--short-root",
         str(args.short_root),
         "--output",

@@ -7,20 +7,20 @@
 #   models/reid/swin_tiny_market1501_aicity156_featuredim256.onnx      (--reid-swin)
 #
 # Usage:
-#   ./scripts/prepare_models.sh                # YOLO11 + ReID Swin-Tiny (main default)
-#   ./scripts/prepare_models.sh --default      # same as no args
-#   ./scripts/prepare_models.sh --yolo         # YOLOv8 ONNX only
-#   ./scripts/prepare_models.sh --yolov11      # YOLO11n ONNX only
-#   ./scripts/prepare_models.sh --reid-swin    # ReID Swin-Tiny ONNX only
-#   ./scripts/prepare_models.sh --reid         # YOLOv8 + ResNet50 ReID ETLT
-#   ./scripts/prepare_models.sh --all          # everything (both detectors + both ReID)
+#   ./scripts/setup/prepare_models.sh                # YOLO11 + ReID Swin-Tiny (main default)
+#   ./scripts/setup/prepare_models.sh --default      # same as no args
+#   ./scripts/setup/prepare_models.sh --yolo         # YOLOv8 ONNX only
+#   ./scripts/setup/prepare_models.sh --yolov11      # YOLO11n ONNX only
+#   ./scripts/setup/prepare_models.sh --reid-swin    # ReID Swin-Tiny ONNX only
+#   ./scripts/setup/prepare_models.sh --reid         # YOLOv8 + ResNet50 ReID ETLT
+#   ./scripts/setup/prepare_models.sh --all          # everything (both detectors + both ReID)
 # =============================================================================
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
-source "$ROOT_DIR/scripts/docker_cmd.sh"
+source "$ROOT_DIR/scripts/setup/docker_cmd.sh"
 
 PREPARE_YOLO=0
 PREPARE_YOLOV11=0
@@ -87,7 +87,7 @@ _export_yolo_onnx() {
     -lc "set -euo pipefail; \
 echo '[prepare_models] Container command started'; \
 python3 -m pip install --no-cache-dir --progress-bar off ultralytics onnx onnxslim; \
-python3 -u scripts/export_yolo_onnx.py"
+python3 -u scripts/train/export_yolo_onnx.py"
 
   test -f "$onnx" || {
     echo "[ERROR] ONNX export did not create $onnx"

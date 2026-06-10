@@ -8,7 +8,7 @@ Workflow:
   4. Copy ONNX to models/yolov11/yolo11n_mta.onnx
 
 Run:
-    python scripts/train_yolo_mta.py \\
+    python scripts/train/train_yolo_mta.py \\
         [--data dataset/mta_yolo/dataset.yaml] \\
         [--epochs 50] [--batch 16] [--imgsz 640] [--device 0] \\
         [--resume]     # resume from last checkpoint
@@ -66,7 +66,7 @@ def main() -> None:
 
     if not data_path.exists():
         print(f"[ERROR] dataset.yaml not found: {data_path}")
-        print("  Run first: python scripts/mta_to_yolo.py --mta-root dataset/mta/MTA_ext_short")
+        print("  Run first: python scripts/datasets/mta_to_yolo.py --mta-root dataset/mta/MTA_ext_short")
         raise SystemExit(1)
 
     # ── Train ─────────────────────────────────────────────────────────────────

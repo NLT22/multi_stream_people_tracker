@@ -14,7 +14,7 @@ Frame resolution: 640×360
 Val split: last 2 scenes per environment (scene index >= n-2)
 
 Run:
-    python scripts/mmp_to_yolo.py [--short-root dataset/MMPTracking_short]
+    python scripts/datasets/mmp_to_yolo.py [--short-root dataset/MMPTracking_short]
                                    [--output-dir dataset/mmp_yolo]
                                    [--sample-rate 5]
                                    [--min-height 20] [--min-width 8]

@@ -1,4 +1,4 @@
-"""Internal helper for scripts/benchmark_fps_ablation.py."""
+"""Internal helper for scripts/benchmark/benchmark_fps_ablation.py."""
 
 from __future__ import annotations
 

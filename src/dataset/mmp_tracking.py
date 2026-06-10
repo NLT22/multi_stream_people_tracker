@@ -317,7 +317,7 @@ class MMPTrackingShortDataset:
     """
     Loader for MMPTracking_short — the pre-built 1-minute clips dataset.
 
-    Layout (created by scripts/create_mmp_short.py):
+    Layout (created by scripts/datasets/create_mmp_short.py):
         <root>/
             <scene>/
                 cam<N>.mp4

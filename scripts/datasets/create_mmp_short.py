@@ -17,9 +17,9 @@ Output layout:
         calibrations/<env>/calibrations.json
 
 Run:
-    python scripts/create_mmp_short.py
-    python scripts/create_mmp_short.py --mmp-root dataset/MMPTracking --jobs 3
-    python scripts/create_mmp_short.py --scenes lobby_0 lobby_1 cafe_shop_0
+    python scripts/datasets/create_mmp_short.py
+    python scripts/datasets/create_mmp_short.py --mmp-root dataset/MMPTracking --jobs 3
+    python scripts/datasets/create_mmp_short.py --scenes lobby_0 lobby_1 cafe_shop_0
 """
 
 from __future__ import annotations

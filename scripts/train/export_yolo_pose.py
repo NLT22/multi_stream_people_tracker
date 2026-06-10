@@ -5,7 +5,7 @@ model as a secondary GIE on tracked person crops. This only prepares the model;
 nothing in the live pipeline references it yet (see src/reid/pose.py and
 configs/models/nvinfer_yolo11n_pose_sgie.yml).
 
-    python scripts/export_yolo_pose.py        # -> models/pose/yolo11n-pose.onnx
+    python scripts/train/export_yolo_pose.py        # -> models/pose/yolo11n-pose.onnx
 
 Requires ultralytics (training-time dependency; use the venv or a PyTorch env).
 """

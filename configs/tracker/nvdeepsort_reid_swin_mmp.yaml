@@ -1,7 +1,7 @@
 # =============================================================================
 # NvDeepSORT Tracker Config — ReID Swin-Tiny fine-tuned on MMPTracking_short
 # =============================================================================
-# Model: scripts/finetune_reid_mmp.py output
+# Model: scripts/train/finetune_reid_mmp.py output
 #   Input : RGB 256x128 (HxW), output: 256-dim L2-normalised embedding
 #   Trained on indoor MMPTracking_short.
 #
@@ -55,7 +55,7 @@ ReID:
 
   inputOrder: 0
   colorFormat: 0
-  # Match scripts/finetune_reid_mmp.py:
+  # Match scripts/train/finetune_reid_mmp.py:
   # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]).
   # NvMOT exposes one scalar scale, so use the common TAO/ImageNet
   # approximation used by the ResNet50 ReID config.

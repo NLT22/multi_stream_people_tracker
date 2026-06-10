@@ -16,7 +16,7 @@ YOLO label format (one line per person):
     0 cx cy w h          (class_id=0, normalized 0-1 relative to 1920×1080)
 
 Run:
-    python scripts/mta_to_yolo.py \\
+    python scripts/datasets/mta_to_yolo.py \\
         --mta-root dataset/mta/MTA_ext_short \\
         --output-dir dataset/mta_yolo \\
         --sample-rate 5          # keep every 5th frame (~8 fps)
@@ -249,7 +249,7 @@ def main() -> None:
     _write_dataset_yaml(output_dir)
     print("\n[mta_to_yolo] Done.")
     print(f"  Output: {output_dir.resolve()}")
-    print(f"  Next:   python scripts/train_yolo_mta.py --data {output_dir}/dataset.yaml")
+    print(f"  Next:   python scripts/train/train_yolo_mta.py --data {output_dir}/dataset.yaml")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ Pipeline:
   4. Export to ONNX matching existing nvtracker config (input: [N,3,256,128])
 
 Run:
-    python scripts/finetune_reid_mta.py [--epochs 50] [--batch 64] [--output output/reid]
+    python scripts/train/finetune_reid_mta.py [--epochs 50] [--batch 64] [--output output/reid]
 
 Output:
     output/reid/swin_tiny_mta_reid.pth        — PyTorch checkpoint

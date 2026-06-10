@@ -27,7 +27,7 @@ if ! docker info >/dev/null 2>&1; then
     docker_user="${SUDO_USER:-$USER}"
     echo "[ERROR] Docker is installed but not usable by the current user."
     echo "Try one of:"
-    echo "  sudo ./scripts/prepare_demo.sh"
+    echo "  sudo ./scripts/setup/prepare_demo.sh"
     echo "  sudo usermod -aG docker $docker_user   # then log out/in"
     echo "  sudo docker run --rm hello-world"
     exit 1

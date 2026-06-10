@@ -12,7 +12,7 @@
 # probe (output-tensor-meta: 1) and decode the 17 (x,y,conf) triplets there.
 # The Python-probe route is simplest and matches how the ReID SGIE is consumed.
 #
-# Export the ONNX first:  python scripts/export_yolo_pose.py
+# Export the ONNX first:  python scripts/train/export_yolo_pose.py
 # =============================================================================
 
 property:

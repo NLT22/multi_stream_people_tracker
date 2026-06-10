@@ -11,12 +11,12 @@ Data pipeline:
 Architecture: same Swin-Tiny + BNNeck as MTA script — compatible ONNX output.
 
 Run (fast start, fine-tune from MTA model):
-    python scripts/finetune_reid_mmp.py \\
+    python scripts/train/finetune_reid_mmp.py \\
         --resume output/reid_v2/best.pth \\
         --epochs 40 --pk-p 24 --pk-k 4
 
 Run (from ImageNet pretrained):
-    python scripts/finetune_reid_mmp.py --epochs 60
+    python scripts/train/finetune_reid_mmp.py --epochs 60
 
 Output:
     output/reid_mmp/best.pth

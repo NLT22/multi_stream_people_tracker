@@ -8,7 +8,7 @@ person_id có per-camera recall dưới ngưỡng (mặc định 5%), rồi ghi 
 để dùng với --exclude-person-ids trong metrics_mmp.py.
 
 Usage:
-    python scripts/detect_phantom_gt.py \\
+    python scripts/datasets/detect_phantom_gt.py \\
         --short-root dataset/MMPTracking_short \\
         --scene      retail_0 \\
         --pred-dir   output/eval/mmp_retail_0 \\
@@ -28,7 +28,7 @@ import argparse
 import sys
 from pathlib import Path
 
-# Allow running as `python scripts/detect_phantom_gt.py` (not just `python -m`)
+# Allow running as `python scripts/datasets/detect_phantom_gt.py` (not just `python -m`)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np

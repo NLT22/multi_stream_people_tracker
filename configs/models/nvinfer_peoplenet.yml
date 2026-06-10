@@ -19,7 +19,7 @@
 #
 # DOWNLOAD:
 #   The ONNX is NOT bundled with DeepStream. Download from NGC:
-#     scripts/download_peoplenet.sh
+#     scripts/setup/download_peoplenet.sh
 #   Saves to: models/peoplenet/resnet34_peoplenet.onnx
 #
 # Reference: deepstream-tracker-3d-multi-view/config_templates/config_pgie_peoplenet.txt
@@ -30,7 +30,7 @@ property:
 
   # ── Model files ──────────────────────────────────────────────────────────────
   # Path relative to THIS config file (configs/models/).
-  # The ONNX must be downloaded first via scripts/download_peoplenet.sh.
+  # The ONNX must be downloaded first via scripts/setup/download_peoplenet.sh.
   onnx-file: ../../models/peoplenet/resnet34_peoplenet.onnx
 
   # Engine: built on first run, saved next to the ONNX file.

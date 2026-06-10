@@ -2,8 +2,8 @@
 # Prepare the default mentor demo end-to-end.
 #
 # Usage:
-#   ./scripts/prepare_demo.sh
-#   ./scripts/prepare_demo.sh --all   # also build image and run import smoke test
+#   ./scripts/setup/prepare_demo.sh
+#   ./scripts/setup/prepare_demo.sh --all   # also build image and run import smoke test
 
 set -euo pipefail
 
@@ -26,9 +26,9 @@ for arg in "$@"; do
   esac
 done
 
-./scripts/prepare_dataset.sh
-./scripts/prepare_models.sh
-./scripts/docker_smoke_test.sh "${SMOKE_ARGS[@]}"
+./scripts/datasets/prepare_dataset.sh
+./scripts/setup/prepare_models.sh
+./scripts/setup/docker_smoke_test.sh "${SMOKE_ARGS[@]}"
 
 echo ""
 echo "[prepare_demo] Ready. Run:"

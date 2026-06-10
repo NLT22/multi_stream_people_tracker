@@ -14,7 +14,7 @@
 #   models/peoplenet/resnet34_peoplenet.onnx   ← used by nvinfer_peoplenet.yml
 #
 # Run from project root:
-#   bash scripts/download_peoplenet.sh
+#   bash scripts/setup/download_peoplenet.sh
 # =============================================================================
 
 set -e

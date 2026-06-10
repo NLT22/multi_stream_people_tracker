@@ -1,7 +1,7 @@
 """Export an Ultralytics YOLO model to dynamic-batch ONNX.
 
 This script is called inside the DeepStream Docker image by
-scripts/prepare_models.sh. Keeping it as a real file avoids fragile heredoc
+scripts/setup/prepare_models.sh. Keeping it as a real file avoids fragile heredoc
 stdin handling in `docker compose run` on different hosts.
 """
 

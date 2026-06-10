@@ -19,7 +19,7 @@ Frames are streamed straight out of the zip in memory (no extractall) to avoid
 millions of small-file writes on the external disk.
 
 Run:
-    python scripts/build_mmp_10minute.py --minutes 10
+    python scripts/datasets/build_mmp_10minute.py --minutes 10
 """
 
 from __future__ import annotations

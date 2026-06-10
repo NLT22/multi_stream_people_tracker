@@ -26,12 +26,12 @@ Controls
 
 Usage
 -----
-  python scripts/gt_editor.py \\
+  python scripts/datasets/gt_editor.py \\
       --scene dataset/MMPTracking_short/retail_0 \\
       --cam   cam1
 
   # Continue editing a previously saved _clean.csv:
-  python scripts/gt_editor.py \\
+  python scripts/datasets/gt_editor.py \\
       --scene dataset/MMPTracking_short/retail_0 \\
       --cam   cam1 --use-clean
 """
