@@ -8,11 +8,8 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
-from pathlib import Path
 
-from src.dataset.mta import MtaDataset
 from src.dataset.mmp_tracking import MMPTrackingDataset, MMPTrackingShortDataset
-from src.dataset.wildtrack import WildtrackDataset
 
 
 @dataclass
@@ -28,47 +25,15 @@ def build_source_plan(args, reid_config) -> SourcePlan:
     """Resolve sources + optional GT/geometry from the selected dataset flag."""
     sources = args.sources
     gt_by_cam = None
-    gt_snap_frames = None   # None = exact frame lookup (MTA); int = snap window (Wildtrack)
+    gt_snap_frames = None
     gt_scale = (1.0, 1.0)
     geometry = None
 
-    exclusive = [args.mta_dataset, args.wildtrack_dataset, args.mmp_dataset,
-                 args.mmp_short_dataset]
-    if sum(bool(x) for x in exclusive) > 1:
-        print("[ERROR] --mta-dataset, --wildtrack-dataset, and --mmp-dataset are mutually exclusive.")
+    if args.mmp_dataset and args.mmp_short_dataset:
+        print("[ERROR] --mmp-dataset and --mmp-short-dataset are mutually exclusive.")
         sys.exit(1)
 
-    if args.mta_dataset:
-        try:
-            _mta_path = Path(args.mta_dataset)
-            mta = MtaDataset(str(_mta_path.parent), split=_mta_path.name)
-            sources = mta.get_video_uris()
-            print(f"[reid] MTA dataset: {args.mta_dataset} → {len(sources)} camera(s)")
-            if args.show_gt:
-                gt_by_cam = mta.load_all_gt()
-                print(f"[reid] Loading GT annotations for {len(gt_by_cam)} camera(s)")
-        except FileNotFoundError as e:
-            print(f"[ERROR] {e}")
-            sys.exit(1)
-    elif args.wildtrack_dataset:
-        try:
-            wt = WildtrackDataset(args.wildtrack_dataset)
-            sources = wt.get_video_uris()
-            print(f"[reid] Wildtrack dataset: {args.wildtrack_dataset} "
-                  f"→ {len(sources)} camera(s)")
-            if args.show_gt:
-                max_sec = (args.wildtrack_minutes * 60.0
-                           if args.wildtrack_minutes is not None else None)
-                gt_by_cam = wt.load_all_gt(max_seconds=max_sec)
-                # Wildtrack: annotations every ~30 video frames; snap to nearest slot
-                from src.dataset.wildtrack import FRAMES_PER_ANN
-                gt_snap_frames = round(FRAMES_PER_ANN)
-                print(f"[reid] Loading Wildtrack GT for {len(gt_by_cam)} camera(s) "
-                      f"(annotated: {wt.annotated_duration_seconds:.0f}s)")
-        except FileNotFoundError as e:
-            print(f"[ERROR] {e}")
-            sys.exit(1)
-    elif args.mmp_dataset:
+    if args.mmp_dataset:
         try:
             if ":" not in args.mmp_dataset:
                 print("[ERROR] --mmp-dataset must be 'ROOT:SCENE', e.g. "
@@ -123,8 +88,8 @@ def build_source_plan(args, reid_config) -> SourcePlan:
             print(f"[ERROR] {e}")
             sys.exit(1)
     elif args.show_gt:
-        print("[WARNING] --show-gt requires --mta-dataset, --wildtrack-dataset, "
-              "--mmp-dataset, or --mmp-short-dataset; ignoring.")
+        print("[WARNING] --show-gt requires --mmp-dataset or "
+              "--mmp-short-dataset; ignoring.")
 
     return SourcePlan(sources=sources, gt_by_cam=gt_by_cam,
                       gt_snap_frames=gt_snap_frames, gt_scale=gt_scale,

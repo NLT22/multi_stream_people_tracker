@@ -15,9 +15,6 @@ from src.pipeline.model_utils import (
 from src.pipeline.engine_prep import prepare_nvinfer_config
 from src.pipeline.recording import add_recording_branch, compute_grid
 from src.pipeline.run_config import PipelineRunConfig
-from src.dataset.mta import MtaDataset
-from src.dataset.mmp_tracking import MMPTrackingDataset, MMPTrackingShortDataset
-from src.dataset.wildtrack import WildtrackDataset
 from src.eval.export import PredictionExporter
 from src.eval.gt_overlay import GtOverlayProbe
 from src.pipeline.sources import resolve_sources, trim_sources

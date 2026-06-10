@@ -37,20 +37,7 @@ detection:
   #   80 COCO classes, person class id inferred from configs/labels/coco_labels.txt
   #   Requires models/yolov11/yolo11n.onnx and the YOLOv8/v11 custom parser .so.
   config_file: configs/models/nvinfer_yolov11_people.yml
-
-  # YOLOv8n stable baseline:
-  # config_file: configs/models/nvinfer_yolov8_people.yml
-
-  # TrafficCamNet (bundled with DeepStream):
-  #   4 classes: vehicle(0), bicycle(1), PERSON(2), road_sign(3)
-  #   person class id is inferred from configs/labels/trafficcamnet_labels.txt
-  # config_file: configs/models/nvinfer_trafficcamnet.yml
-
-  # PeopleNet v2.6.3 (recommended for people tracking, download required):
-  #   3 classes: PERSON(0), bag(1), face(2)  — bag+face filtered automatically
-  #   person class id is inferred from configs/labels/peoplenet_labels.txt
-  #   Download: bash scripts/setup/download_peoplenet.sh
-  # config_file: configs/models/nvinfer_peoplenet.yml
+  # MMP fine-tuned detector: configs/models/nvinfer_yolov11_mmp.yml
 
 # ── Tracker ──────────────────────────────────────────────────────────────────
 # nvtracker assigns a local object_id per camera. The main ReID gallery then

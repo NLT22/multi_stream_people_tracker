@@ -15,10 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./setup_venv.sh
 source venv/bin/activate
 
-# Run the full pipeline (default: mtmc_4cam preset)
-python -m src.main
-
-# Run with MMP dataset scene
+# Run the MMP pipeline on a scene (primary workflow)
 python -m src.main \
     --config configs/pipelines/pipeline_mmp.yaml \
     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
@@ -88,7 +85,7 @@ python -m src.eval.metrics_mmp \
     --pred-dir output/eval/mmp_lobby0_nearline
 ```
 
-See `Old materials/COMMANDS.md` for full commands including MTA, Wildtrack, sweeps, and benchmarks.
+See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, benchmarks). MTA/Wildtrack/MTMC/FastReID/YOLOv8/pose support has been moved to `old_stuff/` — the pipeline is now MMP-only.
 
 ## Architecture
 
@@ -133,8 +130,7 @@ See `Old materials/COMMANDS.md` for full commands including MTA, Wildtrack, swee
 
 | File | Dataset | Notes |
 |------|---------|-------|
-| `configs/pipelines/pipeline.yaml` | mtmc_4cam | default |
-| `configs/pipelines/pipeline_mta.yaml` | MTA 6-cam | NvDeepSORT Swin-MTA |
+| `configs/pipelines/pipeline.yaml` | generic | default fallback (people detector) |
 | `configs/pipelines/pipeline_mmp.yaml` | MMPTracking_short | MMP fine-tuned detector + Swin ReID |
 | `configs/pipelines/pipeline_mmp_nvdcf_realtime_baseline.yaml` | MMPTracking_short | NvDCF realtime, no online merge |
 | `configs/pipelines/pipeline_mmp_nvdcf_online.yaml` | MMPTracking_short | NvDCF + online global merge |
@@ -167,14 +163,14 @@ python scripts/train/train_yolo_mmp.py       # fine-tune YOLO11n
 python scripts/train/finetune_reid_mmp.py    # outputs output/reid_mmp/swin_tiny_mmp_reid.onnx
 ```
 
-Best YOLO warm-start: use MTA model (`output/train/yolo11n_mta/weights/best.pt`).
-Best ReID warm-start: use MTA ReID model (`output/reid_v2/best.pth`).
+YOLO warm-start: `yolo11n.pt` (COCO) or the previous `yolo11n_mmp.onnx` weights.
+ReID warm-start: `models/reid/swin_tiny_market1501_aicity156_featuredim256.onnx`
+(the base the deployed `swin_tiny_mmp_reid_all` was fine-tuned from).
 
 ## Regression Anchors
 
 | Scene | Preset | Global IDF1 |
 |-------|--------|-------------|
-| MTA (offline merge) | `pipeline_mta.yaml` + `nvdeepsort_reid_swin_mta.yaml` | 0.5801 |
 | `lobby_0` (nearline) | `pipeline_mmp_nvdcf_realtime_baseline.yaml` | 0.8365 |
 | `industry_safety_0` (nearline) | same | 0.8360 |
 

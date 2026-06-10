@@ -25,3 +25,6 @@ models/**/*.pt
 models/**/*.pth
 *.pt
 third_party/fast-reid/
+
+# Archived foreign datasets (MTA/MTMC) moved out of dataset/
+old_stuff/datasets_archive/

@@ -48,11 +48,9 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                         help="Delete the current-batch detector engine and "
                              "rebuild it on this run.")
     parser.add_argument("--nvinfer-config", default=defaults["nvinfer_config"],
-                        help="nvinfer config. Default comes from pipeline.yaml. "
-                             "Alternatives: configs/models/nvinfer_yolov8_people.yml, "
-                             "configs/models/nvinfer_yolov11_people.yml, "
-                             "configs/models/nvinfer_peoplenet.yml, "
-                             "configs/models/nvinfer_trafficcamnet.yml")
+                        help="nvinfer config. Default comes from the pipeline YAML. "
+                             "MMP detector: configs/models/nvinfer_yolov11_mmp.yml; "
+                             "generic people: configs/models/nvinfer_yolov11_people.yml")
     parser.add_argument("--reid-sgie-config", default=defaults["reid_sgie_config"],
                         help="Optional secondary nvinfer (SGIE) config that "
                              "extracts per-person ReID embeddings as "
@@ -231,23 +229,12 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                         help="Loop file sources indefinitely (file-loop=1 on nvurisrcbin). "
                              "Useful for benchmarking so short videos do not end "
                              "before the FPS probe fires.")
-    parser.add_argument("--mta-dataset", default=None, metavar="PATH",
-                        help="Path to an MTA split folder (e.g. dataset/mta/MTA_ext_short/test). "
-                             "Auto-loads all cam_*.mp4 files as sources, overriding --sources.")
     parser.add_argument("--export-predictions", default=None, metavar="DIR",
                         help="Write per-camera prediction CSVs to this directory "
-                             "for offline evaluation with src.eval.metrics.")
+                             "for offline evaluation with src.eval.metrics_mmp.")
     parser.add_argument("--show-gt", action="store_true",
                         help="Overlay ground-truth boxes (green) on the display. "
-                             "Requires --mta-dataset or --wildtrack-dataset.")
-    parser.add_argument("--wildtrack-dataset", default=None, metavar="PATH",
-                        help="Path to the Wildtrack root folder "
-                             "(e.g. dataset/Wildtrack). "
-                             "Auto-loads cam1.mp4…cam7.mp4 as sources, "
-                             "overriding --sources. Incompatible with --mta-dataset.")
-    parser.add_argument("--wildtrack-minutes", type=float, default=None,
-                        help="Limit Wildtrack playback/GT to this many minutes "
-                             "(max: ~3.3 min = full annotated range).")
+                             "Requires --mmp-dataset or --mmp-short-dataset.")
     parser.add_argument("--mmp-dataset", default=None, metavar="ROOT:SCENE",
                         help="MMPTracking scene to run: 'ROOT:SCENE', e.g. "
                              "'dataset/MMPTracking:lobby_0'. "

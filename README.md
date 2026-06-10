@@ -132,7 +132,7 @@ Deeper notes (configs, presets, tuning, regression anchors) are in
 |---|---|---|
 | Detector | `yolo11n_mmp.onnx` (`nvinfer_yolov11_mmp.yml`) | SGIE-decoupled ReID, alternate detectors |
 | Tracker | NvDCF **legacy DCF** (`nvdcf_accuracy_mmp_recall_all.yaml`) | NvDeepSORT, VPI DCF (`visualTrackerType:2`) |
-| Cross-camera ID | Micro-batch fusion (`--micro-batch-fusion`, cooccur geometry) | trajectory geometry (`--geo-mode trajectory`), pose feet (`src/reid/pose.py`) |
+| Cross-camera ID | Micro-batch fusion (`--micro-batch-fusion`, cooccur geometry) | trajectory geometry (`--geo-mode trajectory`); pose feet (archived in `old_stuff/`) |
 
 The experimental geometry modes (trajectory, pose) and SGIE/NvDeepSORT paths are
 **off by default** — A/B tests showed no gain on the overlapping MMP cameras

@@ -17,7 +17,7 @@ import yaml
 @dataclass
 class DetectionConfig:
     enabled: bool = True
-    config_file: str = "configs/models/nvinfer_yolov8_people.yml"
+    config_file: str = "configs/models/nvinfer_yolov11_mmp.yml"
 
 
 @dataclass
