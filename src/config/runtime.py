@@ -6,7 +6,6 @@ from pathlib import Path
 
 import yaml
 
-from src.reid import gallery
 from src.reid.config import ReIDConfig
 
 

@@ -150,12 +150,16 @@ python -m pytest tests/ -v          # or: python tests/test_fusion.py
 ## Layout
 
 ```text
-configs/      pipeline presets, nvinfer detector + nvtracker configs, sources
-models/       YOLO + Swin ReID ONNX (engines built on first run; gitignored)
-dataset/      MMPTracking_short (primary) + other datasets
-src/          main.py, pipeline/, reid/, eval/, dataset/
-scripts/      training + benchmark utilities
-Old materials/ learning milestones, daily reports, COMMANDS.md, legacy dataset docs
+configs/    pipeline presets + nvinfer / nvtracker / source configs
+            (pipelines/, models/, tracker/, sources/, labels/)
+models/     YOLO + Swin-ReID ONNX (TensorRT .engine built on first run; gitignored)
+dataset/    MMPTracking_short (primary benchmark)
+src/        config/, dataset/, pipeline/, reid/, eval/, utils/ + main.py
+scripts/    datasets/, train/, eval/, benchmark/, setup/
+tests/      unit tests (run: python tests/test_*.py  or  pytest)
+docs/       reference papers (PDF)
+report/     dated progress reports
+old_stuff/  archived milestones, reports, and legacy (MTA / Wildtrack / …) code
 ```
 
 Model ONNX files are tracked via Git LFS; run `git lfs pull` after cloning.
@@ -176,4 +180,4 @@ Docker training services: `yolo_train`, `reid_train_mmp` (see `docker-compose.ym
 
 The earlier learning-project history (DeepStream milestones 1–8, MTA / Wildtrack /
 mtmc_4cam experiments, daily reports, full command log) is preserved under
-[Old materials/](Old%20materials/).
+[old_stuff/](old_stuff/).

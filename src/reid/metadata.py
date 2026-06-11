@@ -7,7 +7,6 @@ only DeepStream metadata + optional torch, no gallery tuning state.
 
 import traceback
 
-import numpy as np
 import pyservicemaker as psm
 
 try:

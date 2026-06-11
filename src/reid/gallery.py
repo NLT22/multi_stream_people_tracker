@@ -26,14 +26,8 @@ from src.reid.gallery_store import GalleryStore
 from src.reid.config import ReIDConfig
 from src.reid.detection_row import DetectionRow
 
-# Tuning constants now live in ReIDConfig (src/reid/config.py).
-
-from src.reid.matching import (  # noqa: F401  (re-exported for callers)
-    _cosine_similarity,
-    _mean_embedding,
-    max_weight_assignment,
-)
-
+# SourceIdCollectorProbe is re-exported here: runner.py builds it via
+# gallery.SourceIdCollectorProbe, and gallery uses it internally (pretiler path).
 from src.reid.metadata import SourceIdCollectorProbe  # noqa: F401
 
 # Probe logic split by concern into mixins (see each module). They operate on the

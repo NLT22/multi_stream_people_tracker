@@ -1,12 +1,12 @@
 """Pipeline assembly + run orchestration (the production builder).
-Extracted from src/main.py; replaces the unused src/pipeline/builder.py."""
 
-import argparse
+`run(PipelineRunConfig)` builds the GStreamer/pyservicemaker graph
+(sources → mux → nvinfer → nvtracker → probes → tiler → osd → sink) and runs it."""
+
 import sys
 from pathlib import Path
 
 import pyservicemaker as psm
-import yaml
 
 from src.pipeline.model_utils import (
     deepstream_tracker_lib_path,

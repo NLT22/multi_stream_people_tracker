@@ -337,7 +337,6 @@ def run_editor(scene_dir: Path, cam: str, use_clean: bool) -> None:
 
 def _save(gt: pd.DataFrame, states: dict, person_ids: list,
           gt_path: Path, scene_dir: Path, cam: str) -> None:
-    import sys
     out_path = scene_dir / f"gt_{cam}_clean.csv"
     backup   = scene_dir / f"gt_{cam}_original.csv"
     if not backup.exists():

@@ -10,7 +10,6 @@ WHY THIS EXISTS:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 import yaml
 
 
@@ -70,13 +69,7 @@ class PipelineConfig:
 
     @classmethod
     def from_yaml(cls, path: str) -> "PipelineConfig":
-        """
-        Load PipelineConfig from a YAML file.
-
-        TODO (Milestone 4+): This method is used by main.py and the later
-        milestones. For the early milestones (01-03) you pass URIs directly
-        via --input, so this is not called yet.
-        """
+        """Load a PipelineConfig from a YAML preset file."""
         yaml_path = Path(path)
         if not yaml_path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")

@@ -3,7 +3,6 @@ Extracted from src/main.py."""
 
 import argparse
 
-from src.reid import gallery
 from src.reid.config import ReIDConfig
 from src.config.runtime import DEFAULT_CONFIG_PATH, _load_defaults
 

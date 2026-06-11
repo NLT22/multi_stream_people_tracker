@@ -33,7 +33,7 @@ python -m pytest tests/test_geometry.py -v
 python -m pytest tests/test_geometry.py::test_foot_to_world -v
 ```
 
-There are no other automated tests — the main validation workflow is the pipeline eval loop described in `Old materials/COMMANDS.md`.
+The unit tests under `tests/` (run `python tests/test_*.py` or `pytest`) cover the ReID/gallery/eval logic; the end-to-end validation is the pipeline eval loop (export → nearline merge → `metrics_mmp`). Archived commands live in `old_stuff/COMMANDS.md`.
 
 ## Docker
 
@@ -115,15 +115,19 @@ See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, bench
 - `src/main.py` — thin entry point (`main()` orchestration only)
 - `src/config/args.py` — CLI argument parsing
 - `src/config/runtime.py` — build defaults dict from YAML preset + gallery tuning
-- `src/pipeline/runner.py` — assembles all GStreamer/pyservicemaker elements + `run()` (the production builder; replaced the old unused `builder.py`)
-- `src/pipeline/probes.py` — metadata probe callbacks (BatchMetadataOperator subclasses)
+- `src/pipeline/runner.py` — assembles all GStreamer/pyservicemaker elements + `run(PipelineRunConfig)` (the production builder)
+- `src/pipeline/run_config.py` — `PipelineRunConfig` dataclass (all `run()` parameters)
+- `src/pipeline/source_plan.py` — turns args into a `SourcePlan` (sources + GT + geometry)
 - `src/pipeline/sources.py` — URI loading for video files, folders, RTSP
 - `src/pipeline/engine_prep.py` — dynamic TensorRT engine generation per batch size
-- `src/reid/gallery.py` — CrossCameraGalleryProbe + SourceIdCollectorProbe + all ReID tuning constants
+- `src/reid/gallery.py` — `CrossCameraGalleryProbe` (thin DeepStream adapter) + `gallery_{rows,conflict,assignment,merge}` mixins
+- `src/reid/metadata.py` — `SourceIdCollectorProbe` (pre-tiler source_id + embedding reader)
+- `src/reid/config.py` — `ReIDConfig` dataclass (all ReID / Global-ID tuning)
+- `src/reid/{gallery_store,tracklet_store,detection_row}.py` — gallery/tracklet state + the per-frame row dataclass
 - `src/reid/matching.py` — pure cosine / mean-embedding / Hungarian helpers
 - `src/reid/geometry.py` — ground-plane geometry from MMPTracking calibration JSONs
 - `src/config/loader.py` — PipelineConfig YAML loader
-- `src/eval/metrics_mmp.py` — MOTA/IDF1/Global IDF1 for MMPTracking_short
+- `src/eval/mmp_metrics/` — MOTA/IDF1/Global IDF1 engine (`core.py`) + CLI (`cli.py`); `src/eval/metrics_mmp.py` is a thin `-m` shim
 - `src/eval/nearline_merge.py` — delayed geometry+embedding-assisted Global ID remapping
 
 ### Config Presets

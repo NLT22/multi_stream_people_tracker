@@ -171,7 +171,6 @@ def _make_looped_uri(source: str, min_seconds: float) -> str:
     If the source is already long enough, return it as-is.
     Otherwise loop it via ffmpeg concat to create a cached clip.
     """
-    import shutil
 
     # Get duration of source
     try:
