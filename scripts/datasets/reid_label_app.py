@@ -7,7 +7,7 @@ lets you group them into real people by clicking, then saves the labels.
 Usage:
     python scripts/datasets/reid_label_app.py            # serves http://localhost:8000
     # open the URL, pick an environment, group the cards, Save.
-Outputs: output/reid_labelsheet/labels_<env>.json   {trackKey: group_id}
+Outputs: reid_labels/labels_<env>.json   {trackKey: group_id}   (git-tracked, portable)
 Then:    python scripts/datasets/apply_reid_labels.py  (builds the consolidated cache)
 """
 
@@ -23,7 +23,8 @@ from urllib.parse import urlparse, parse_qs
 
 CACHE = os.path.abspath("dataset/MMPTracking_10minute_reid_cache")
 PROPOSAL = "output/reid_consolidation/train_consolidated_manifest.csv"
-OUTDIR = "output/reid_labelsheet"
+# Tracked (git-committable) so the manual labels are portable across machines.
+OUTDIR = "reid_labels"
 os.makedirs(OUTDIR, exist_ok=True)
 
 
@@ -83,6 +84,7 @@ ENVS = sorted({env_of(s) for s, _ in _track_paths})
 
 PAGE = """<!doctype html><html><head><meta charset=utf-8><title>ReID labeler</title>
 <style>
+:root{--imgh:84px}
 body{font-family:sans-serif;margin:0;background:#1e1e1e;color:#ddd}
 #bar{position:sticky;top:0;background:#111;padding:8px 12px;z-index:10;border-bottom:1px solid #333}
 #bar a{color:#6cf;margin-right:10px;text-decoration:none}
@@ -97,8 +99,8 @@ button:hover{background:#3a3a3a}
 .cards{display:flex;flex-wrap:wrap;gap:6px;padding:6px;min-height:30px}
 .card{border:3px solid transparent;border-radius:4px;background:#111;padding:2px;cursor:pointer}
 .card.sel{border-color:#6cf;box-shadow:0 0 6px #6cf}
-.card .imgs{display:flex;flex-wrap:wrap;gap:2px;max-width:270px}
-.card img{height:84px;width:auto;display:block}
+.card .imgs{display:flex;flex-wrap:wrap;gap:2px;max-width:calc(var(--imgh) * 3.4)}
+.card img{height:var(--imgh);width:auto;display:block}
 .cap{font-size:10px;color:#9c9;text-align:center}
 #status{color:#6f6;margin-left:10px}
 </style></head><body>
@@ -107,6 +109,9 @@ button:hover{background:#3a3a3a}
   | imgs/track <select id=nsel onchange="setN(this.value)">
     <option>3</option><option>4</option><option selected>5</option><option>6</option>
     <option>8</option><option>10</option><option>12</option><option>16</option></select>
+  | size <select id=szsel onchange="setSize(this.value)">
+    <option>60</option><option>72</option><option selected>84</option><option>110</option>
+    <option>140</option><option>180</option><option>240</option></select>
   <button onclick=newPerson()>+ New person</button>
   <button onclick=moveSel('JUNK')>Discard selected</button>
   <button onclick=clearSel()>Clear selection</button>
@@ -129,6 +134,7 @@ async function load(env){
 }
 async function setN(n){ N=+n; const d=await fetchTracks(); tracks=d.tracks;
   tracks.forEach(t=>{if(!(t.key in assign))assign[t.key]='P'+t.proposed}); render(); }
+function setSize(px){ document.documentElement.style.setProperty('--imgh', px+'px'); }
 function groups(){
   const g={}; tracks.forEach(t=>{const k=assign[t.key]; (g[k]=g[k]||[]).push(t)}); return g;
 }
