@@ -84,6 +84,47 @@ def _resolve_short_root(short_root: Path, scenes: list[str]) -> Path:
     raise SystemExit(1)
 
 
+def _scene_group_key(scene: str) -> tuple[str, int]:
+    head, sep, tail = scene.rpartition("_")
+    if sep and tail.isdigit():
+        return head, int(tail)
+    return scene, -1
+
+
+def _split_cache_train_scenes(cache_root: Path) -> tuple[set[str], set[str]]:
+    manifest_path = cache_root / "train" / "manifest.csv"
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing train manifest: {manifest_path}")
+
+    scenes: set[str] = set()
+    with manifest_path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            scene = row.get("scene", "")
+            if scene:
+                scenes.add(scene)
+    if not scenes:
+        raise RuntimeError(f"No scene names found in {manifest_path}")
+
+    groups: dict[str, list[tuple[int, str]]] = {}
+    for scene in scenes:
+        group, idx = _scene_group_key(scene)
+        groups.setdefault(group, []).append((idx, scene))
+
+    val_scenes = {
+        sorted(items, key=lambda x: (x[0], x[1]))[-1][1]
+        for items in groups.values()
+        if len(items) >= 2
+    }
+    train_scenes = scenes - val_scenes
+    if not train_scenes:
+        raise RuntimeError(
+            "Scene split left no training scenes. Need at least two scenes per "
+            "group or pass a normal crop cache with train/val manifests."
+        )
+    return train_scenes, val_scenes
+
+
 def _configure_worker_tmp(out_dir: Path, workers: int) -> None:
     if workers <= 0:
         return
@@ -155,6 +196,7 @@ class CachedCropSample:
     image_path: str
     gid: int
     cam_id: int
+    scene: str
 
 
 class MMPReidDataset(Dataset):
@@ -359,7 +401,14 @@ class MMPReidDataset(Dataset):
 class CachedReidDataset(Dataset):
     """Read pre-cropped ReID JPEGs produced by build_reid_crop_cache.py."""
 
-    def __init__(self, cache_root: Path, split: str, transform=None) -> None:
+    def __init__(
+        self,
+        cache_root: Path,
+        split: str,
+        transform=None,
+        scene_names: set[str] | None = None,
+        split_name: str | None = None,
+    ) -> None:
         self.cache_root = cache_root
         self.transform = transform
         self.samples: list[CachedCropSample] = []
@@ -375,6 +424,9 @@ class CachedReidDataset(Dataset):
         with manifest_path.open("r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
+                scene = row.get("scene", "")
+                if scene_names is not None and scene not in scene_names:
+                    continue
                 gid = int(row["pid"])
                 cam_id = int(row["cam_id"])
                 image_path = cache_root / row["rel_path"]
@@ -383,6 +435,7 @@ class CachedReidDataset(Dataset):
                     image_path=str(image_path),
                     gid=gid,
                     cam_id=cam_id,
+                    scene=scene,
                 ))
                 self._pid_to_idxs.setdefault(gid, []).append(idx)
 
@@ -394,7 +447,8 @@ class CachedReidDataset(Dataset):
             for pid, idxs in self._pid_to_idxs.items()
         }
 
-        print(f"[reid_cache:{split}] {len(self.samples)} crops "
+        label = split_name or split
+        print(f"[reid_cache:{label}] {len(self.samples)} crops "
               f"({self.num_classes} persons) from {manifest_path}")
 
     def __len__(self) -> int:
@@ -729,6 +783,10 @@ def main() -> None:
                    help="Train from pre-cropped ReID JPEGs in DIR/{train,val}/ "
                         "instead of seeking videos. Build with "
                         "scripts/datasets/build_reid_crop_cache.py.")
+    p.add_argument("--crop-cache-val-from-train", action="store_true",
+                   help="With --crop-cache-root: ignore cache val/ and split "
+                        "train/manifest.csv by scene. Holds out the last scene "
+                        "per scene group, e.g. lobby_0-2 train, lobby_3 val.")
     p.add_argument("--exclude-retail", action="store_true",
                    help="With --scan-root: drop scene dirs whose name contains "
                         "'retail' from both train and val.")
@@ -738,6 +796,9 @@ def main() -> None:
     p.add_argument("--resume",      default=None, metavar="CKPT",
                    help="Resume from checkpoint (.pth). If from MTA model, "
                         "the classifier head is replaced automatically.")
+    p.add_argument("--warm-start", action="store_true",
+                   help="With --resume: load weights but start training at epoch 1 "
+                        "instead of continuing the checkpoint epoch counter.")
     args = p.parse_args()
 
     device  = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -746,9 +807,20 @@ def main() -> None:
     _configure_worker_tmp(out_dir, args.workers)
 
     if args.crop_cache_root:
-        train_scenes, val_scenes = ["crop-cache/train"], ["crop-cache/val"]
+        if args.crop_cache_val_from_train:
+            cache_train_scenes, cache_val_scenes = _split_cache_train_scenes(
+                Path(args.crop_cache_root)
+            )
+            train_scenes = sorted(cache_train_scenes)
+            val_scenes = sorted(cache_val_scenes)
+        else:
+            cache_train_scenes = cache_val_scenes = None
+            train_scenes, val_scenes = ["crop-cache/train"], ["crop-cache/val"]
         short_root = None
         print(f"[reid] crop-cache-root: {args.crop_cache_root}")
+        if args.crop_cache_val_from_train:
+            print("[reid] crop-cache split: train manifest only; "
+                  "last scene per group held out for val")
     elif args.scan_root:
         root = Path(args.scan_root)
 
@@ -783,10 +855,24 @@ def main() -> None:
     # ── Dataset ─────────────────────────────────────────────────────────────
     if args.crop_cache_root:
         cache_root = Path(args.crop_cache_root)
-        train_ds = CachedReidDataset(
-            cache_root, "train", transform=make_transforms(train=True)
-        )
-        val_ds = CachedReidDataset(cache_root, "val", transform=None)
+        if args.crop_cache_val_from_train:
+            train_ds = CachedReidDataset(
+                cache_root, "train",
+                transform=make_transforms(train=True),
+                scene_names=cache_train_scenes,
+                split_name="train_from_train_manifest",
+            )
+            val_ds = CachedReidDataset(
+                cache_root, "train",
+                transform=None,
+                scene_names=cache_val_scenes,
+                split_name="val_from_train_manifest",
+            )
+        else:
+            train_ds = CachedReidDataset(
+                cache_root, "train", transform=make_transforms(train=True)
+            )
+            val_ds = CachedReidDataset(cache_root, "val", transform=None)
     else:
         assert short_root is not None
         train_ds = MMPReidDataset(
@@ -859,7 +945,9 @@ def main() -> None:
                      if not k.startswith("classifier.")}
             model.load_state_dict(state, strict=False)
             print(f"[train] Loaded checkpoint (head dropped+replaced for {train_ds.num_classes} classes): {args.resume}")
-        if "epoch" in ckpt:
+        if args.warm_start:
+            print("[train] Warm start: checkpoint epoch ignored; starting at epoch 1")
+        elif "epoch" in ckpt:
             start_epoch = ckpt["epoch"] + 1
             print(f"[train] Resuming from epoch {start_epoch}")
 
