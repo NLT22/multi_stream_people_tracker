@@ -22,7 +22,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 CACHE = os.path.abspath("dataset/MMPTracking_10minute_reid_cache")
+# Optional auto-clustering proposal (gitignored output/). If absent, fall back to
+# the crop-cache manifest (built from the dataset) so the app is portable across
+# machines with no output/ files — each scene-track simply starts as its own group.
 PROPOSAL = "output/reid_consolidation/train_consolidated_manifest.csv"
+CACHE_MANIFEST = os.path.join(CACHE, "train", "manifest.csv")
 # Tracked (git-committable) so the manual labels are portable across machines.
 OUTDIR = "reid_labels"
 os.makedirs(OUTDIR, exist_ok=True)
@@ -32,13 +36,33 @@ def env_of(scene: str) -> str:
     return "_".join(scene.split("_")[1:-1])
 
 
-# ---- load proposal, group crops by scene-track ----------------------------
-_track_paths: dict[tuple, list[str]] = defaultdict(list)
-_track_gid: dict[tuple, int] = {}
-for r in csv.DictReader(open(PROPOSAL)):
-    key = (r["scene"], r["orig_id"] if "orig_id" in r else r["orig_pid"])
-    _track_paths[key].append(r["rel_path"])
-    _track_gid[key] = int(r["gid"])
+def _load_tracks():
+    """Group crops by scene-track (scene, orig_id) and pick a starting group id.
+    Prefers the auto-clustering proposal; else uses the crop-cache manifest
+    (no proposal -> each scene-track is its own group)."""
+    if os.path.exists(PROPOSAL):
+        src, gidcol = PROPOSAL, "gid"
+    elif os.path.exists(CACHE_MANIFEST):
+        src, gidcol = CACHE_MANIFEST, "pid"  # no proposal -> pid (each track separate)
+    else:
+        raise SystemExit(
+            f"[reid] Need either {PROPOSAL} or {CACHE_MANIFEST}.\n"
+            f"  Build the crop cache first:\n"
+            f"    python -m scripts.datasets.build_reid_crop_cache "
+            f"--src-root dataset/MMPTracking_10minute "
+            f"--output-dir dataset/MMPTracking_10minute_reid_cache --exclude-retail")
+    paths: dict[tuple, list[str]] = defaultdict(list)
+    gid: dict[tuple, int] = {}
+    for r in csv.DictReader(open(src)):
+        oid = r.get("orig_id") or r.get("orig_pid") or r.get("pid")
+        key = (r["scene"], oid)
+        paths[key].append(r["rel_path"])
+        gid[key] = int(r[gidcol])
+    print(f"[reid] tracks loaded from {src}")
+    return paths, gid
+
+
+_track_paths, _track_gid = _load_tracks()
 
 _env_cache: dict[str, list] = {}
 
