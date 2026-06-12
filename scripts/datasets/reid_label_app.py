@@ -52,9 +52,12 @@ def _load_cache_tracks():
     items: dict[tuple, list] = defaultdict(list)
     gid: dict[tuple, int] = {}
     for r in csv.DictReader(open(src)):
+        scene, rel = r.get("scene"), r.get("rel_path")
+        if not scene or not rel:
+            continue   # skip blank/trailing/malformed rows
         oid = str(r.get("orig_id") or r.get("orig_pid") or r.get("pid"))
-        key = (r["scene"], oid)
-        items[key].append(r["rel_path"])
+        key = (scene, oid)
+        items[key].append(rel)
         gid[key] = int(r[gidcol])
     print(f"[reid] tracks loaded from {src} (cache mode)")
     return items, gid
