@@ -26,9 +26,13 @@ Output:
 from __future__ import annotations
 
 import argparse
+import csv
 import math
+import os
 import random
+import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -80,17 +84,87 @@ def _resolve_short_root(short_root: Path, scenes: list[str]) -> Path:
     raise SystemExit(1)
 
 
+def _configure_worker_tmp(out_dir: Path, workers: int) -> None:
+    if workers <= 0:
+        return
+
+    target = (out_dir / "mp_tmp").resolve()
+    target.mkdir(parents=True, exist_ok=True)
+
+    # Python's multiprocessing resource_sharer binds an AF_UNIX socket below
+    # tempfile.gettempdir(). Long project paths under /media/... exceed the
+    # kernel socket path limit, so expose the HDD temp dir through a short path.
+    candidates = [
+        Path("/media/pc/mmp_reid_tmp"),
+        Path("/tmp/mmp_reid_tmp"),
+    ]
+    chosen: Path | None = None
+    for link in candidates:
+        try:
+            if link.is_symlink():
+                if link.resolve() != target:
+                    link.unlink()
+                    link.symlink_to(target, target_is_directory=True)
+            elif link.exists():
+                if not link.is_dir() or not os.access(link, os.W_OK):
+                    continue
+            else:
+                link.symlink_to(target, target_is_directory=True)
+
+            probe = link / ".write_test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+            chosen = link
+            break
+        except OSError:
+            continue
+
+    if chosen is None:
+        chosen = target
+        print(
+            "[reid] WARNING: could not create a short multiprocessing temp "
+            f"symlink; workers may fail if TMPDIR is too long: {chosen}"
+        )
+
+    for key in ("TMPDIR", "TEMP", "TMP"):
+        os.environ[key] = str(chosen)
+    tempfile.tempdir = str(chosen)
+
+    suffix = f" -> {target}" if chosen.is_symlink() else ""
+    print(f"[reid] multiprocessing tmp: {chosen}{suffix}")
+
+
 # ---------------------------------------------------------------------------
 # Dataset — crop persons directly from video frames
 # ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CropSample:
+    video_path: str
+    frame_no: int
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    gid: int
+    cam_id: int
+
+
+@dataclass(frozen=True)
+class CachedCropSample:
+    image_path: str
+    gid: int
+    cam_id: int
+
 
 class MMPReidDataset(Dataset):
     """
     Crops person bounding boxes from MMPTracking_short GT for ReID training.
 
     Samples every `sample_rate` frames.
-    Global person ID = scene_global_offset + local_pid so identities from
-    different scenes never collide.
+    Stores crop metadata only; frames are decoded lazily in __getitem__.
+    This keeps MMPTracking_10minute training from materializing hundreds of
+    thousands of crop arrays in RAM before epoch 1.
     """
 
     def __init__(
@@ -106,8 +180,8 @@ class MMPReidDataset(Dataset):
         prefer_clean_gt: bool = False,
     ) -> None:
         self.transform = transform
-        # (frame_array_or_path, global_pid, cam_id)
-        self.samples: list[tuple] = []
+        self.samples: list[CropSample] = []
+        self._caps: dict[str, cv2.VideoCapture] = {}
 
         # Map global_pid → list[sample_idx]
         self._pid_to_idxs: dict[int, list[int]] = {}
@@ -120,7 +194,6 @@ class MMPReidDataset(Dataset):
             if not scene_dir.exists():
                 print(f"  [SKIP] scene not found: {scene_dir}")
                 continue
-            # Build crop list: load video, decode every sample_rate-th frame
             import pandas as pd
 
             found_csv = False
@@ -139,57 +212,57 @@ class MMPReidDataset(Dataset):
                     print(f"  [WARN] video not found: {vid_path}")
                     continue
 
-                df = pd.read_csv(csv_path)
-
-                # Group boxes by frame for fast lookup
-                frame_boxes: dict[int, list[tuple]] = {}
-                for _, row in df.iterrows():
-                    f = int(row["frame"])
-                    frame_boxes.setdefault(f, []).append((
-                        int(row["person_id"]),
-                        float(row["left"]), float(row["top"]),
-                        float(row["width"]), float(row["height"]),
-                    ))
+                width, height = self._video_size(vid_path)
+                if width <= 0 or height <= 0:
+                    print(f"  [WARN] cannot read video size: {vid_path}")
+                    continue
 
                 # Build global pid map for this scene
                 local_to_global: dict[int, int] = {}
 
-                cap = cv2.VideoCapture(str(vid_path))
-                frame_no = 0
-                while True:
-                    ret, frame_img = cap.read()
-                    if not ret:
-                        break
-                    if frame_no % sample_rate == 0 and frame_no in frame_boxes:
-                        for (local_pid, x1, y1, w, h) in frame_boxes[frame_no]:
-                            total_raw += 1
-                            if w < min_w or h < min_h:
-                                continue
-                            # Clamp to frame
-                            x1c = max(0, int(x1))
-                            y1c = max(0, int(y1))
-                            x2c = min(frame_img.shape[1], int(x1 + w))
-                            y2c = min(frame_img.shape[0], int(y1 + h))
-                            if x2c <= x1c or y2c <= y1c:
-                                continue
+                df = pd.read_csv(
+                    csv_path,
+                    usecols=["frame", "person_id", "left", "top", "width", "height"],
+                )
+                df = df[df["frame"] % sample_rate == 0]
+                for row in df.itertuples(index=False):
+                    frame_no = int(row.frame)
+                    local_pid = int(row.person_id)
+                    x1 = float(row.left)
+                    y1 = float(row.top)
+                    w = float(row.width)
+                    h = float(row.height)
 
-                            crop = frame_img[y1c:y2c, x1c:x2c]
-                            crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                    total_raw += 1
+                    if w < min_w or h < min_h:
+                        continue
 
-                            # Assign global pid
-                            if local_pid not in local_to_global:
-                                key = (scene, local_pid)
-                                if key not in scene_pid_to_global:
-                                    scene_pid_to_global[key] = len(scene_pid_to_global)
-                                local_to_global[local_pid] = scene_pid_to_global[key]
-                            gid = local_to_global[local_pid]
+                    # Clamp to frame using video metadata instead of decoding.
+                    x1c = max(0, int(x1))
+                    y1c = max(0, int(y1))
+                    x2c = min(width, int(x1 + w))
+                    y2c = min(height, int(y1 + h))
+                    if x2c <= x1c or y2c <= y1c:
+                        continue
 
-                            idx = len(self.samples)
-                            self.samples.append((crop_rgb, gid, cam_id))
-                            self._pid_to_idxs.setdefault(gid, []).append(idx)
-                            total_kept += 1
-                    frame_no += 1
-                cap.release()
+                    # Assign global pid
+                    if local_pid not in local_to_global:
+                        key = (scene, local_pid)
+                        if key not in scene_pid_to_global:
+                            scene_pid_to_global[key] = len(scene_pid_to_global)
+                        local_to_global[local_pid] = scene_pid_to_global[key]
+                    gid = local_to_global[local_pid]
+
+                    idx = len(self.samples)
+                    self.samples.append(CropSample(
+                        video_path=str(vid_path),
+                        frame_no=frame_no,
+                        x1=x1c, y1=y1c, x2=x2c, y2=y2c,
+                        gid=gid,
+                        cam_id=cam_id,
+                    ))
+                    self._pid_to_idxs.setdefault(gid, []).append(idx)
+                    total_kept += 1
             if not found_csv:
                 print(f"  [WARN] no gt_cam*.csv files found in: {scene_dir}")
 
@@ -199,7 +272,8 @@ class MMPReidDataset(Dataset):
             if len(idxs) >= min_imgs_per_pid
         )
         valid_set = set(valid_pids)
-        keep_idxs = [i for i, (_, gid, _) in enumerate(self.samples) if gid in valid_set]
+        keep_idxs = [i for i, sample in enumerate(self.samples)
+                     if sample.gid in valid_set]
 
         filtered_samples = [self.samples[i] for i in keep_idxs]
         self.samples = filtered_samples
@@ -210,8 +284,8 @@ class MMPReidDataset(Dataset):
 
         # Rebuild pid→idxs with new indices
         self._pid_to_idxs = {}
-        for i, (_, gid, _) in enumerate(self.samples):
-            cls = self.pid_to_cls[gid]
+        for i, sample in enumerate(self.samples):
+            cls = self.pid_to_cls[sample.gid]
             self._pid_to_idxs.setdefault(cls, []).append(i)
 
         print(f"[reid_data:{split_name}] {len(scenes)} scenes: "
@@ -223,15 +297,124 @@ class MMPReidDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx: int):
-        crop_rgb, gid, cam_id = self.samples[idx]
+        sample = self.samples[idx]
+        crop_rgb = self.load_crop_rgb(idx)
         img = Image.fromarray(crop_rgb)
         if self.transform:
             img = self.transform(img)
-        cls = self.pid_to_cls[gid]
-        return img, cls, cam_id
+        cls = self.pid_to_cls[sample.gid]
+        return img, cls, sample.cam_id
 
     def get_pid_indices(self) -> dict[int, list[int]]:
         return self._pid_to_idxs
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_caps"] = {}
+        return state
+
+    @staticmethod
+    def _video_size(vid_path: Path) -> tuple[int, int]:
+        cap = cv2.VideoCapture(str(vid_path))
+        try:
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            return width, height
+        finally:
+            cap.release()
+
+    def _capture(self, video_path: str) -> cv2.VideoCapture:
+        cap = self._caps.get(video_path)
+        if cap is None or not cap.isOpened():
+            cap = cv2.VideoCapture(video_path)
+            self._caps[video_path] = cap
+        return cap
+
+    def load_crop_rgb(self, idx: int) -> np.ndarray:
+        sample = self.samples[idx]
+        cap = self._capture(sample.video_path)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, sample.frame_no)
+        ret, frame_img = cap.read()
+        if not ret:
+            # Reopen once: OpenCV VideoCapture can get wedged after many seeks.
+            old = self._caps.pop(sample.video_path, None)
+            if old is not None:
+                old.release()
+            cap = self._capture(sample.video_path)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, sample.frame_no)
+            ret, frame_img = cap.read()
+        if not ret:
+            raise RuntimeError(
+                f"Could not read frame {sample.frame_no} from {sample.video_path}"
+            )
+
+        crop = frame_img[sample.y1:sample.y2, sample.x1:sample.x2]
+        if crop.size == 0:
+            raise RuntimeError(
+                f"Empty crop at frame {sample.frame_no} from {sample.video_path}"
+            )
+        return cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+
+
+class CachedReidDataset(Dataset):
+    """Read pre-cropped ReID JPEGs produced by build_reid_crop_cache.py."""
+
+    def __init__(self, cache_root: Path, split: str, transform=None) -> None:
+        self.cache_root = cache_root
+        self.transform = transform
+        self.samples: list[CachedCropSample] = []
+        self._pid_to_idxs: dict[int, list[int]] = {}
+
+        manifest_path = cache_root / split / "manifest.csv"
+        if not manifest_path.exists():
+            raise FileNotFoundError(
+                f"Missing ReID crop-cache manifest: {manifest_path}. "
+                "Build it with scripts/datasets/build_reid_crop_cache.py first."
+            )
+
+        with manifest_path.open("r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                gid = int(row["pid"])
+                cam_id = int(row["cam_id"])
+                image_path = cache_root / row["rel_path"]
+                idx = len(self.samples)
+                self.samples.append(CachedCropSample(
+                    image_path=str(image_path),
+                    gid=gid,
+                    cam_id=cam_id,
+                ))
+                self._pid_to_idxs.setdefault(gid, []).append(idx)
+
+        valid_pids = sorted(self._pid_to_idxs)
+        self.pid_to_cls = {pid: i for i, pid in enumerate(valid_pids)}
+        self.num_classes = len(valid_pids)
+        self._pid_to_idxs = {
+            self.pid_to_cls[pid]: idxs
+            for pid, idxs in self._pid_to_idxs.items()
+        }
+
+        print(f"[reid_cache:{split}] {len(self.samples)} crops "
+              f"({self.num_classes} persons) from {manifest_path}")
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int):
+        sample = self.samples[idx]
+        img = Image.open(sample.image_path).convert("RGB")
+        if self.transform:
+            img = self.transform(img)
+        cls = self.pid_to_cls[sample.gid]
+        return img, cls, sample.cam_id
+
+    def get_pid_indices(self) -> dict[int, list[int]]:
+        return self._pid_to_idxs
+
+    def load_crop_rgb(self, idx: int) -> np.ndarray:
+        sample = self.samples[idx]
+        img = Image.open(sample.image_path).convert("RGB")
+        return np.asarray(img)
 
 
 # ---------------------------------------------------------------------------
@@ -429,9 +612,9 @@ def evaluate_cross_cam_sim(model, dataset: MMPReidDataset, device,
 
     # Group by (pid_cls, cam)
     pid_cam: dict[int, dict[int, list[int]]] = {}
-    for i, (_, gid, cam) in enumerate(dataset.samples):
-        cls = dataset.pid_to_cls[gid]
-        pid_cam.setdefault(cls, {}).setdefault(cam, []).append(i)
+    for i, sample in enumerate(dataset.samples):
+        cls = dataset.pid_to_cls[sample.gid]
+        pid_cam.setdefault(cls, {}).setdefault(sample.cam_id, []).append(i)
 
     multi = {p: cams for p, cams in pid_cam.items() if len(cams) >= 2}
     if len(multi) < 2:
@@ -440,7 +623,7 @@ def evaluate_cross_cam_sim(model, dataset: MMPReidDataset, device,
     sample_pids = random.sample(sorted(multi.keys()), min(n_persons, len(multi)))
 
     def _emb(idx):
-        crop_rgb, _, _ = dataset.samples[idx]
+        crop_rgb = dataset.load_crop_rgb(idx)
         img = tf(Image.fromarray(crop_rgb)).unsqueeze(0).to(device)
         return model(img, return_feat=True)[0]
 
@@ -526,6 +709,8 @@ def main() -> None:
     p.add_argument("--min-imgs-pid", type=int, default=4)
     p.add_argument("--early-stop",  type=int, default=8)
     p.add_argument("--workers",     type=int, default=4)
+    p.add_argument("--prefetch-factor", type=int, default=2,
+                   help="DataLoader prefetch factor when --workers > 0.")
     p.add_argument("--batches-per-epoch", type=int, default=200,
                    help="PK batches per epoch. Use 0 to cover roughly all crops once "
                         "(default 200; old behavior was only num_persons // P batches).")
@@ -540,6 +725,10 @@ def main() -> None:
                    help="Use a dataset laid out as DIR/{train,val}/<scene>/cam*.mp4 "
                         "(e.g. MMPTracking_10minute). Overrides --short-root and the "
                         "built-in scene split with the on-disk train/val dirs.")
+    p.add_argument("--crop-cache-root", default=None, metavar="DIR",
+                   help="Train from pre-cropped ReID JPEGs in DIR/{train,val}/ "
+                        "instead of seeking videos. Build with "
+                        "scripts/datasets/build_reid_crop_cache.py.")
     p.add_argument("--exclude-retail", action="store_true",
                    help="With --scan-root: drop scene dirs whose name contains "
                         "'retail' from both train and val.")
@@ -554,8 +743,13 @@ def main() -> None:
     device  = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
+    _configure_worker_tmp(out_dir, args.workers)
 
-    if args.scan_root:
+    if args.crop_cache_root:
+        train_scenes, val_scenes = ["crop-cache/train"], ["crop-cache/val"]
+        short_root = None
+        print(f"[reid] crop-cache-root: {args.crop_cache_root}")
+    elif args.scan_root:
         root = Path(args.scan_root)
 
         def _scan(split: str) -> list[str]:
@@ -587,29 +781,38 @@ def main() -> None:
     print(f"Val   scenes ({len(val_scenes)}):   {val_scenes}")
 
     # ── Dataset ─────────────────────────────────────────────────────────────
-    train_ds = MMPReidDataset(
-        short_root, train_scenes,
-        transform=make_transforms(train=True),
-        sample_rate=args.sample_rate,
-        min_w=args.min_w, min_h=args.min_h,
-        min_imgs_per_pid=args.min_imgs_pid,
-        split_name="train",
-        prefer_clean_gt=args.prefer_clean_gt,
-    )
+    if args.crop_cache_root:
+        cache_root = Path(args.crop_cache_root)
+        train_ds = CachedReidDataset(
+            cache_root, "train", transform=make_transforms(train=True)
+        )
+        val_ds = CachedReidDataset(cache_root, "val", transform=None)
+    else:
+        assert short_root is not None
+        train_ds = MMPReidDataset(
+            short_root, train_scenes,
+            transform=make_transforms(train=True),
+            sample_rate=args.sample_rate,
+            min_w=args.min_w, min_h=args.min_h,
+            min_imgs_per_pid=args.min_imgs_pid,
+            split_name="train",
+            prefer_clean_gt=args.prefer_clean_gt,
+        )
 
     if train_ds.num_classes == 0:
         print("[ERROR] No valid persons found. Lower --min-h/--min-w or check dataset.")
         raise SystemExit(1)
 
-    val_ds = MMPReidDataset(
-        short_root, val_scenes,
-        transform=None,
-        sample_rate=args.sample_rate,
-        min_w=args.min_w, min_h=args.min_h,
-        min_imgs_per_pid=args.min_imgs_pid,
-        split_name="val",
-        prefer_clean_gt=args.prefer_clean_gt,
-    )
+    if not args.crop_cache_root:
+        val_ds = MMPReidDataset(
+            short_root, val_scenes,
+            transform=None,
+            sample_rate=args.sample_rate,
+            min_w=args.min_w, min_h=args.min_h,
+            min_imgs_per_pid=args.min_imgs_pid,
+            split_name="val",
+            prefer_clean_gt=args.prefer_clean_gt,
+        )
     if val_ds.num_classes == 0:
         print("[ERROR] No valid validation persons found. Check MMPTracking_short val scenes.")
         raise SystemExit(1)
@@ -621,9 +824,15 @@ def main() -> None:
         k=args.pk_k,
         batches_per_epoch=args.batches_per_epoch,
     )
+    loader_kwargs = {}
+    if args.workers > 0:
+        loader_kwargs.update(
+            persistent_workers=True,
+            prefetch_factor=args.prefetch_factor,
+        )
     loader    = DataLoader(train_ds, batch_size=batch_sz, sampler=sampler,
                            num_workers=args.workers, pin_memory=True,
-                           drop_last=True)
+                           drop_last=True, **loader_kwargs)
 
     # ── Model ────────────────────────────────────────────────────────────────
     model = SwinTinyReID(
