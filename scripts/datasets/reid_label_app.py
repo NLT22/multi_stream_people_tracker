@@ -191,7 +191,9 @@ button:hover{background:#3a3a3a}
   <span id=envs></span> | <span id=stat></span>
   | imgs/track <select id=nsel onchange="setN(this.value)">
     <option>3</option><option>4</option><option selected>5</option><option>6</option>
-    <option>8</option><option>10</option><option>12</option><option>16</option></select>
+    <option>8</option><option>10</option><option>12</option><option>16</option>
+    <option>20</option><option>24</option><option>30</option><option>40</option>
+    <option>50</option></select>
   | size <select id=szsel onchange="setSize(this.value)">
     <option>60</option><option>72</option><option selected>84</option><option>110</option>
     <option>140</option><option>180</option><option>240</option></select>
