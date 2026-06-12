@@ -64,6 +64,7 @@ def run(config: PipelineRunConfig):
     no_sync = config.no_sync
     loop_video = config.loop_video
     reid_sgie_config = config.reid_sgie_config
+    nvdsanalytics_config = config.nvdsanalytics_config
     geometry = config.geometry
     reid_config = config.reid_config
 
@@ -215,6 +216,22 @@ def run(config: PipelineRunConfig):
         print(f"[reid] decoupled ReID SGIE enabled "
               f"(batch={_sgie_batch}): {runtime_sgie_config}")
 
+    # Optional gst-nvdsanalytics: ROI occupancy / line-crossing / overcrowding
+    # on the tracked objects. Counts attach as frame user meta (read by
+    # AnalyticsProbe) and, with osd-mode=2, are drawn on the video.
+    analytics_probe = None
+    if nvdsanalytics_config:
+        from src.pipeline.analytics import AnalyticsProbe
+        pipeline.add("nvdsanalytics", "analytics",
+                     {"config-file": nvdsanalytics_config, "enable": 1})
+        analytics_probe = AnalyticsProbe(
+            print_interval=60,
+            export_path=(f"{export_predictions}/analytics.csv"
+                         if export_predictions else None),
+        )
+        pipeline.attach("analytics", psm.Probe("analytics_probe", analytics_probe))
+        print(f"[reid] nvdsanalytics enabled: {nvdsanalytics_config}")
+
     trajectory_visualizer = None
     if show_trajectories:
         trajectory_visualizer = TrajectoryVisualizer(
@@ -296,6 +313,10 @@ def run(config: PipelineRunConfig):
     if reid_src_element == "sgie_reid":
         pipeline.link("tracker", "sgie_reid")
         tracker_tail = "sgie_reid"
+    # nvdsanalytics runs on tracked objects, before the tiler.
+    if analytics_probe is not None:
+        pipeline.link(tracker_tail, "analytics")
+        tracker_tail = "analytics"
     visual_tail = tracker_tail
     if no_tiler:
         # Headless throughput: skip the tiler entirely.
@@ -361,5 +382,7 @@ def run(config: PipelineRunConfig):
         if exporter is not None:
             exporter.close()
             print(f"[reid] Predictions exported to: {export_predictions}")
+        if analytics_probe is not None:
+            analytics_probe.close()
 
 

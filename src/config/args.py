@@ -56,6 +56,12 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "output-tensor-meta. Use with a reidType:0 perf "
                              "tracker for realtime cross-camera ReID. "
                              "E.g. configs/models/nvinfer_reid_swin_sgie.yml")
+    parser.add_argument("--nvdsanalytics-config",
+                        default=defaults["nvdsanalytics_config"],
+                        help="Optional gst-nvdsanalytics config (ROI occupancy, "
+                             "line-crossing, overcrowding). Counts are printed, "
+                             "exported (with --export-predictions), and drawn on the "
+                             "video. E.g. configs/analytics/nvdsanalytics_mmp.txt")
     parser.add_argument("--tracker-config", default=defaults["tracker_config"],
                         help="Tracker config. Default comes from pipeline.yaml. "
                              "Recommended demo: nvdeepsort_reid_swin.yaml. "

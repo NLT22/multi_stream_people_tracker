@@ -70,6 +70,7 @@ def main(argv: list[str] | None = None) -> None:
         no_sync=args.no_sync,
         loop_video=args.loop_video,
         reid_sgie_config=args.reid_sgie_config,
+        nvdsanalytics_config=args.nvdsanalytics_config,
         geometry=geometry,
         reid_config=reid_config,
     ))

@@ -1,0 +1,100 @@
+# gst-nvdsanalytics config for the MMP pipeline.
+# https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_plugin_gst-nvdsanalytics.html
+#
+# Coordinates are in config-width x config-height space (the nvstreammux output,
+# 1920x1080 in src/pipeline/runner.py) and are auto-scaled to the runtime frame.
+# All rules test the bounding-box BOTTOM-CENTRE (foot point).
+# class-id=0 is "person" for the MMP YOLO11 detector (-1 = all classes).
+# Each [*-stream-N] block applies to source/camera N. Duplicate the blocks with
+# stream-1, stream-2, ... for more cameras (this file covers a 4-camera scene).
+
+[property]
+enable=1
+config-width=1920
+config-height=1080
+# osd-mode 2 = draw ROIs/lines + live counts on the video (needs nvosd downstream)
+osd-mode=2
+display-font-size=14
+
+# ===================== camera 0 =====================
+[roi-filtering-stream-0]
+enable=1
+# central region of the frame
+roi-CENTER=240;140;1680;140;1680;940;240;940
+inverse-roi=0
+class-id=0
+
+[overcrowding-stream-0]
+enable=1
+roi-OC=240;140;1680;140;1680;940;240;940
+object-threshold=4
+class-id=0
+
+[line-crossing-stream-0]
+enable=1
+# line-crossing-<Label>=x1d;y1d;x2d;y2d;x1c;y1c;x2c;y2c
+# first 4 = direction vector (pointing "down"), last 4 = the virtual line
+line-crossing-Mid=960;360;960;720;240;540;1680;540
+class-id=0
+extended=0
+mode=loose
+
+# ===================== camera 1 =====================
+[roi-filtering-stream-1]
+enable=1
+roi-CENTER=240;140;1680;140;1680;940;240;940
+inverse-roi=0
+class-id=0
+
+[overcrowding-stream-1]
+enable=1
+roi-OC=240;140;1680;140;1680;940;240;940
+object-threshold=4
+class-id=0
+
+[line-crossing-stream-1]
+enable=1
+line-crossing-Mid=960;360;960;720;240;540;1680;540
+class-id=0
+extended=0
+mode=loose
+
+# ===================== camera 2 =====================
+[roi-filtering-stream-2]
+enable=1
+roi-CENTER=240;140;1680;140;1680;940;240;940
+inverse-roi=0
+class-id=0
+
+[overcrowding-stream-2]
+enable=1
+roi-OC=240;140;1680;140;1680;940;240;940
+object-threshold=4
+class-id=0
+
+[line-crossing-stream-2]
+enable=1
+line-crossing-Mid=960;360;960;720;240;540;1680;540
+class-id=0
+extended=0
+mode=loose
+
+# ===================== camera 3 =====================
+[roi-filtering-stream-3]
+enable=1
+roi-CENTER=240;140;1680;140;1680;940;240;940
+inverse-roi=0
+class-id=0
+
+[overcrowding-stream-3]
+enable=1
+roi-OC=240;140;1680;140;1680;940;240;940
+object-threshold=4
+class-id=0
+
+[line-crossing-stream-3]
+enable=1
+line-crossing-Mid=960;360;960;720;240;540;1680;540
+class-id=0
+extended=0
+mode=loose

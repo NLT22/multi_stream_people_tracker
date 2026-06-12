@@ -19,6 +19,7 @@ def _load_defaults(config_path: str) -> dict:
         "sources": ["configs/sources/video_files.txt"],
         "nvinfer_config": "configs/models/nvinfer_yolov11_people.yml",
         "reid_sgie_config": None,
+        "nvdsanalytics_config": None,
         "tracker_config": "configs/tracker/nvdeepsort_reid_swin.yaml",
         "tracker_width": 640,
         "tracker_height": 384,
@@ -90,6 +91,8 @@ def _load_defaults(config_path: str) -> dict:
         "config_file", defaults["nvinfer_config"])
     defaults["reid_sgie_config"] = detection.get(
         "reid_sgie_config", defaults["reid_sgie_config"])
+    defaults["nvdsanalytics_config"] = raw.get("analytics", {}).get(
+        "config_file", defaults["nvdsanalytics_config"])
     defaults["tracker_config"] = tracker.get(
         "config_file", defaults["tracker_config"])
     defaults["tracker_width"] = tracker.get(
