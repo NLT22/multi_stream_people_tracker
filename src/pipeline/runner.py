@@ -194,10 +194,12 @@ def run(config: PipelineRunConfig):
     pipeline.add("nvtracker", "tracker", tracker_props)
 
     # Optional decoupled ReID: a secondary nvinfer (SGIE) extracts a per-person
-    # embedding and attaches it as output-tensor-meta. This keeps the tracker on
-    # the fast reidType:0 path — in-tracker ReID (reidType:2) collapses 20-cam
-    # throughput 22->5 FPS/cam regardless of tuning. The gallery probe attaches
-    # to this SGIE so it sees the embedding tensor on each object.
+    # embedding and attaches it as output-tensor-meta, keeping the tracker on the
+    # reidType:0 path. NOTE: this was the workaround for the *old* throughput
+    # bottleneck — the VPI visual tracker (visualTrackerType:2 ~ 5 FPS/cam). With
+    # Legacy DCF (visualTrackerType:1) the in-tracker ReID (reidType:2) config
+    # runs ~350 frames/s aggregate (≈17 FPS/cam at 20 cams), so the decoupled
+    # SGIE is no longer required for 20cam@10FPS. Kept for flexibility.
     # `reid_src_element` is the element whose objects carry ReID embeddings.
     reid_src_element = "tracker"
     if reid_sgie_config:
