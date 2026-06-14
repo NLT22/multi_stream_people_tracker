@@ -68,17 +68,23 @@ def main() -> None:
             kept += 1
     print(f"[apply] train crops: {kept} kept, {dropped} dropped (JUNK/unlabeled)")
 
-    # val: kept as-is (held-out monitor, not manually labeled)
-    os.makedirs(f"{args.out_dir}/val", exist_ok=True)
-    nval = 0
-    with open(f"{args.cache_root}/val/manifest.csv") as fin, \
-         open(f"{args.out_dir}/val/manifest.csv", "w", newline="") as fout:
-        w = csv.DictWriter(fout, fieldnames=fields); w.writeheader()
-        for r in csv.DictReader(fin):
-            w.writerow({"rel_path": rel_prefix + r["rel_path"], "pid": r["pid"],
-                        "cam_id": r["cam_id"], "scene": r["scene"], "frame": r["frame"]})
-            nval += 1
-    print(f"[apply] val crops: {nval} (scene-local, held-out monitor)")
+    # val: kept as-is (held-out monitor, not manually labeled). Skip if the
+    # source cache was built train-only (e.g. --splits train) — fine when the
+    # trainer uses --crop-cache-val-from-train.
+    val_src = f"{args.cache_root}/val/manifest.csv"
+    if not os.path.exists(val_src):
+        print(f"[apply] val: skipped (no {val_src}; use --crop-cache-val-from-train)")
+    else:
+        os.makedirs(f"{args.out_dir}/val", exist_ok=True)
+        nval = 0
+        with open(val_src) as fin, \
+             open(f"{args.out_dir}/val/manifest.csv", "w", newline="") as fout:
+            w = csv.DictWriter(fout, fieldnames=fields); w.writeheader()
+            for r in csv.DictReader(fin):
+                w.writerow({"rel_path": rel_prefix + r["rel_path"], "pid": r["pid"],
+                            "cam_id": r["cam_id"], "scene": r["scene"], "frame": r["frame"]})
+                nval += 1
+        print(f"[apply] val crops: {nval} (scene-local, held-out monitor)")
     print(f"[apply] labeled cache -> {args.out_dir}")
     print("[apply] retrain with:")
     print(f"  python scripts/train/finetune_reid_mmp.py --resume output/reid_mmp_all/best.pth \\")
