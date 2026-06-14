@@ -107,6 +107,39 @@ def smooth(acc: np.ndarray, sigma: float) -> np.ndarray:
     return cv2.GaussianBlur(acc, (0, 0), sigma)
 
 
+def grid_stats(acc: np.ndarray, grid_w: int, fps: float, mode: str) -> tuple[np.ndarray, dict]:
+    """Downsample the full-res accumulator to a grid_w-wide occupancy grid and
+    compute per-camera summary stats — the structured 'information' a real
+    analytics store keeps (vs the rendered picture).
+
+    Returns (grid[gh,gw], stats). Grid cell value = summed occupancy in that
+    cell. For mode=foot the value is #person-detections (≈ person-frames); at
+    `fps` that converts to dwell-seconds."""
+    H, W = acc.shape
+    gw = max(1, grid_w)
+    gh = max(1, round(gw * H / W))
+    grid = cv2.resize(acc, (gw, gh), interpolation=cv2.INTER_AREA) * (W / gw) * (H / gh)
+    total = float(acc.sum())
+    flat_i = int(grid.argmax())
+    py, px = divmod(flat_i, gw)
+    occupied = int((grid > grid.max() * 0.05).sum()) if grid.max() > 0 else 0
+    # dwell-seconds only meaningful for foot mode (cell value = person-frames).
+    # foot: count = person-frames; visit: count = unique track-visits; dwell: box-pixel coverage.
+    foot = mode == "foot"
+    stats = {
+        "mode": mode,
+        "grid_w": gw, "grid_h": gh,
+        "total_detections": round(total, 1),
+        "peak_cell_xy": [px, py],
+        "peak_cell_px": [int((px + 0.5) * W / gw), int((py + 0.5) * H / gh)],
+        "peak_value": round(float(grid.max()), 1),
+        "peak_dwell_seconds": round(float(grid.max()) / fps, 1) if (foot and fps) else None,
+        "occupied_cells": occupied,
+        "occupied_fraction": round(occupied / (gw * gh), 3),
+    }
+    return grid, stats
+
+
 def colorize(dens: np.ndarray, gamma: float, vmax_pct: float) -> tuple[np.ndarray, np.ndarray]:
     """Return (heat_bgr, alpha[0..1]) from a smoothed density map."""
     pos = dens[dens > 0]
@@ -205,6 +238,11 @@ def main() -> None:
     ap.add_argument("--alpha", type=float, default=0.65, help="Max overlay opacity.")
     ap.add_argument("--compare-gt", action="store_true",
                     help="With --pred-dir: render GT vs pred + diff map and print CC/SIM/KL per camera.")
+    ap.add_argument("--dump-grid", type=int, default=0, metavar="GRID_W",
+                    help="Also write structured heatmap data: per-camera occupancy "
+                         "grid CSV (GRID_W wide) + a stats JSON. 0 = off.")
+    ap.add_argument("--fps", type=float, default=15.0,
+                    help="Frame rate, to convert occupancy counts -> dwell seconds in --dump-grid.")
     ap.add_argument("--out-dir", default="output/heatmap")
     args = ap.parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
@@ -218,6 +256,7 @@ def main() -> None:
         print("[ERROR] no cameras found"); return
     src = "pred" if args.pred_dir else "gt"
     panels = []
+    all_stats = {}
     for cam, df, video in cams:
         cap = cv2.VideoCapture(video)
         W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
@@ -225,6 +264,14 @@ def main() -> None:
         cap.release()
         bg = background(video, W, H)
         acc = accumulate(df, W, H, args.mode, args.visit_cell)
+        if args.dump_grid:
+            grid, st = grid_stats(acc, args.dump_grid, args.fps, args.mode)
+            np.savetxt(os.path.join(args.out_dir, f"{args.scene}_cam{cam}_{args.mode}_grid.csv"),
+                       grid, fmt="%.2f", delimiter=",")
+            all_stats[f"cam{cam}"] = st
+            secs = f" ({st['peak_dwell_seconds']}s dwell)" if st["peak_dwell_seconds"] else ""
+            print(f"[cam{cam}] grid {st['grid_w']}x{st['grid_h']} -> peak {st['peak_value']}{secs} "
+                  f"at cell {st['peak_cell_xy']}, {st['occupied_fraction']*100:.0f}% occupied")
         heat, alpha = colorize(smooth(acc, args.sigma), args.gamma, args.vmax_pct)
         out = render(bg, heat, alpha, args.alpha)
         cv2.putText(out, f"{args.scene} cam{cam} ({args.mode}, {src}, {len(df)} det)",
@@ -233,6 +280,14 @@ def main() -> None:
         cv2.imwrite(p, out)
         print(f"[cam{cam}] {len(df)} detections -> {p}")
         panels.append(out)
+
+    if args.dump_grid and all_stats:
+        import json
+        sp = os.path.join(args.out_dir, f"{args.scene}_{args.mode}_{src}_stats.json")
+        with open(sp, "w") as f:
+            json.dump({"scene": args.scene, "mode": args.mode, "source": src,
+                       "fps": args.fps, "cameras": all_stats}, f, indent=2)
+        print(f"[data] {sp}  (per-camera occupancy grids + stats)")
 
     # group montage: every camera of the scene tiled in one picture
     import math as _m
