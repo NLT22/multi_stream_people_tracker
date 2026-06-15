@@ -372,6 +372,9 @@ class CrossCameraGalleryProbe(
                     else None
                 ),
                 foot_world=row.foot_world,
+                # Per-detection embedding for every detection (faithful
+                # reference reproduction needs per-frame, not per-tracklet).
+                det_embedding=row.raw_embedding or None,
             )
 
     def _display_gid(self, gid: int | None) -> int | None:

@@ -30,3 +30,5 @@ third_party/fast-reid/
 old_stuff/datasets_archive/
 
 tmp/
+reference/
+anchor-guided-implement.md

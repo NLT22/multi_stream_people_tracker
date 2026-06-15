@@ -38,6 +38,11 @@ class PredictionExporter:
         self._files: dict[int, object] = {}
         self._writers: dict[int, csv.DictWriter] = {}
         self._tracklets: dict[tuple[int, int, int], dict] = {}
+        # Per-detection embeddings (for the faithful reference reproduction:
+        # per-frame Hungarian + sliding-window vote needs one embedding per
+        # detection, not one mean per tracklet). Parallel arrays at flush.
+        self._det_keys: list[tuple[int, int, int]] = []   # (cam, frame, ltid)
+        self._det_embs: list[list[float]] = []
 
         # Near-realtime delayed-flush buffer. When delay_frames > 0 (micro-batch
         # fusion path), rows are held for `delay_frames` and the latest Global-ID
@@ -63,10 +68,14 @@ class PredictionExporter:
         height: float,
         embedding: list[float] | None = None,
         foot_world: tuple[float, float] | None = None,
+        det_embedding: list[float] | None = None,
     ) -> None:
         """Buffer one detection row for cam_id (raw Global ID)."""
         gid = global_id if global_id is not None else -1
         self._max_frame = max(self._max_frame, frame_no)
+        if det_embedding:
+            self._det_keys.append((cam_id, frame_no, local_track_id))
+            self._det_embs.append(det_embedding)
         self._buffer.setdefault(cam_id, []).append({
             "frame_no_cam": frame_no,
             "cam_id": cam_id,
@@ -275,6 +284,16 @@ class PredictionExporter:
             tracklet_ids=tracklet_ids,
             embeddings=vectors,
         )
+
+        # Per-detection embeddings for the faithful reference reproduction.
+        if self._det_embs:
+            keys = np.asarray(self._det_keys, dtype=np.int64)  # (N,3)
+            demb = np.asarray(self._det_embs, dtype=np.float32)
+            np.savez_compressed(
+                self._output_dir / "detection_embeddings.npz",
+                cam_id=keys[:, 0], frame_no=keys[:, 1],
+                local_track_id=keys[:, 2], embeddings=demb,
+            )
 
     def __enter__(self):
         return self

@@ -42,11 +42,13 @@ def load_cameras(args) -> list[tuple[int, pd.DataFrame, str]]:
                       key=lambda p: int(re.search(r"cam_(\d+)_", os.path.basename(p)).group(1)))
         for csv in csvs:
             src = int(re.search(r"cam_(\d+)_", os.path.basename(csv)).group(1))
-            df = pd.read_csv(csv).rename(columns={"local_track_id": "tid"})
+            df = pd.read_csv(csv).rename(columns={"local_track_id": "tid", "global_id": "gid"})
+            if "gid" not in df.columns:
+                df["gid"] = df["tid"]
             video = videos[src] if src < len(videos) else _video(scene_dir, src)
             m = re.search(r"cam(\d+)\.mp4", os.path.basename(video))
             cam = int(m.group(1)) if m else src  # real camera number, so it matches GT labels
-            out.append((cam, df[["left", "top", "width", "height", "tid"]], video))
+            out.append((cam, df[["left", "top", "width", "height", "tid", "gid"]], video))
     else:
         for csv in sorted(glob.glob(os.path.join(scene_dir, "gt_cam*.csv"))):
             tail = os.path.basename(csv).replace("gt_cam", "").replace(".csv", "")
@@ -54,7 +56,8 @@ def load_cameras(args) -> list[tuple[int, pd.DataFrame, str]]:
                 continue
             cam = int(tail)
             df = pd.read_csv(csv).rename(columns={"person_id": "tid"})
-            out.append((cam, df[["left", "top", "width", "height", "tid"]], _video(scene_dir, cam)))
+            df["gid"] = df["tid"]   # GT identity IS the unique visitor
+            out.append((cam, df[["left", "top", "width", "height", "tid", "gid"]], _video(scene_dir, cam)))
     return out
 
 
@@ -87,11 +90,16 @@ def accumulate(df: pd.DataFrame, W: int, H: int, mode: str, visit_cell: int = 8)
             x2, y2 = min(W, int(l + w)), min(H, int(t + h))
             if x2 > x1 and y2 > y1:
                 acc[y1:y2, x1:x2] += 1.0
-    elif mode == "visit":
+    elif mode in ("visit", "visitor"):
+        # visit   = unique LOCAL track per cell (per-camera coverage, over-counts fragments)
+        # visitor = unique GLOBAL id per cell = distinct PEOPLE who visited the area
+        idcol = "gid" if (mode == "visitor" and "gid" in df.columns) else "tid"
         fx = np.clip((L + Wd / 2).astype(int), 0, W - 1)
         fy = np.clip((T + Hd).astype(int), 0, H - 1)
         cx, cy = fx // visit_cell, fy // visit_cell
-        uniq = pd.DataFrame({"t": df["tid"].to_numpy(), "cx": cx, "cy": cy}).drop_duplicates()
+        ids = df[idcol].to_numpy()
+        keep = ids >= 0                       # drop unassigned global ids (-1)
+        uniq = pd.DataFrame({"t": ids[keep], "cx": cx[keep], "cy": cy[keep]}).drop_duplicates()
         cnt = uniq.groupby(["cy", "cx"]).size().reset_index(name="n")
         px = np.clip(cnt["cx"].to_numpy() * visit_cell + visit_cell // 2, 0, W - 1)
         py = np.clip(cnt["cy"].to_numpy() * visit_cell + visit_cell // 2, 0, H - 1)
@@ -229,9 +237,10 @@ def main() -> None:
     ap.add_argument("--short-root", default="dataset/MMPTracking_short")
     ap.add_argument("--scene", required=True)
     ap.add_argument("--pred-dir", default=None, help="Use pipeline predictions instead of GT.")
-    ap.add_argument("--mode", choices=["foot", "dwell", "visit"], default="foot")
+    ap.add_argument("--mode", choices=["foot", "dwell", "visit", "visitor"], default="foot")
     ap.add_argument("--visit-cell", type=int, default=8,
-                    help="Cell size (px) for --mode visit dedup (per track per cell).")
+                    help="Cell size (px) for visit/visitor dedup (per id per cell). "
+                         "visit=unique local track; visitor=unique GLOBAL id (distinct people).")
     ap.add_argument("--sigma", type=float, default=12.0, help="Gaussian smoothing (px).")
     ap.add_argument("--gamma", type=float, default=0.5, help="<1 boosts low-density areas.")
     ap.add_argument("--vmax-pct", type=float, default=99.0)
