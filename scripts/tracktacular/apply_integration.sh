@@ -44,4 +44,17 @@ if "mmptracking_dataset" not in s:
     open(p, "w").write(s)
 print("datamodule patched")
 PY
+# 4. torch>=2.x: Sampler.__init__ no longer takes data_source
+sed -i 's/        super().__init__(data_source)/        super().__init__()/' \
+    "$TT/datasets/sampler.py"
+
+# 5. guard datasets/__init__ imports missing in this clone version
+cat > "$TT/datasets/__init__.py" <<'PY'
+from .pedestrian_datamodule import PedestrianDataModule
+try:
+    from .synthehicle_datamodule import SynthehicleDataModule
+except ModuleNotFoundError:
+    SynthehicleDataModule = None
+PY
+
 echo "integration applied to $TT"
