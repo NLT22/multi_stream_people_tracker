@@ -1,5 +1,12 @@
 # 3-Way Method Comparison — TrackTacular (lifting_BEV) vs Anchor-guided vs Current
 
+**Scope/status:** completed on the industry environment (the hardest scene,
+"industry first" per plan). The 4-env expansion (cafe/lobby/office/retail) was
+**intentionally stopped** after the throughput benchmark showed TrackTacular
+cannot meet 20-cam/10-FPS regardless of accuracy — so the remaining ~12h of
+training was not spent. The integration is complete and reproducible
+(`run_env.sh <env> <scene> <ncam>`) if the per-env IDF1 numbers are wanted later.
+
 Scene: **63am_industry_safety_0** (the hardest scene; "industry first" per scope).
 Split: TrackTacular standard protocol = first 90% train / **last 10% test** (293
 multi-cam frames). All three scored on the **same topdown GT** with the same
@@ -67,7 +74,25 @@ excluded, no disk I/O / tracking / metrics. RTX 5060 Ti, 720x1280/cam, batch 1.
   detect recall 56%); headroom exists via more epochs, multi-scene training,
   higher BEV resolution, and a tighter grid->world fit.
 
-## Optimisation levers (not yet applied)
+## Final findings (industry; expansion stopped by decision)
+
+1. **TrackTacular is the better BEV localizer** (BEV-IDF1 0.448 / MOTA 0.619 vs
+   anchor 0.436 / ~0, current 0.281 / <0) — early-fusion in BEV beats projecting
+   an image-space tracker into BEV. But its first untuned run is far from 0.8 and
+   detect-recall (56%) is the cap.
+2. **It is not realtime at scale**: 4.3 multi-cam FPS at 20 cam (model-only,
+   optimistic) — ~2.3x short of 10 FPS. The current DeepStream pipeline (16.6
+   fps/cam) remains the deployable option.
+3. **Metric spaces differ**: anchor-guided still wins *image-space* Global IDF1
+   (0.754 full-scene). The two families optimise different objectives; neither
+   dominates both accuracy spaces, and only the current pipeline is realtime.
+4. **Verdict on the target (0.8 all scenes @ 20cam/10FPS)**: not achievable with
+   TrackTacular (fails FPS) nor with the current/anchor pipeline (fails 0.8 on the
+   hard scenes). The target is over-constrained: BEV early-fusion buys accuracy
+   at a throughput cost; the realtime ReID pipeline buys throughput at an accuracy
+   cost on look-alike-heavy scenes.
+
+## Optimisation levers (if TrackTacular accuracy is pursued later, ignoring FPS)
 1. Train on **all industry scenes** (more data; needs multi-sequence dataset).
 2. More epochs + higher input/BEV resolution (recall is the bottleneck).
 3. Refine the grid->world affine (reduce the 270 mm GT error).
