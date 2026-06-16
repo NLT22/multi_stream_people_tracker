@@ -111,12 +111,86 @@ def concurrency_floor(bev: pd.DataFrame, keep_tids: set[int],
     return floor
 
 
+def build_cannot_link(bev: pd.DataFrame, ids: list[int],
+                      min_co: int = 5) -> set[tuple[int, int]]:
+    """Pairs of tracklets that are the SAME person impossible: two tracklets seen
+    in the same camera at the same frame for >= min_co frames are different people
+    (a camera cannot show one identity as two simultaneous tracks). Built from
+    actual per-frame co-occurrence (not tracklet intervals, which overlap across a
+    whole lifetime and would create false constraints between same-person frags)."""
+    idset = set(ids)
+    co: dict[tuple[int, int], int] = defaultdict(int)
+    sub = bev[bev["tracklet_id"].isin(idset)]
+    for _, grp in sub.groupby(["cam_id", "frame_no_cam"]):
+        present = sorted(set(int(t) for t in grp["tracklet_id"]))
+        for i in range(len(present)):
+            for j in range(i + 1, len(present)):
+                co[(present[i], present[j])] += 1
+    return {p for p, c in co.items() if c >= min_co}
+
+
+def constrained_agglomerative(X: np.ndarray, cannot: set[tuple[int, int]],
+                              k: int) -> np.ndarray:
+    """Average-linkage agglomerative clustering that never merges two clusters
+    containing a cannot-link pair. Lance-Williams update -> O(n^2). Returns labels.
+    May end with > k clusters if the cannot-link graph forbids reaching k."""
+    n = len(X)
+    D = 1.0 - X @ X.T                       # cosine distance (X is L2-normalized)
+    members = {i: [i] for i in range(n)}
+    size = {i: 1 for i in range(n)}
+    active = list(range(n))
+    forbid = set()
+    for a, b in cannot:
+        forbid.add((min(a, b), max(a, b)))
+    dist = {}
+    for x in range(n):
+        for y in range(x + 1, n):
+            dist[(x, y)] = D[x, y]
+
+    def key(a, b):
+        return (a, b) if a < b else (b, a)
+
+    while len(active) > k:
+        best, bd = None, np.inf
+        for idx, a in enumerate(active):
+            for b in active[idx + 1:]:
+                kk = key(a, b)
+                if kk in forbid:
+                    continue
+                d = dist.get(kk, np.inf)
+                if d < bd:
+                    bd, best = d, kk
+        if best is None:
+            break                          # cannot-link blocks any further merge
+        a, b = best                        # merge b into a
+        members[a] += members[b]; size[a] += size[b]
+        active.remove(b)
+        for c in active:
+            if c == a:
+                continue
+            da = dist.get(key(a, c), np.inf)
+            db = dist.get(key(b, c), np.inf)
+            na, nb = size[a] - size[b], size[b]
+            dist[key(a, c)] = (na * da + nb * db) / (na + nb)
+            if key(b, c) in forbid:
+                forbid.add(key(a, c))
+        members.pop(b, None); size.pop(b, None)
+    labels = np.empty(n, dtype=int)
+    for lab, a in enumerate(active):
+        for m in members[a]:
+            labels[m] = lab
+    return labels
+
+
 def cluster_anchors(
     trk: pd.DataFrame,
     emb_by_trk: dict[int, np.ndarray],
     k: int | None,
     min_dets: int,
     conc_floor: int = 0,
+    bev: pd.DataFrame | None = None,
+    cannot_link: bool = False,
+    min_co: int = 5,
 ) -> tuple[dict[int, int], int]:
     """Return ({tracklet_id -> candidate_gid (>=1)}, k_used)."""
     rows = trk[trk["num_detections"] >= min_dets]
@@ -126,11 +200,25 @@ def cluster_anchors(
     X = np.vstack([emb_by_trk[t] for t in ids])
     if k is None:
         gap_k = estimate_k(X)
-        k = max(gap_k, conc_floor)
+        # The concurrency floor (peak simultaneously-visible people per camera) is
+        # a geometrically-grounded, reliable identity-count estimate; the
+        # dendrogram gap is appearance-noise-sensitive and OVERSHOOTS on
+        # look-alike scenes (e.g. industry: gap 9 vs true 7 -> -0.025 IDF1).
+        # Prefer the floor; fall back to the gap only when the floor is degenerate.
+        k = conc_floor if conc_floor >= 2 else gap_k
         print(f"[anchor] auto-k: gap={gap_k} concurrency_floor={conc_floor} "
-              f"-> k={k}")
+              f"-> k={k} (floor-preferred)")
     k = max(1, min(k, len(ids)))
-    labels = AgglomerativeClustering(n_clusters=k).fit_predict(X)
+    if cannot_link and bev is not None:
+        idx = {t: i for i, t in enumerate(ids)}
+        cl = {(idx[a], idx[b]) for a, b in build_cannot_link(bev, ids, min_co)
+              if a in idx and b in idx}
+        labels = constrained_agglomerative(X, cl, k)
+        n_out = len(set(labels))
+        print(f"[anchor] cannot-link pairs={len(cl)} -> {n_out} clusters "
+              f"(target k={k})")
+    else:
+        labels = AgglomerativeClustering(n_clusters=k).fit_predict(X)
     return {t: int(lab) + 1 for t, lab in zip(ids, labels)}, k
 
 
@@ -270,6 +358,13 @@ def main() -> None:
                     help="Enable spatio-temporal split correction. Off by "
                          "default: appearance clustering already resolves most "
                          "identities, and STCRA can over-split clean clusters.")
+    ap.add_argument("--cannot-link", action="store_true",
+                    help="EXPERIMENTAL: same-camera co-occurrence cannot-link "
+                         "constraint (cosine+average linkage). Off by default — it "
+                         "over-splits with our fragmented tracks (greedy gets "
+                         "stuck) and underperforms plain ward; see RESULTS.md.")
+    ap.add_argument("--min-co", type=int, default=5,
+                    help="Min co-occurring frames for a cannot-link pair.")
     args = ap.parse_args()
 
     pred_dir, out_dir = Path(args.pred_dir), Path(args.out_dir)
@@ -286,7 +381,8 @@ def main() -> None:
     keep = set(trk[trk["num_detections"] >= args.min_dets]["tracklet_id"])
     floor = concurrency_floor(bev, keep) if k is None else 0
     tid_to_cluster, k_used = cluster_anchors(
-        trk, emb_by_trk, k, args.min_dets, conc_floor=floor)
+        trk, emb_by_trk, k, args.min_dets, conc_floor=floor,
+        bev=bev, cannot_link=args.cannot_link, min_co=args.min_co)
     print(f"[anchor] clustered {len(tid_to_cluster)} tracklets into "
           f"{len(set(tid_to_cluster.values()))} identities (k={k_used})")
 
