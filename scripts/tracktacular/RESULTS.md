@@ -34,10 +34,28 @@ both metric spaces.
 
 ## Throughput (the 20-cam/10-FPS target)
 
-| Method | Measured | 20-cam/10-FPS? |
+Clean inference-only benchmark (`bench_fps.py`): model.forward only, warmup
+excluded, no disk I/O / tracking / metrics. RTX 5060 Ti, 720x1280/cam, batch 1.
+
+| Cameras | ms/timestep | multi-cam FPS | cam-frames/s | peak VRAM |
+|---|---|---|---|---|
+| 4 | 49.2 | 20.3 | 81.3 | 0.93 GB |
+| 5 | 63.7 | 15.7 | 78.5 | 1.14 |
+| 6 | 71.9 | 13.9 | 83.5 | 1.35 |
+| 7 | 83.8 | 11.9 | 83.6 | 1.56 |
+| **20** | 233.6 | **4.28** | 85.6 | 4.32 GB |
+
+- Throughput scales ~linearly with camera count (per-camera CNN encoder
+  dominates; cam-frames/s ~constant ~82).
+- **20 cam = 4.3 multi-cam FPS** — ~2.3x below the 10 FPS target, and this is
+  optimistic (excludes detection-decode, JDETracker association, data loading).
+- The earlier "~9 FPS" was a rough end-to-end figure at 4 cam (with I/O); the
+  clean model-only rate at 4 cam is 20.3 FPS.
+
+| Method | 20-cam throughput | 20-cam/10-FPS? |
 |---|---|---|
-| TrackTacular | ~9 multi-cam(4) timesteps/s | **No** — heavy BEV model; ~2-4 fps projected at 20 cam |
-| Current (online) | 16.6 fps/cam @ 20 cam (DeepStream) | Yes (realtime) |
+| TrackTacular (SegNet, model-only) | 4.3 FPS | **No** (~2.3x short) |
+| Current (online, DeepStream) | 16.6 fps/cam | Yes (realtime) |
 
 ## Verdict vs the target (0.8 Global IDF1, all scenes, 20 cam @ 10 FPS)
 
