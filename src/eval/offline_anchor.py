@@ -232,6 +232,40 @@ def _tracklet_world(bev: pd.DataFrame) -> dict[int, dict[int, np.ndarray]]:
     return out
 
 
+def _env_box(scene: str | None) -> tuple[float, float, float, float] | None:
+    """Plausible world box (mm) for the scene's environment from affines.json
+    (fit by scripts/tracktacular). Used to drop garbage monocular foot
+    projections before STCRA. Returns None if unavailable."""
+    if not scene:
+        return None
+    import json
+    p = Path("scripts/tracktacular/affines.json")
+    if not p.exists():
+        return None
+    env = scene.split("_", 1)[1].rsplit("_", 1)[0]  # 63am_industry_safety_0 -> industry_safety
+    data = json.load(open(p))
+    if env in data and "box" in data[env]:
+        return tuple(data[env]["box"])
+    return None
+
+
+def _filter_world(trk_world: dict[int, dict[int, np.ndarray]],
+                  box: tuple[float, float, float, float] | None
+                  ) -> dict[int, dict[int, np.ndarray]]:
+    """Drop per-frame world points outside the plausible box (grazing-ray
+    garbage). Tracklets left with no valid points are dropped from STCRA."""
+    if box is None:
+        return trk_world
+    xmin, xmax, ymin, ymax = box
+    out: dict[int, dict[int, np.ndarray]] = {}
+    for tid, frames in trk_world.items():
+        kept = {f: xy for f, xy in frames.items()
+                if xmin <= xy[0] <= xmax and ymin <= xy[1] <= ymax}
+        if kept:
+            out[tid] = kept
+    return out
+
+
 def _gid_trajectory(
     tids_of_gid: set[int],
     trk_world: dict[int, dict[int, np.ndarray]],
@@ -240,7 +274,7 @@ def _gid_trajectory(
     """Per-frame mean world position over the tracklets assigned to a gid."""
     acc: dict[int, list[np.ndarray]] = defaultdict(list)
     for tid in tids_of_gid:
-        if tid == exclude:
+        if tid == exclude or tid not in trk_world:
             continue
         for fid, xy in trk_world[tid].items():
             acc[fid].append(xy)
@@ -405,6 +439,12 @@ def main() -> None:
 
     if args.stcra:
         trk_world = _tracklet_world(bev)
+        box = _env_box(args.scene)
+        before = sum(len(v) for v in trk_world.values())
+        trk_world = _filter_world(trk_world, box)
+        after = sum(len(v) for v in trk_world.values())
+        print(f"[stcra] world filter (box={'on' if box else 'off'}): "
+              f"{before}->{after} pts ({100*after/max(1,before):.0f}% kept)")
         base = stcra(base, trk_world, args.split_thr, args.min_overlap)
         print(f"[stcra] -> {len(set(base.values()))} identities")
 

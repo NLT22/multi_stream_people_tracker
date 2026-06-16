@@ -67,8 +67,10 @@ def _oracle_k(short_root: str, scene: str) -> int:
 
 # -------------------------------------------------- stage 1: anchors + assign
 def build_anchors(emb: np.ndarray, frame: np.ndarray, k: int,
-                  n_anchor_frames: int = 40) -> np.ndarray:
-    """Cluster embeddings sampled from anchor frames into k anchor means."""
+                  n_anchor_frames: int = 40, bank_cap: int = 64) -> list[np.ndarray]:
+    """Cluster embeddings sampled from anchor frames into k anchors; each anchor
+    is a FEATURE BANK (paper §3.2): a set of exemplar embeddings (capped), not a
+    single mean. Returns a list of (n_j, D) arrays."""
     uframes = np.unique(frame)
     pick = uframes[np.linspace(0, len(uframes) - 1, n_anchor_frames).astype(int)]
     mask = np.isin(frame, pick)
@@ -76,20 +78,29 @@ def build_anchors(emb: np.ndarray, frame: np.ndarray, k: int,
     if len(X) < k:
         X = emb
     labels = AgglomerativeClustering(n_clusters=k).fit_predict(X)
-    anchors = np.zeros((k, emb.shape[1]), np.float32)
+    banks = []
+    rng = np.random.default_rng(0)
     for g in range(k):
-        m = X[labels == g].mean(0)
-        anchors[g] = m / (np.linalg.norm(m) or 1.0)
-    return anchors
+        bank = X[labels == g]
+        if len(bank) > bank_cap:
+            bank = bank[rng.choice(len(bank), bank_cap, replace=False)]
+        banks.append(bank.astype(np.float32))
+    return banks
 
 
-def assign_per_frame(cam, frame, ltid, emb, anchors):
+def _bank_cost(emb: np.ndarray, banks: list[np.ndarray]) -> np.ndarray:
+    """Paper eq.(1): cost(d, a_j) = 1 - mean_l cos(d, a_{j,l}) over the bank."""
+    cols = []
+    for bank in banks:                 # (n_j, D)
+        cols.append(1.0 - (emb @ bank.T).mean(axis=1))   # (N,)
+    return np.stack(cols, axis=1)      # (N, k)
+
+
+def assign_per_frame(cam, frame, ltid, emb, banks):
     """Per-camera, per-frame Hungarian to distinct anchors + window-vote smooth.
     Returns {(cam,frame,ltid): gid}."""
-    k = len(anchors)
-    # cost = cosine distance det->anchor  (1 - sim, since both normalized)
-    sims = emb @ anchors.T            # (N,k)
-    cost = 1.0 - sims
+    k = len(banks)
+    cost = _bank_cost(emb, banks)     # (N,k) avg-cosine-to-bank
     out: dict[tuple[int, int, int], int] = {}
 
     for c in np.unique(cam):
@@ -208,8 +219,9 @@ def main():
         raise SystemExit("provide --oracle-k or --num-people")
     print(f"[faithful] k = {k}")
 
-    anchors = build_anchors(emb, frame, k)
-    det_gid = assign_per_frame(cam, frame, ltid, emb, anchors)
+    banks = build_anchors(emb, frame, k)
+    print(f"[faithful] anchor bank sizes: {[len(b) for b in banks]}")
+    det_gid = assign_per_frame(cam, frame, ltid, emb, banks)
     print(f"[faithful] assigned {len(det_gid)} detections -> "
           f"{len(set(det_gid.values()))} identities")
 
