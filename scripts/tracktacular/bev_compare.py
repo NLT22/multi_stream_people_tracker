@@ -61,6 +61,10 @@ def load_tt(pred_path):
     return fid.astype(int), tid.astype(int), xy
 
 
+# plausible world box for industry (GT extent + generous margin), mm
+XMIN, XMAX, YMIN, YMAX = -12000, 8000, -16000, 4000
+
+
 def load_export(pred_dir, gt_frames, frame_step):
     """DeepStream export -> (step_frame, gid, xy_mm) aligned to GT step-frames."""
     pred_dir = Path(pred_dir)
@@ -72,7 +76,10 @@ def load_export(pred_dir, gt_frames, frame_step):
             key2gid[(int(r["cam_id"]), int(r["local_track_id"]),
                      int(r["frame_no_cam"]))] = int(float(r["global_id"]))
     want = set(int(f) * frame_step for f in gt_frames)   # GT step-frame -> orig
-    fid, gid, xs, ys = [], [], [], []
+    # image-space tracker: a person seen by N cameras yields N world points per
+    # frame. For a fair BEV comparison, collapse to ONE point per (frame, gid)
+    # by averaging the per-camera world positions (the consensus BEV location).
+    acc: dict[tuple[int, int], list] = {}
     for r in bev.itertuples():
         of = int(r.frame_no_cam)
         if of not in want:
@@ -80,9 +87,16 @@ def load_export(pred_dir, gt_frames, frame_step):
         g = key2gid.get((int(r.cam_id), int(r.local_track_id), of), int(r.global_id))
         if g < 0:
             continue
-        fid.append(of // frame_step); gid.append(g)
-        xs.append(r.world_x); ys.append(r.world_y)
-    return (np.array(fid), np.array(gid), np.stack([xs, ys], 1))
+        # drop geometrically-impossible monocular foot projections (grazing rays
+        # send world coords to millions of mm); keep only the plausible region.
+        if not (XMIN <= r.world_x <= XMAX and YMIN <= r.world_y <= YMAX):
+            continue
+        acc.setdefault((of // frame_step, g), []).append((r.world_x, r.world_y))
+    fid, gid, xy = [], [], []
+    for (sf, g), pts in acc.items():
+        p = np.median(pts, axis=0)          # robust consensus BEV location
+        fid.append(sf); gid.append(g); xy.append(p)
+    return (np.array(fid), np.array(gid), np.stack(xy, 0))
 
 
 def main():
