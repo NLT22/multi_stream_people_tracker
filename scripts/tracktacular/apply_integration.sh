@@ -6,9 +6,10 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 TT="$REPO/reference/TrackTacular/WorldTrack"
 SRC="$REPO/scripts/tracktacular"
 
-# 1. adapter + config into the clone
+# 1. adapter + config + affines into the clone
 cp "$SRC/mmptracking_dataset.py" "$TT/datasets/mmptracking_dataset.py"
 cp "$SRC/d_mmp_industry.yml" "$TT/configs/d_mmp_industry.yml"
+[ -f "$SRC/affines.json" ] && cp "$SRC/affines.json" "$TT/datasets/affines.json"
 
 # 2. guard the mmcv-only bevformer import (segnet/mvdet/liftnet need no mmcv)
 python3 - "$TT/models/__init__.py" <<'PY'

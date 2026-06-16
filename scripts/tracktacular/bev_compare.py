@@ -14,18 +14,16 @@ affine, and remapping original frame -> step-frame (orig // frame_step).
 Metric: motmetrics IDF1/MOTA/MODA at a 1 m gate (TrackTacular's mot_bev protocol).
 """
 from __future__ import annotations
-import argparse, csv
+import argparse, csv, json
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import motmetrics as mm
 
-# grid->world(mm) affine per env (must match mmptracking_dataset.py)
-AFFINE = {
-    "industry_safety": np.array([[1.706, 33.103, -6301.5],
-                                 [36.942, 3.970, -10626.8],
-                                 [0.0, 0.0, 1.0]]),
-}
+# grid->world(mm) affine + world box per env, from affines.json (fit_affine.py)
+_AFF = json.load(open(Path(__file__).resolve().parent / "affines.json"))
+AFFINE = {k: np.array(v["affine"]) for k, v in _AFF.items()}
+BOX = {k: v["box"] for k, v in _AFF.items()}
 
 
 def _idf1(gt_fid, gt_id, gt_xy, pr_fid, pr_id, pr_xy, gate_m=1.0, scale=0.001):
@@ -59,10 +57,6 @@ def load_tt(pred_path):
     fid, tid, gx, gy = d[:, 1], d[:, 2], d[:, 8], d[:, 9]
     xy = (AFFINE_ENV @ np.stack([gx, gy, np.ones_like(gx)]))[:2].T
     return fid.astype(int), tid.astype(int), xy
-
-
-# plausible world box for industry (GT extent + generous margin), mm
-XMIN, XMAX, YMIN, YMAX = -12000, 8000, -16000, 4000
 
 
 def load_export(pred_dir, gt_frames, frame_step):
@@ -109,8 +103,9 @@ def main():
     ap.add_argument("--frame-step", type=int, default=2)
     args = ap.parse_args()
 
-    global AFFINE_ENV
+    global AFFINE_ENV, XMIN, XMAX, YMIN, YMAX
     AFFINE_ENV = AFFINE[args.env]
+    XMIN, XMAX, YMIN, YMAX = BOX[args.env]
 
     gt_fid, gt_id, gt_xy = load_gt(args.gt)
     gt_frames = np.unique(gt_fid)

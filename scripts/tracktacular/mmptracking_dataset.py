@@ -18,11 +18,16 @@ GRID_NY = 256  # must match the converter's positionID encoding
 
 # Per-environment grid->world(mm) affine, fitted from foot-point projections
 # (maps [gx, gy, 1] -> [world_x_mm, world_y_mm, 1]). See scripts/tracktacular.
-WORLDCOORD_FROM_WORLDGRID = {
-    "industry_safety": np.array([[1.706, 33.103, -6301.5],
-                                 [36.942, 3.970, -10626.8],
-                                 [0.0, 0.0, 1.0]]),
-}
+_AFFINE_JSON = os.path.join(os.path.dirname(__file__), "affines.json")
+if os.path.exists(_AFFINE_JSON):
+    _data = json.load(open(_AFFINE_JSON))
+    WORLDCOORD_FROM_WORLDGRID = {k: np.array(v["affine"]) for k, v in _data.items()}
+else:
+    WORLDCOORD_FROM_WORLDGRID = {
+        "industry_safety": np.array([[1.706, 33.103, -6301.5],
+                                     [36.942, 3.970, -10626.8],
+                                     [0.0, 0.0, 1.0]]),
+    }
 DEFAULT_WORLDCOORD = WORLDCOORD_FROM_WORLDGRID["industry_safety"]
 
 
