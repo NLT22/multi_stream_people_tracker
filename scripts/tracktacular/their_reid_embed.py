@@ -31,6 +31,7 @@ def main():
     ap.add_argument("--pred-dir", required=True)
     ap.add_argument("--short-root", default="dataset/MMPTracking_10minute/train")
     ap.add_argument("--scene", required=True)
+    ap.add_argument("--ckpt", default=CKPT, help="ReID weights (default: their synthetic OSNet)")
     ap.add_argument("--batch", type=int, default=512)
     args = ap.parse_args()
 
@@ -40,7 +41,7 @@ def main():
         from torchreid.reid.utils import FeatureExtractor
     from src.dataset.mmp_tracking import MMPTrackingShortDataset
 
-    ext = FeatureExtractor(model_name="osnet_x1_0", model_path=CKPT,
+    ext = FeatureExtractor(model_name="osnet_x1_0", model_path=args.ckpt,
                            device="cuda", image_size=(256, 128))
     ds = MMPTrackingShortDataset(str(args.short_root), args.scene)
     cam_ids = ds.get_cam_ids()                      # source_id i -> cam_ids[i]
