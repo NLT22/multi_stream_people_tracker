@@ -61,6 +61,13 @@ def main():
     ap.add_argument("--splits", nargs="+", default=["train", "val"])
     ap.add_argument("--limit", type=int, default=0, help="0 = all; else first N images/split (dry run)")
     ap.add_argument("--batch", type=int, default=64)
+    ap.add_argument("--imgsz", type=int, default=640)
+    ap.add_argument("--augment", action="store_true",
+                    help="verifier test-time augmentation (TTA) — higher verifier recall "
+                         "→ fewer real (occluded/partial) people wrongly dropped")
+    ap.add_argument("--name-filter", default=None,
+                    help="only process images whose filename contains this substring "
+                         "(e.g. 'retail' to re-clean just retail into an existing dst)")
     ap.add_argument("--qa-dir", default=None, help="dir for dropped/kept crop montage")
     args = ap.parse_args()
 
@@ -75,13 +82,15 @@ def main():
         out_img = dst / "images" / split; out_img.mkdir(parents=True, exist_ok=True)
         out_lbl = dst / "labels" / split; out_lbl.mkdir(parents=True, exist_ok=True)
         imgs = sorted(img_dir.glob("*.jpg"))
+        if args.name_filter:
+            imgs = [p for p in imgs if args.name_filter in p.name]
         if args.limit:
             imgs = imgs[:args.limit]
         st = {"boxes": 0, "kept": 0, "drop_occ": 0, "drop_unverified": 0}
         for i in range(0, len(imgs), args.batch):
             chunk = imgs[i:i+args.batch]
             res = model.predict([str(p) for p in chunk], conf=args.conf, classes=[0],
-                                verbose=False, imgsz=640)
+                                verbose=False, imgsz=args.imgsz, augment=args.augment)
             for p, r in zip(chunk, res):
                 vboxes = r.boxes.xyxy.cpu().numpy() if r.boxes is not None else np.zeros((0, 4))
                 lbl = lbl_dir / (p.stem + ".txt")

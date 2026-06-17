@@ -172,6 +172,10 @@ def main() -> None:
                     help="Force re-running the ReID instead of loading cached embeddings.")
     ap.add_argument("--make-montages", action="store_true")
     ap.add_argument("--montage-envs", nargs="+", default=["lobby", "office", "cafe_shop"])
+    ap.add_argument("--envs", nargs="+", default=None,
+                    help="Only (re)cluster these environments (e.g. 'retail'); embed "
+                         "just their tracks and MERGE into the existing proposal, "
+                         "preserving other envs' rows. Omit to cluster everything.")
     args = ap.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -184,25 +188,50 @@ def main() -> None:
     print(f"[{args.split}] {len(rows)} crops, {len(track_scene)} scene-tracks, "
           f"{len(set(track_env.values()))} environments")
 
+    target_envs = set(args.envs) if args.envs else None
+    out_manifest = args.out_dir / f"{args.split}_consolidated_manifest.csv"
+
+    # When restricting to a subset of envs, embed only those tracks (fast) and
+    # carry forward the existing proposal's rows for all other envs.
+    embed_rows = rows if target_envs is None else \
+        [r for r in rows if track_env[int(r["pid"])] in target_envs]
+
     # cache track embeddings so threshold sweeps don't re-run the ReID
     emb_cache = args.out_dir / f"track_emb_{args.split}.npz"
-    if emb_cache.exists() and not args.reembed:
+    if target_envs is None and emb_cache.exists() and not args.reembed:
         z = np.load(emb_cache)
         track_emb = {int(k): z[k] for k in z.files}
         print(f"[reid] loaded cached embeddings: {emb_cache} ({len(track_emb)} tracks)")
     else:
-        track_emb = embed_tracks(args.cache_root, rows, args.reid_onnx,
+        track_emb = embed_tracks(args.cache_root, embed_rows, args.reid_onnx,
                                  args.crops_per_track, args.batch)
-        np.savez(emb_cache, **{str(k): v for k, v in track_emb.items()})
-        print(f"[reid] cached embeddings -> {emb_cache}")
+        if target_envs is None:
+            np.savez(emb_cache, **{str(k): v for k, v in track_emb.items()})
+            print(f"[reid] cached embeddings -> {emb_cache}")
+        else:
+            print(f"[reid] embedded {len(track_emb)} tracks for envs={sorted(target_envs)}")
 
     # cluster per environment; assign globally-unique consolidated gids
     env_tracks: dict[str, list[int]] = defaultdict(list)
     for t, e in track_env.items():
-        env_tracks[e].append(t)
+        if target_envs is None or e in target_envs:
+            env_tracks[e].append(t)
+
+    # merge mode: keep existing proposal rows for envs we're NOT reclustering,
+    # and start new gids after the highest gid already used by those rows.
+    kept_rows: list[dict] = []
+    gid_base = 0
+    if target_envs is not None and out_manifest.exists():
+        with out_manifest.open() as f:
+            for r in csv.DictReader(f):
+                if env_of(r["scene"]) in target_envs:
+                    continue
+                kept_rows.append(r)
+                gid_base = max(gid_base, int(r["gid"]) + 1)
+        print(f"[merge] keeping {len(kept_rows)} rows from {gid_base} existing identities")
 
     track_to_gid: dict[int, int] = {}
-    gid_base = 0
+    gid_start = gid_base
     print(f"\n=== consolidation (threshold={args.threshold}) ===")
     for env in sorted(env_tracks):
         ts = env_tracks[env]
@@ -219,21 +248,24 @@ def main() -> None:
         print(f"  {env:18s}: {len(ts):3d} scene-tracks -> {len(clusters):3d} identities "
               f"({merged} are multi-scene merges)")
         gid_base += len(clusters)
-    print(f"  TOTAL: {len(track_scene)} scene-tracks -> {gid_base} consolidated identities")
+    print(f"  TOTAL: {len(track_to_gid)} scene-tracks -> "
+          f"{gid_base - gid_start} new identities (gids {gid_start}..{gid_base - 1})")
 
-    # write consolidated manifest
-    out_manifest = args.out_dir / f"{args.split}_consolidated_manifest.csv"
+    # write consolidated manifest (kept rows + freshly-clustered target rows)
+    fields = ["rel_path", "gid", "orig_pid", "cam_id", "scene", "frame"]
     with out_manifest.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["rel_path", "gid", "orig_pid", "cam_id", "scene", "frame"])
+        w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
-        for r in rows:
+        for r in kept_rows:
+            w.writerow({k: r[k] for k in fields})
+        for r in embed_rows:
             w.writerow({"rel_path": r["rel_path"], "gid": track_to_gid[int(r["pid"])],
                         "orig_pid": r["pid"], "cam_id": r["cam_id"],
                         "scene": r["scene"], "frame": r["frame"]})
     print(f"[done] consolidated manifest -> {out_manifest}")
 
     if args.make_montages:
-        render_montages(args, rows, track_to_gid, track_scene, track_env)
+        render_montages(args, embed_rows, track_to_gid, track_scene, track_env)
 
 
 def render_montages(args, rows, track_to_gid, track_scene, track_env) -> None:

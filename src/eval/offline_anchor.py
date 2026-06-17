@@ -234,12 +234,12 @@ def _tracklet_world(bev: pd.DataFrame) -> dict[int, dict[int, np.ndarray]]:
 
 def _env_box(scene: str | None) -> tuple[float, float, float, float] | None:
     """Plausible world box (mm) for the scene's environment from affines.json
-    (fit by scripts/tracktacular). Used to drop garbage monocular foot
-    projections before STCRA. Returns None if unavailable."""
+    (fit by scripts/anchor_guided/fit_affine.py). Used to drop garbage monocular
+    foot projections before STCRA. Returns None if unavailable."""
     if not scene:
         return None
     import json
-    p = Path("scripts/tracktacular/affines.json")
+    p = Path("scripts/anchor_guided/affines.json")
     if not p.exists():
         return None
     env = scene.split("_", 1)[1].rsplit("_", 1)[0]  # 63am_industry_safety_0 -> industry_safety

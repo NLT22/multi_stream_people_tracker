@@ -96,7 +96,7 @@ def _bank_cost(emb: np.ndarray, banks: list[np.ndarray]) -> np.ndarray:
     return np.stack(cols, axis=1)      # (N, k)
 
 
-def assign_per_frame(cam, frame, ltid, emb, banks):
+def assign_per_frame(cam, frame, ltid, emb, banks, window: int = WINDOW):
     """Per-camera, per-frame Hungarian to distinct anchors + window-vote smooth.
     Returns {(cam,frame,ltid): gid}."""
     k = len(banks)
@@ -129,8 +129,8 @@ def assign_per_frame(cam, frame, ltid, emb, banks):
             frames = [f for f, _ in seq]
             anchs = [a for _, a in seq]
             for i, f in enumerate(frames):
-                lo = max(0, i - WINDOW // 2)
-                hi = min(len(anchs), i + WINDOW // 2 + 1)
+                lo = max(0, i - window // 2)
+                hi = min(len(anchs), i + window // 2 + 1)
                 vote = Counter(anchs[lo:hi]).most_common(1)[0][0]
                 out[(int(c), int(f), int(t))] = vote + 1   # gid >= 1
     return out
@@ -206,6 +206,8 @@ def main():
     ap.add_argument("--passes", type=float, nargs="+", default=[1500, 1000, 750])
     ap.add_argument("--conf-thr", type=float, default=0.65)
     ap.add_argument("--min-overlap", type=int, default=8)
+    ap.add_argument("--window", type=int, default=WINDOW,
+                    help="sliding-window majority-vote length (default 15)")
     args = ap.parse_args()
 
     pred_dir, out_dir = Path(args.pred_dir), Path(args.out_dir)
@@ -221,7 +223,7 @@ def main():
 
     banks = build_anchors(emb, frame, k)
     print(f"[faithful] anchor bank sizes: {[len(b) for b in banks]}")
-    det_gid = assign_per_frame(cam, frame, ltid, emb, banks)
+    det_gid = assign_per_frame(cam, frame, ltid, emb, banks, window=args.window)
     print(f"[faithful] assigned {len(det_gid)} detections -> "
           f"{len(set(det_gid.values()))} identities")
 

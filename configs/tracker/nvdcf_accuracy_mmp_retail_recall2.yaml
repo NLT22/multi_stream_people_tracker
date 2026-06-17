@@ -1,0 +1,95 @@
+%YAML:1.0
+# =============================================================================
+# NvDCF Tracker Config — MMP recall-tuned variant
+# =============================================================================
+# Use when NvDCF Global IDF1 is promising but local recall drops too much
+# (notably retail/cafe cam_1).  This keeps the same MMP Swin-Tiny ReID export
+# as nvdcf_accuracy_mmp.yaml, but lets tracks survive longer and accepts weaker
+# detector/tracker confidence.
+# =============================================================================
+
+BaseConfig:
+  minDetectorConfidence: 0.12
+
+TargetManagement:
+  enableBboxUnClipping: 1
+  preserveStreamUpdateOrder: 0
+  maxTargetsPerStream: 220
+  minIouDiff4NewTarget: 0.50
+  minTrackerConfidence: 0.20
+  probationAge: 2
+  maxShadowTrackingAge: 240
+  earlyTerminationAge: 4
+
+TrajectoryManagement:
+  enableReAssoc: 1
+  minMatchingScore4Overall: 0.72
+  minTrackletMatchingScore: 0.38
+  minMatchingScore4ReidSimilarity: 0.33
+  matchingScoreWeight4TrackletSimilarity: 0.75
+  matchingScoreWeight4ReidSimilarity: 0.45
+  minTrajectoryLength4Projection: 34
+  prepLength4TrajectoryProjection: 58
+  trajectoryProjectionLength: 33
+  maxAngle4TrackletMatching: 67
+  minSpeedSimilarity4TrackletMatching: 0.057
+  minBboxSizeSimilarity4TrackletMatching: 0.101
+  maxTrackletMatchingTimeSearchRange: 30
+  trajectoryProjectionProcessNoiseScale: 0.0100
+  trajectoryProjectionMeasurementNoiseScale: 100
+  trackletSpacialSearchRegionScale: 0.0100
+  reidExtractionInterval: 5
+
+DataAssociator:
+  dataAssociatorType: 0
+  associationMatcherType: 1
+  checkClassMatch: 1
+  minMatchingScore4Overall: 0.32
+  minMatchingScore4SizeSimilarity: 0.42
+  minMatchingScore4Iou: 0.08
+  minMatchingScore4VisualSimilarity: 0.58
+  matchingScoreWeight4VisualSimilarity: 0.85
+  matchingScoreWeight4SizeSimilarity: 0.20
+  matchingScoreWeight4Iou: 0.20
+  tentativeDetectorConfidence: 0.22
+  minMatchingScore4TentativeIou: 0.30
+
+StateEstimator:
+  stateEstimatorType: 1
+  processNoiseVar4Loc: 6497.75
+  processNoiseVar4Size: 1541.86
+  processNoiseVar4Vel: 8035.86
+  measurementNoiseVar4Detector: 100.0
+  measurementNoiseVar4Tracker: 883.58
+
+VisualTracker:
+  visualTrackerType: 1
+  useColorNames: 1
+  useHog: 1
+  featureImgSizeLevel: 5
+  featureFocusOffsetFactor_y: -0.105
+  filterLr: 0.015
+  filterChannelWeightsLr: 0.050
+  gaussianSigma: 0.450
+
+ReID:
+  reidType: 2
+
+  batchSize: 16
+  workspaceSize: 1000
+  reidFeatureSize: 256
+  reidHistorySize: 100
+  inferDims: [3, 256, 128]
+  networkMode: 1
+
+  inputOrder: 0
+  colorFormat: 0
+  offsets: [123.6750, 116.2800, 103.5300]
+  netScaleFactor: 0.01735207
+  keepAspc: 1
+  useVPICropScaler: 1
+  addFeatureNormalization: 0
+  outputReidTensor: 1
+
+  onnxFile: "models/reid/swin_tiny_mmp_reid_10min_clean.onnx"
+  modelEngineFile: ""

@@ -29,14 +29,32 @@ from tqdm import tqdm
 from scripts.train.finetune_reid_mmp import MMPReidDataset
 
 
-def _scan_scenes(src_root: Path, split: str, exclude_retail: bool) -> list[str]:
+def _scan_scenes(src_root: Path, split: str, exclude_retail: bool,
+                 only_retail: bool = False) -> list[str]:
     split_dir = src_root / split
     if not split_dir.exists():
         return []
     names = sorted(d.name for d in split_dir.iterdir() if d.is_dir())
-    if exclude_retail:
+    if only_retail:
+        names = [name for name in names if "retail" in name]
+    elif exclude_retail:
         names = [name for name in names if "retail" not in name]
     return [f"{split}/{name}" for name in names]
+
+
+def _existing_pid_offset(manifest_path: Path) -> int:
+    """Highest scene-track pid already in the manifest + 1 (0 if absent).
+
+    Used by --append so newly-added scenes get fresh pids that never collide
+    with (and never renumber) the ids already baked into reid_labels/*.json.
+    """
+    if not manifest_path.exists():
+        return 0
+    max_pid = -1
+    with manifest_path.open(encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            max_pid = max(max_pid, int(r["pid"]))
+    return max_pid + 1
 
 
 def _safe_scene_name(video_path: str) -> str:
@@ -44,7 +62,8 @@ def _safe_scene_name(video_path: str) -> str:
 
 
 def build_split(args, split: str) -> dict[str, int]:
-    scenes = _scan_scenes(args.src_root, split, args.exclude_retail)
+    scenes = _scan_scenes(args.src_root, split, args.exclude_retail,
+                          only_retail=args.only_retail)
     if args.max_scenes_per_split > 0:
         scenes = scenes[:args.max_scenes_per_split]
     if not scenes:
@@ -53,12 +72,26 @@ def build_split(args, split: str) -> dict[str, int]:
 
     split_out = args.output_dir / split
     manifest_path = split_out / "manifest.csv"
-    if manifest_path.exists() and not args.overwrite:
-        raise SystemExit(
-            f"{manifest_path} already exists. Pass --overwrite to rebuild."
-        )
-    if split_out.exists() and args.overwrite:
-        shutil.rmtree(split_out)
+
+    # --append: keep existing crops/manifest, add new scenes with offset pids so
+    # the scene-track ids already referenced by reid_labels/*.json never move.
+    existing_rows: list[dict[str, str | int]] = []
+    pid_offset = 0
+    if args.append:
+        pid_offset = _existing_pid_offset(manifest_path)
+        if manifest_path.exists():
+            with manifest_path.open(encoding="utf-8") as f:
+                existing_rows = list(csv.DictReader(f))
+        print(f"[append] {split}: {len(existing_rows)} existing crops, "
+              f"new scene-track pids start at {pid_offset}")
+    else:
+        if manifest_path.exists() and not args.overwrite:
+            raise SystemExit(
+                f"{manifest_path} already exists. Pass --overwrite to rebuild "
+                f"or --append to add scenes."
+            )
+        if split_out.exists() and args.overwrite:
+            shutil.rmtree(split_out)
     split_out.mkdir(parents=True, exist_ok=True)
 
     ds = MMPReidDataset(
@@ -87,7 +120,7 @@ def build_split(args, split: str) -> dict[str, int]:
 
     for ordinal, idx in enumerate(tqdm(order, desc=f"cache {split}", unit="crop")):
         sample = ds.samples[idx]
-        pid_cls = ds.pid_to_cls[sample.gid]
+        pid_cls = ds.pid_to_cls[sample.gid] + pid_offset
         scene = _safe_scene_name(sample.video_path)
         pid_dir = split_out / f"{pid_cls:06d}"
         pid_dir.mkdir(parents=True, exist_ok=True)
@@ -115,15 +148,18 @@ def build_split(args, split: str) -> dict[str, int]:
             "frame": sample.frame_no,
         })
 
+    all_rows = existing_rows + rows
     with manifest_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
             f,
             fieldnames=["rel_path", "pid", "cam_id", "scene", "frame"],
         )
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(all_rows)
 
-    print(f"[done] {split}: {len(rows)} crops, {ds.num_classes} persons")
+    added = "added" if args.append else "wrote"
+    print(f"[done] {split}: {added} {len(rows)} crops ({ds.num_classes} new persons); "
+          f"manifest now {len(all_rows)} crops")
     print(f"       manifest: {manifest_path}")
     return {"crops": len(rows), "persons": ds.num_classes}
 
@@ -141,6 +177,13 @@ def main() -> None:
     p.add_argument("--min-imgs-pid", type=int, default=4)
     p.add_argument("--jpeg-quality", type=int, default=92)
     p.add_argument("--exclude-retail", action="store_true")
+    p.add_argument("--only-retail", action="store_true",
+                   help="Build ONLY retail scenes (mirror of --exclude-retail). "
+                        "Use with --append to add retail to a non-retail cache.")
+    p.add_argument("--append", action="store_true",
+                   help="Append to an existing cache + manifest, offsetting new "
+                        "scene-track pids past the current max so ids referenced "
+                        "by reid_labels/*.json never move.")
     p.add_argument("--prefer-clean-gt", action="store_true")
     p.add_argument("--overwrite", action="store_true")
     p.add_argument("--max-scenes-per-split", type=int, default=0,

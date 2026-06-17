@@ -98,15 +98,15 @@ excluded, no disk I/O / tracking / metrics. RTX 5060 Ti, 720x1280/cam, batch 1.
 3. Refine the grid->world affine (reduce the 270 mm GT error).
 4. Try `liftnet` (depth-splat) / longer schedule.
 
-## Repro
+## Repro (TrackTacular/lifting-BEV archived to old_stuff/tracktacular/)
 ```
-bash scripts/tracktacular/apply_integration.sh
-python scripts/tracktacular/mmp_to_worldtrack.py --scene 63am_industry_safety_0 \
+bash old_stuff/tracktacular/apply_integration.sh
+python old_stuff/tracktacular/mmp_to_worldtrack.py --scene 63am_industry_safety_0 \
     --out dataset/worldtrack/mmp_industry_safety_0 --frame-step 2
-cd reference/TrackTacular/WorldTrack
+cd old_stuff/tracktacular/TrackTacular_clone/WorldTrack
 python world_track.py fit  -c configs/t_fit.yml -c configs/d_mmp_industry.yml -c configs/m_segnet.yml
 python world_track.py test -c lightning_logs/version_0/config.yaml --ckpt <best.ckpt>
-python scripts/tracktacular/bev_compare.py --gt <ver>/mota_gt.txt --tt-pred <ver>/mota_pred.txt \
+python old_stuff/tracktacular/bev_compare.py --gt <ver>/mota_gt.txt --tt-pred <ver>/mota_pred.txt \
     --current-dir output/eval/clean_63am_industry_safety_0 \
     --anchor-dir  output/eval/anchor_63am_industry_safety_0
 ```

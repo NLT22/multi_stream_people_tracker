@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fit the per-environment topdown-grid -> world(mm) affine and write it to
-scripts/tracktacular/affines.json (consumed by mmptracking_dataset.py and
-bev_compare.py).
+scripts/anchor_guided/affines.json (consumed by src/eval/offline_anchor.py for
+robust-foot outlier rejection before STCRA).
 
 Method: for matched person_ids, project foot points to world via the calibration
 (src.reid.geometry), take a robust median across cameras, and least-squares fit
