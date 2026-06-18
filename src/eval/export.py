@@ -31,9 +31,20 @@ _FIELDNAMES = [
 class PredictionExporter:
     """Writes per-camera prediction CSVs during pipeline execution."""
 
-    def __init__(self, output_dir: str, delay_frames: int = 0) -> None:
+    def __init__(self, output_dir: str, delay_frames: int = 0,
+                 emb_flush_frames: int = 0) -> None:
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
+        # Live buffered cross-camera: when > 0, per-detection embeddings are
+        # flushed to numbered chunk files (det_emb_chunk_<NNNN>.npz) every
+        # `emb_flush_frames` frames and the in-memory buffer is cleared. This
+        # (a) lets a live consumer (src/mtmc/live_buffered.py) cluster rolling
+        # windows during an unbounded stream, and (b) bounds memory growth on
+        # long runs (the _det_embs list otherwise grows forever). 0 = legacy:
+        # embeddings written once at close().
+        self._emb_flush_frames = max(0, int(emb_flush_frames))
+        self._emb_chunk = 0
+        self._last_emb_flush = 0
         # Lazy-open: one file + writer per cam_id encountered.
         self._files: dict[int, object] = {}
         self._writers: dict[int, csv.DictWriter] = {}
@@ -106,6 +117,33 @@ class PredictionExporter:
             self._remap = remap
         safe_frame = current_frame - self._delay_frames
         self._flush(safe_frame)
+        if (self._emb_flush_frames
+                and current_frame - self._last_emb_flush >= self._emb_flush_frames):
+            self.flush_embeddings()
+            self._last_emb_flush = current_frame
+
+    def flush_embeddings(self) -> None:
+        """Write buffered per-detection embeddings to a numbered chunk npz and
+        clear the in-memory buffer. Same array layout as detection_embeddings.npz
+        so a consumer can stack chunks. No-op if nothing buffered."""
+        if not self._det_embs:
+            return
+        try:
+            import numpy as np
+        except ImportError:
+            return
+        keys = np.asarray(self._det_keys, dtype=np.int64)        # (N,3)
+        demb = np.asarray(self._det_embs, dtype=np.float32)
+        path = self._output_dir / f"det_emb_chunk_{self._emb_chunk:04d}.npz"
+        # tmp must end in .npz or np.savez_compressed appends it; rename is atomic
+        # so the consumer never sees a half-written chunk.
+        tmp = path.with_name(f"det_emb_chunk_{self._emb_chunk:04d}.tmp.npz")
+        np.savez_compressed(tmp, cam_id=keys[:, 0], frame_no=keys[:, 1],
+                            local_track_id=keys[:, 2], embeddings=demb)
+        tmp.rename(path)
+        self._emb_chunk += 1
+        self._det_keys.clear()
+        self._det_embs.clear()
 
     def close(self) -> None:
         """Flush all remaining rows with the final remap, then write summaries."""

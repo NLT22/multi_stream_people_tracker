@@ -62,6 +62,7 @@ def main(argv: list[str] | None = None) -> None:
         trajectory_sample_interval=args.trajectory_sample_interval,
         trajectory_max_segments=args.trajectory_max_segments,
         export_predictions=args.export_predictions,
+        live_buffered_window=args.live_buffered_window,
         disable_gallery=args.disable_gallery,
         osd_enabled=args.osd_enabled,
         gt_by_cam=gt_by_cam,

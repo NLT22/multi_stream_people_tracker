@@ -154,7 +154,8 @@ def run(config: PipelineRunConfig):
         10 ** 9 if reid_config.use_micro_batch_fusion else 0
     )
     exporter = (
-        PredictionExporter(export_predictions, delay_frames=export_delay_frames)
+        PredictionExporter(export_predictions, delay_frames=export_delay_frames,
+                           emb_flush_frames=config.live_buffered_window)
         if export_predictions and not disable_gallery else None
     )
 

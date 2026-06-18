@@ -47,6 +47,7 @@ class PipelineRunConfig:
     trajectory_sample_interval: int = 20
     trajectory_max_segments: int = 24
     export_predictions: str | None = None
+    live_buffered_window: int = 0   # >0: flush per-det embedding chunks every N frames (live buffered MTMC)
     disable_gallery: bool = False
     osd_enabled: bool = True
     gt_by_cam: dict | None = None

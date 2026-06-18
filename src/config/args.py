@@ -237,6 +237,11 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--export-predictions", default=None, metavar="DIR",
                         help="Write per-camera prediction CSVs to this directory "
                              "for offline evaluation with src.eval.metrics_mmp.")
+    parser.add_argument("--live-buffered-window", type=int, default=0, metavar="FRAMES",
+                        help="For live buffered cross-camera MTMC: flush per-detection "
+                             "embedding chunks every N frames (e.g. 450 = 30s @15fps) so "
+                             "src.mtmc.live_buffered can cluster rolling windows during an "
+                             "unbounded stream. Also bounds exporter memory. 0 = off.")
     parser.add_argument("--show-gt", action="store_true",
                         help="Overlay ground-truth boxes (green) on the display. "
                              "Requires --mmp-dataset or --mmp-short-dataset.")

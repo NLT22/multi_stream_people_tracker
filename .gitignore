@@ -33,3 +33,5 @@ tmp/
 reference/
 anchor-guided-implement.md
 models/pose/*.pt
+old_stuff/tracktacular/TrackTacular_clone/
+models/reid_osnet_mmp/
