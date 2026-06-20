@@ -35,3 +35,34 @@ anchor-guided-implement.md
 models/pose/*.pt
 old_stuff/tracktacular/TrackTacular_clone/
 models/reid_osnet_mmp/
+
+# Local GUI/editor profile cache accidentally created at repo root.
+Backups/
+Cache/
+CachedConfigurations/
+CachedData/
+CachedProfilesData/
+Code Cache/
+Cookies
+Cookies-journal
+Crashpad/
+DIPS
+DawnGraphiteCache/
+DawnWebGPUCache/
+Dictionaries/
+GPUCache/
+Local State
+Local Storage/
+Network Persistent State
+Preferences
+Session Storage/
+Shared Dictionary/
+SharedStorage
+TransportSecurity
+Trust Tokens
+Trust Tokens-journal
+User/
+blob_storage/
+languagepacks.json
+logs/
+machineid
