@@ -123,6 +123,8 @@ scripts/eval/mediamtx_multienv.sh stop
   helpers.
 - [x] Evaluate the current production YOLO11 detector on exact-source validation
   frames.
+- [x] Add exact MMPTracking zip-source ReID crop conversion and deployed-ONNX
+  retrieval eval.
 
 ## 3. Next Priority
 
@@ -176,6 +178,43 @@ Remaining exact-dataset gap:
   source path.
 - [ ] Keep the existing 10-minute video benchmark passing while exact-source
   end-to-end eval is added.
+
+ReID crop/eval also reads the official zip files directly:
+
+```bash
+./venv/bin/python scripts/datasets/mmp_exact_to_reid.py \
+  --output-dir dataset/mmp_exact_reid_eval \
+  --splits val \
+  --sample-rate 100 \
+  --max-crops-per-scene 1000 \
+  --clean
+
+./venv/bin/python scripts/eval/eval_reid_mmp_exact.py \
+  --crop-root dataset/mmp_exact_reid_eval \
+  --split val \
+  --weights models/reid/swin_tiny_mmp_reid_all.onnx \
+  --batch 64 \
+  --max-crops-per-scene 200
+```
+
+Current deployed ReID ONNX on balanced exact-source val crops:
+
+```text
+cross-camera top1: 0.5504
+cross-camera mAP:  0.4263
+
+env mean top1:
+  cafe_shop:       0.7675
+  industry_safety: 0.5050
+  lobby:           0.8038
+  office:          0.7617
+  retail:          0.2644
+```
+
+This confirms retail is an embedding-quality/generalization problem, not only a
+tracking or clustering problem. Exact-source ReID training is not productionized
+yet because the repo currently has the deployed ONNX, not the original trainable
+Swin checkpoint.
 
 ### 3.1 RTSP Production Validation
 

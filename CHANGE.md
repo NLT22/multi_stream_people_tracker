@@ -333,6 +333,79 @@ Verdict:
   DeepStream image-sequence/RTSP conversion path or exact-video generation from
   the official zip frames.
 
+## Exact MMPTracking ReID Eval on 2026-06-21
+
+Added exact-source ReID crop/eval tooling:
+
+- `scripts/datasets/mmp_exact_to_reid.py`
+- `scripts/eval/eval_reid_mmp_exact.py`
+
+This path reads the official MMPTracking zip image/label files directly and
+builds identity crops from GT boxes. It does not use the old extracted
+MMPTracking_10minute videos/CSVs.
+
+Bounded exact-val crop build:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/datasets/mmp_exact_to_reid.py \
+  --output-dir dataset/mmp_exact_reid_eval \
+  --splits val \
+  --sample-rate 100 \
+  --max-crops-per-scene 1000 \
+  --clean
+```
+
+Output:
+
+```text
+val crops: 23,571
+val pids:  168
+```
+
+Balanced deployed-ONNX ReID eval:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/eval/eval_reid_mmp_exact.py \
+  --crop-root dataset/mmp_exact_reid_eval \
+  --split val \
+  --weights models/reid/swin_tiny_mmp_reid_all.onnx \
+  --batch 64 \
+  --max-crops-per-scene 200
+```
+
+Metric definition:
+
+- cross-camera top1: nearest crop from a different camera has same scene-local
+  pid
+- cross-camera mAP: AP over crops from different cameras
+- this is embedding retrieval quality only, not end-to-end MTMC IDF1
+
+Result on 4,800 balanced exact-val crops:
+
+```text
+cross_camera_top1: 0.5504
+cross_camera_mAP:  0.4263
+
+env mean top1:
+  cafe_shop:       0.7675
+  industry_safety: 0.5050
+  lobby:           0.8038
+  office:          0.7617
+  retail:          0.2644
+```
+
+Interpretation:
+
+- The deployed Swin ReID model is acceptable on lobby/office/cafe but weak on
+  industry and very weak on retail.
+- This aligns with the end-to-end IDF1 bottleneck: retail is not just a tracker
+  issue; ReID appearance generalization is poor there.
+- Current repo only has the deployed ONNX, not the original trainable Swin
+  checkpoint, so do not claim exact-source ReID training is ready yet.
+- Full exact-val ReID eval is slow in this venv because ONNX Runtime falls back
+  to CPU: CUDA provider cannot load `libcudnn.so.9`. Production DeepStream still
+  uses TensorRT, so this is an eval-environment limitation.
+
 Single-pass product validation before the SSD recovery:
 
 ```bash
