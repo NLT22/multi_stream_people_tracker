@@ -12,6 +12,7 @@ import csv
 import os
 import sys
 import tempfile
+import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -97,6 +98,33 @@ def test_tracklet_bev_written_when_foot_world_available():
         assert rows[0]["global_id"] == "4"
         assert rows[0]["world_x"] == "1234.5"
         assert rows[0]["world_y"] == "6789.0"
+
+
+def test_live_embedding_chunks_are_uncompressed_and_close_flushes_tail():
+    with tempfile.TemporaryDirectory() as d:
+        e = PredictionExporter(d, delay_frames=0, emb_flush_frames=100)
+        e.record(
+            1, 0, 5, 3, 10, 10, 20, 40,
+            det_embedding=[1.0, 0.0],
+        )
+        e.tick(100)
+        e.record(
+            101, 0, 5, 3, 10, 10, 20, 40,
+            det_embedding=[0.0, 1.0],
+        )
+        e.close()
+
+        chunk0 = os.path.join(d, "det_emb_chunk_0000.npz")
+        chunk1 = os.path.join(d, "det_emb_chunk_0001.npz")
+        assert os.path.exists(chunk0)
+        assert os.path.exists(chunk1)
+        assert not os.path.exists(os.path.join(d, "detection_embeddings.npz"))
+        for path in (chunk0, chunk1):
+            with zipfile.ZipFile(path) as zf:
+                assert all(
+                    info.compress_type == zipfile.ZIP_STORED
+                    for info in zf.infolist()
+                )
 
 
 if __name__ == "__main__":

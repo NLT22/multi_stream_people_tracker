@@ -135,11 +135,13 @@ class PredictionExporter:
         keys = np.asarray(self._det_keys, dtype=np.int64)        # (N,3)
         demb = np.asarray(self._det_embs, dtype=np.float32)
         path = self._output_dir / f"det_emb_chunk_{self._emb_chunk:04d}.npz"
-        # tmp must end in .npz or np.savez_compressed appends it; rename is atomic
-        # so the consumer never sees a half-written chunk.
+        # tmp must end in .npz or np.savez appends it; rename is atomic so the
+        # consumer never sees a half-written chunk. Keep live chunks
+        # uncompressed: compressing in the DeepStream probe path stalls 20-cam
+        # throughput.
         tmp = path.with_name(f"det_emb_chunk_{self._emb_chunk:04d}.tmp.npz")
-        np.savez_compressed(tmp, cam_id=keys[:, 0], frame_no=keys[:, 1],
-                            local_track_id=keys[:, 2], embeddings=demb)
+        np.savez(tmp, cam_id=keys[:, 0], frame_no=keys[:, 1],
+                 local_track_id=keys[:, 2], embeddings=demb)
         tmp.rename(path)
         self._emb_chunk += 1
         self._det_keys.clear()
@@ -148,6 +150,8 @@ class PredictionExporter:
     def close(self) -> None:
         """Flush all remaining rows with the final remap, then write summaries."""
         self._flush(None)               # None = flush everything
+        if self._emb_flush_frames:
+            self.flush_embeddings()
         self._write_tracklet_summaries()
         for f in self._files.values():
             f.close()
