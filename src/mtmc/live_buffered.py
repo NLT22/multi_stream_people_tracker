@@ -32,6 +32,51 @@ from src.eval.offline_anchor_faithful import build_anchors, assign_per_frame
 from src.mtmc.tracklet import _l2
 
 
+def _parse_groups(spec: str | None) -> list[tuple[str, set[int] | None]]:
+    """Parse 'office:8-11,retail:16-19' into named camera groups."""
+    if not spec:
+        return [("all", None)]
+    groups: list[tuple[str, set[int] | None]] = []
+    for raw in spec.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        if ":" not in raw:
+            raise ValueError(f"Invalid group spec {raw!r}; expected name:start-end")
+        name, span = raw.split(":", 1)
+        name = name.strip()
+        cams: set[int] = set()
+        for part in span.split("+"):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                lo, hi = part.split("-", 1)
+                cams.update(range(int(lo), int(hi) + 1))
+            else:
+                cams.add(int(part))
+        if not name or not cams:
+            raise ValueError(f"Invalid group spec {raw!r}; empty name or cameras")
+        groups.append((name, cams))
+    return groups or [("all", None)]
+
+
+def _parse_group_ints(spec: str | None) -> dict[str, int]:
+    """Parse 'retail:4,default:1' into per-group integer overrides."""
+    out: dict[str, int] = {}
+    if not spec:
+        return out
+    for raw in spec.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        if ":" not in raw:
+            raise ValueError(f"Invalid group override {raw!r}; expected name:value")
+        name, value = raw.split(":", 1)
+        out[name.strip()] = int(value)
+    return out
+
+
 def _concurrency_floor(cam, frame, ltid) -> int:
     """Lower bound on #people in the window = max over frames of the busiest
     single camera's distinct-track count (tracks within one camera ≈ distinct
@@ -59,6 +104,10 @@ class LiveBufferedMTMC:
 
     def process_chunk(self, cam, frame, ltid, emb) -> dict:
         """Add one chunk, re-cluster the rolling window, return stats."""
+        current_keys = {
+            (int(c), int(f), int(t))
+            for c, f, t in zip(cam, frame, ltid)
+        }
         self._chunks.append((cam, frame, ltid, emb))
         cw = np.concatenate([c[0] for c in self._chunks])
         fw = np.concatenate([c[1] for c in self._chunks])
@@ -99,12 +148,16 @@ class LiveBufferedMTMC:
 
         # assign each detection's track its window-cluster global id
         active = set()
+        assignments = []
         for (c, f, t), cl in wmap.items():
             gid = cl2gid[cl - 1] + 1
             self.track_gid[(c, t)] = gid
             active.add(gid)
+            if (int(c), int(f), int(t)) in current_keys:
+                assignments.append((int(c), int(f), int(t), int(gid)))
         return {"n_dets": int(len(cw)), "k": k, "n_clusters": len(clusters),
-                "active_gids": len(active), "total_gids": len(self._g_cent)}
+                "active_gids": len(active), "total_gids": len(self._g_cent),
+                "assignments": assignments}
 
 
 def _load_chunk(path: Path):
@@ -118,6 +171,14 @@ def main():
     ap.add_argument("--export-dir", required=True, type=Path)
     ap.add_argument("--window-chunks", type=int, default=1,
                     help="how many recent chunks form one clustering window")
+    ap.add_argument("--groups", default=None,
+                    help="optional named camera groups, e.g. "
+                         "'cafe:0-3,lobby:4-7,office:8-11'. Each group gets "
+                         "an independent MTMC state so unrelated environments "
+                         "are not merged together.")
+    ap.add_argument("--group-window-chunks", default=None,
+                    help="optional per-group window override, e.g. "
+                         "'retail:4,default:1'")
     ap.add_argument("--assign-thr", type=float, default=0.40,
                     help="max (1 - cosine) to link a window cluster to an existing global id")
     ap.add_argument("--num-people", type=int, default=None,
@@ -127,6 +188,9 @@ def main():
     ap.add_argument("--log-csv", default="output/logs/live_buffered.csv")
     ap.add_argument("--gids-csv", default=None,
                     help="optional: write current (cam,local_track_id,global_id) map each step")
+    ap.add_argument("--assign-csv", default=None,
+                    help="optional: append per-detection assignments for the "
+                         "new chunk as group,cam_id,frame_no,local_track_id,global_id")
     ap.add_argument("--poll-interval", type=float, default=5.0)
     ap.add_argument("--duration", type=float, default=0,
                     help="stop after this many seconds (0 = until --max-idle)")
@@ -136,13 +200,35 @@ def main():
                     help="process all existing chunks once then exit (verification)")
     args = ap.parse_args()
 
-    mtmc = LiveBufferedMTMC(args.window_chunks, args.assign_thr,
-                            args.num_people, args.anchor_window)
+    groups = _parse_groups(args.groups)
+    group_windows = _parse_group_ints(args.group_window_chunks)
+    default_window = group_windows.get("default", args.window_chunks)
+    mtmcs = {
+        name: LiveBufferedMTMC(
+            group_windows.get(name, default_window),
+            args.assign_thr,
+            args.num_people,
+            args.anchor_window,
+        )
+        for name, _ in groups
+    }
     log_path = Path(args.log_csv); log_path.parent.mkdir(parents=True, exist_ok=True)
     log = open(log_path, "w")
-    log.write("ts,elapsed_s,chunk,n_dets,k,n_clusters,active_gids,total_gids,cluster_ms\n")
+    log.write("ts,elapsed_s,chunk,group,n_dets,k,n_clusters,active_gids,total_gids,cluster_ms\n")
     log.flush()
+    assign_file = None
+    if args.assign_csv:
+        assign_path = Path(args.assign_csv)
+        assign_path.parent.mkdir(parents=True, exist_ok=True)
+        assign_file = open(assign_path, "w")
+        assign_file.write("group,cam_id,frame_no,local_track_id,global_id\n")
+        assign_file.flush()
     print(f"[live-buffered] watching {args.export_dir} -> {log_path}")
+    print("[live-buffered] groups: " + ", ".join(
+        f"{name}(cams={'all' if cams is None else min(cams)}"
+        f"{'' if cams is None or len(cams) == 1 else '-' + str(max(cams))},"
+        f"chunks={mtmcs[name].window_chunks})"
+        for name, cams in groups))
 
     seen: set = set()
     t0 = time.time(); last_new = time.time()
@@ -154,23 +240,38 @@ def main():
                 cam, frame, ltid, emb = _load_chunk(path)
             except Exception as e:               # half-written / racing; retry next poll
                 print(f"[live-buffered] skip {path.name}: {e}"); continue
-            t1 = time.time()
-            st = mtmc.process_chunk(cam, frame, ltid, emb)
-            dt = (time.time() - t1) * 1000
             seen.add(path.name); last_new = time.time()
             idx = len(seen)
-            log.write(f"{time.strftime('%FT%T')},{time.time()-t0:.0f},{idx},"
-                      f"{st['n_dets']},{st['k']},{st['n_clusters']},"
-                      f"{st['active_gids']},{st['total_gids']},{dt:.0f}\n")
-            log.flush()
-            print(f"[live-buffered] chunk {idx}: dets={st['n_dets']} k={st['k']} "
-                  f"clusters={st['n_clusters']} active_gids={st['active_gids']} "
-                  f"total_gids={st['total_gids']} ({dt:.0f} ms)")
+            for group_name, group_cams in groups:
+                if group_cams is None:
+                    mask = np.ones(len(cam), dtype=bool)
+                else:
+                    mask = np.isin(cam, list(group_cams))
+                if not np.any(mask):
+                    continue
+                t1 = time.time()
+                st = mtmcs[group_name].process_chunk(
+                    cam[mask], frame[mask], ltid[mask], emb[mask])
+                dt = (time.time() - t1) * 1000
+                log.write(f"{time.strftime('%FT%T')},{time.time()-t0:.0f},{idx},"
+                          f"{group_name},{st['n_dets']},{st['k']},"
+                          f"{st['n_clusters']},{st['active_gids']},"
+                          f"{st['total_gids']},{dt:.0f}\n")
+                log.flush()
+                if assign_file is not None:
+                    for c, f, t, gid in st["assignments"]:
+                        assign_file.write(f"{group_name},{c},{f},{t},{gid}\n")
+                    assign_file.flush()
+                print(f"[live-buffered] chunk {idx} group={group_name}: "
+                      f"dets={st['n_dets']} k={st['k']} clusters={st['n_clusters']} "
+                      f"active_gids={st['active_gids']} total_gids={st['total_gids']} "
+                      f"({dt:.0f} ms)")
             if args.gids_csv:
                 with open(args.gids_csv, "w") as g:
-                    g.write("cam_id,local_track_id,global_id\n")
-                    for (c, t), gid in sorted(mtmc.track_gid.items()):
-                        g.write(f"{c},{t},{gid}\n")
+                    g.write("group,cam_id,local_track_id,global_id\n")
+                    for group_name, mtmc in mtmcs.items():
+                        for (c, t), gid in sorted(mtmc.track_gid.items()):
+                            g.write(f"{group_name},{c},{t},{gid}\n")
         if args.once and not new and chunks:
             break
         if args.duration and time.time() - t0 >= args.duration:
@@ -179,7 +280,10 @@ def main():
             print(f"[live-buffered] no new chunk for {args.max_idle}s — stop"); break
         time.sleep(args.poll_interval)
     log.close()
-    print(f"[live-buffered] done; {len(seen)} chunks, {len(mtmc._g_cent)} global ids total")
+    if assign_file is not None:
+        assign_file.close()
+    total_gids = sum(len(mtmc._g_cent) for mtmc in mtmcs.values())
+    print(f"[live-buffered] done; {len(seen)} chunks, {total_gids} global ids total")
 
 
 if __name__ == "__main__":

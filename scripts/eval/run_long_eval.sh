@@ -27,6 +27,7 @@ EXPORT="${EXPORT:-output/eval/long_run}"
 PIPELOG="${PIPELOG:-output/logs/long_pipe.log}"
 LIVE_BUFFERED_WINDOW="${LIVE_BUFFERED_WINDOW:-200}"
 WINDOW_CHUNKS="${WINDOW_CHUNKS:-1}"
+WINDOW_CHUNKS_SPEC="${WINDOW_CHUNKS_SPEC:-retail:4,default:1}"
 ASSIGN_THR="${ASSIGN_THR:-0.40}"
 MONITOR_INTERVAL="${MONITOR_INTERVAL:-30}"
 MAIN_EXTRA_ARGS="${MAIN_EXTRA_ARGS:-}"
@@ -34,6 +35,7 @@ MAIN_EXTRA_ARGS="${MAIN_EXTRA_ARGS:-}"
 mkdir -p output/logs "$EXPORT"
 rm -f "$EXPORT"/det_emb_chunk_*.npz "$EXPORT"/det_emb_chunk_*.tmp.npz \
       "$EXPORT"/cam_*_predictions.csv "$EXPORT"/tracklets.csv \
+      "$EXPORT"/_eval_assign.csv "$EXPORT"/_eval_buf.csv \
       output/logs/long_buffered.csv output/logs/long_gids.csv \
       output/logs/long_stability.csv "$PIPELOG"
 
@@ -51,6 +53,7 @@ echo "[long-eval] cams=$CAM_COUNT sources=$SRCLIST duration=${DUR}s"
 echo "[long-eval] pipeline=$PIPECFG"
 [ -n "$ENV_MAP" ] && echo "[long-eval] env_map=$ENV_MAP"
 echo "[long-eval] export=$EXPORT live_buffered_window=$LIVE_BUFFERED_WINDOW window_chunks=$WINDOW_CHUNKS"
+[ -n "$WINDOW_CHUNKS_SPEC" ] && echo "[long-eval] window_chunks_spec=$WINDOW_CHUNKS_SPEC"
 
 cleanup() {
   set +e
@@ -72,14 +75,20 @@ PPID_=$!
 echo "[long-eval] pipeline pid=$PPID_ -> $PIPELOG"
 sleep 20
 
-python -m src.mtmc.live_buffered \
-  --export-dir "$EXPORT" \
-  --window-chunks "$WINDOW_CHUNKS" \
-  --assign-thr "$ASSIGN_THR" \
-  --duration "$DUR" \
-  --max-idle 180 \
-  --log-csv output/logs/long_buffered.csv \
-  --gids-csv output/logs/long_gids.csv \
+BUFFER_ARGS=(
+  --export-dir "$EXPORT"
+  --window-chunks "$WINDOW_CHUNKS"
+  --assign-thr "$ASSIGN_THR"
+  --duration "$DUR"
+  --max-idle 180
+  --log-csv output/logs/long_buffered.csv
+  --gids-csv output/logs/long_gids.csv
+  --assign-csv "$EXPORT/_eval_assign.csv"
+)
+[ -n "$ENV_MAP" ] && BUFFER_ARGS+=(--groups "$ENV_MAP")
+[ -n "$WINDOW_CHUNKS_SPEC" ] && BUFFER_ARGS+=(--group-window-chunks "$WINDOW_CHUNKS_SPEC")
+
+python -m src.mtmc.live_buffered "${BUFFER_ARGS[@]}" \
   > output/logs/long_buffered_stdout.log 2>&1 &
 CPID=$!
 

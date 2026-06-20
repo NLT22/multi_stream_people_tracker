@@ -67,6 +67,64 @@ python -m pytest tests/test_export.py -v
 
 ## Best Known Target Closure Result
 
+Updated SSD verification on 2026-06-20:
+
+```bash
+PIPECFG=configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
+  bash scripts/eval/run_long_eval.sh 600 configs/sources/val_20cam_mixed.txt \
+  "cafe:0-3,lobby:4-7,office:8-11,industry:12-15,retail:16-19"
+```
+
+Throughput, post-warmup:
+
+```text
+elapsed >= 90s:
+  avg FPS/cam: 9.99
+  min FPS/cam: 9.80
+  max FPS/cam: 10.20
+  avg VRAM:    ~12.7 GB
+```
+
+Important recovered-code fix:
+
+- `run_long_eval.sh` now passes `ENV_MAP` into `src.mtmc.live_buffered`.
+- `src.mtmc.live_buffered` clusters each environment group independently.
+- `src.mtmc.live_buffered` writes per-detection `_eval_assign.csv` assignments.
+- default live-buffered chunks are `retail:4,default:1`.
+
+Why this matters:
+
+The recovered GitHub version clustered all 20 mixed validation cameras as one
+world and ended with only about 8 active IDs total. That is wrong for the mixed
+benchmark because the 20 cameras are five independent environments. Grouped
+buffering restores one MTMC state per environment.
+
+Processed-segment IDF1 from the 600s run, using grouped per-detection
+assignments and GT filtered to the frames actually processed:
+
+```text
+64pm_cafe_shop_0        0.8846
+64pm_lobby_0            0.9130
+64pm_office_0           0.8949
+64pm_industry_safety_0  0.8597
+64pm_retail_0           0.6200
+MEAN                    0.8344
+```
+
+Caveat:
+
+Do not score the 600s looped run against the entire untrimmed GT. Some scenes
+have GT beyond the processed frames, and retail has loop-tail predictions beyond
+its GT. Untrimmed scoring undercounts the run:
+
+```text
+grouped per-detection, untrimmed GT mean: 0.7760
+raw online gallery, untrimmed GT mean:    0.2138
+```
+
+This means the target is met for the processed 20-cam 10-minute segment, but
+retail remains the weak environment and should be the next quality focus.
+
 Single-pass product validation before the SSD recovery:
 
 ```bash
