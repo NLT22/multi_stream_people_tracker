@@ -119,8 +119,63 @@ scripts/eval/mediamtx_multienv.sh stop
 - [x] Group the mixed 20-cam benchmark by environment in `src.mtmc.live_buffered`.
 - [x] Validate target on the current 640x360 mixed benchmark.
 - [x] Simplify Docker Compose to the production tracker service.
+- [x] Add exact MMPTracking zip-source detector conversion, training, and eval
+  helpers.
+- [x] Evaluate the current production YOLO11 detector on exact-source validation
+  frames.
 
 ## 3. Next Priority
+
+### 3.0 Exact MMPTracking Dataset Path
+
+Detector training/eval now reads the official MMPTracking zip files directly:
+
+```bash
+./venv/bin/python scripts/datasets/mmp_exact_to_yolo.py \
+  --output-dir dataset/mmp_exact_yolo \
+  --sample-rate 10 \
+  --clean
+
+./venv/bin/python scripts/eval/eval_yolo_mmp_exact.py \
+  --data dataset/mmp_exact_yolo/dataset.yaml \
+  --weights models/yolov11/yolo11n_mmp.onnx \
+  --imgsz 640 --batch 32 --device 0 \
+  --project output/eval_exact \
+  --name yolo11n_mmp_exact_sr10_baseline
+```
+
+Current exact-source detector baseline:
+
+```text
+images:    61,949
+instances: 422,950
+precision: 0.9653
+recall:    0.8929
+mAP50:     0.9571
+mAP50-95:  0.7565
+```
+
+One-epoch smoke training from generic `yolo11n.pt` was worse:
+
+```text
+precision: 0.952
+recall:    0.830
+mAP50:     0.927
+mAP50-95:  0.617
+```
+
+Do not promote the one-epoch checkpoint. For detector improvement, either recover
+the original trainable `.pt` checkpoint behind `models/yolov11/yolo11n_mmp.onnx`
+or run a longer controlled fine-tune from `yolo11n.pt` and only export if it
+beats the exact-source baseline.
+
+Remaining exact-dataset gap:
+
+- [ ] Add exact-source end-to-end IDF1 evaluation by feeding official zip frames
+  to DeepStream, either as generated videos/RTSP streams or an image-sequence
+  source path.
+- [ ] Keep the existing 10-minute video benchmark passing while exact-source
+  end-to-end eval is added.
 
 ### 3.1 RTSP Production Validation
 

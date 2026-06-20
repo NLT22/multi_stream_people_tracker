@@ -238,6 +238,101 @@ Verdict:
   VRAM or more FPS headroom.
 - Retail remains the quality limiter in both paths.
 
+## Exact MMPTracking Detector Training/Eval on 2026-06-20
+
+Added source-clean YOLO detector tooling that reads the official MMPTracking zip
+dataset directly:
+
+- `scripts/datasets/mmp_exact_to_yolo.py`
+- `scripts/train/train_yolo_mmp_exact.py`
+- `scripts/eval/eval_yolo_mmp_exact.py`
+
+This path reads:
+
+```text
+dataset/MMPTracking/MMPTracking_training/train/{images,labels}/...
+dataset/MMPTracking/MMPTracking_validation/validation/{images,labels}/...
+```
+
+It does not read the old extracted video/CSV cache. The generated YOLO folder is
+only a training format derived from the official zip files and is ignored by git.
+
+Conversion command used:
+
+```bash
+./venv/bin/python scripts/datasets/mmp_exact_to_yolo.py \
+  --output-dir dataset/mmp_exact_yolo \
+  --sample-rate 10 \
+  --clean
+```
+
+Output:
+
+```text
+scenes:       68 official scene zips
+train images: 121,534
+val images:   61,949
+total images: 183,483
+total boxes:  1,254,629
+val boxes:    422,950
+```
+
+Detector baseline on exact-source val:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/eval/eval_yolo_mmp_exact.py \
+  --data dataset/mmp_exact_yolo/dataset.yaml \
+  --weights models/yolov11/yolo11n_mmp.onnx \
+  --imgsz 640 --batch 32 --device 0 \
+  --project output/eval_exact \
+  --name yolo11n_mmp_exact_sr10_baseline
+```
+
+Result:
+
+```text
+images:    61,949
+instances: 422,950
+precision: 0.9653
+recall:    0.8929
+mAP50:     0.9571
+mAP50-95:  0.7565
+```
+
+One-epoch smoke training from generic `yolo11n.pt`:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/train/train_yolo_mmp_exact.py \
+  --data dataset/mmp_exact_yolo/dataset.yaml \
+  --weights yolo11n.pt \
+  --epochs 1 --batch 32 --imgsz 640 --device 0 --workers 4 \
+  --project output/train_exact \
+  --name yolo11n_mmp_exact_sr10_e1 \
+  --patience 0 --no-export
+```
+
+Result after the built-in epoch-end validation:
+
+```text
+images:    61,949
+instances: 422,950
+precision: 0.952
+recall:    0.830
+mAP50:     0.927
+mAP50-95:  0.617
+```
+
+Verdict:
+
+- Do not promote `output/train_exact/yolo11n_mmp_exact_sr10_e1/weights/best.pt`.
+- Current production `models/yolov11/yolo11n_mmp.onnx` remains much better on
+  exact-source val.
+- The training script now avoids an extra duplicate full validation unless
+  `--final-val` is explicitly passed.
+- Exact-source detector mAP is done; exact-source end-to-end IDF1 still needs a
+  DeepStream image-sequence/RTSP conversion path or exact-video generation from
+  the official zip frames.
+
 Single-pass product validation before the SSD recovery:
 
 ```bash
