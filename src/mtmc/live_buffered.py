@@ -29,7 +29,11 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from src.eval.offline_anchor_faithful import build_anchors, assign_per_frame
-from src.mtmc.tracklet import _l2
+
+
+def _l2(v: np.ndarray) -> np.ndarray:
+    n = np.linalg.norm(v)
+    return v / n if n > 0 else v
 
 
 def _parse_groups(spec: str | None) -> list[tuple[str, set[int] | None]]:

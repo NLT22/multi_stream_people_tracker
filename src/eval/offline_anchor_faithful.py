@@ -2,7 +2,7 @@
 
 This mirrors `reference/AIC23_Track1_UWIPL_ETRI` as closely as our data allows,
 to test whether STCRA hurts because of the *algorithm* or because of our earlier
-*tracklet-level* adaptation (`offline_anchor.py`). Differences from that module:
+*tracklet-level* adaptation (now archived). Differences from that module:
 
   * anchors built from **per-detection** embeddings (detection_embeddings.npz),
     not tracklet means;

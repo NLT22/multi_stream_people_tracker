@@ -52,6 +52,22 @@ git revert <cleanup-commit>
 
 or selectively restore one archived file with `git mv old_stuff/retired_20260620/<path> <path>`.
 
+## Production Tightening After Cleanup
+
+Additional root cleanup:
+
+- removed accidental import of the old incremental MTMC simulator from
+  `src.mtmc`
+- inlined the only helper `src.mtmc.live_buffered` needed from the simulator
+- archived retired source files:
+  - `src/mtmc/incremental_mtmc.py`
+  - `src/mtmc/run_incremental.py`
+  - `src/mtmc/tracklet.py`
+  - `src/eval/offline_anchor.py`
+  - `docs/Note.md`
+- added `scripts/setup/production_smoke.sh` as a cheap non-GPU production wiring
+  check
+
 ## Current Best Production Path
 
 Target:

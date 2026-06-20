@@ -11,6 +11,7 @@ Moved here:
 - training, dataset-conversion, benchmark, and anchor-guided experiment scripts
 - old model variants and rejected/redundant ONNX files
 - stale setup helpers that depended on archived training scripts
+- old incremental MTMC simulator files and historical anchor notes
 
 The active production path remains in the root project:
 

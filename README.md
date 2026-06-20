@@ -66,6 +66,12 @@ TensorRT, Python 3.12, and the DeepStream pyservicemaker wheel installed by
 
 ## Run
 
+Quick non-GPU sanity check:
+
+```bash
+scripts/setup/production_smoke.sh
+```
+
 Single command using the production default:
 
 ```bash
