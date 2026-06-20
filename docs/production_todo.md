@@ -51,9 +51,9 @@ sets `live-source=1` on mux + `sync=0` on sink. No code change to consume.
   - `-re` = real-time pacing (simulate live camera); `-stream_loop -1` = loop forever; `-c copy` = no re-encode.
 - [ ] Point the pipeline at the RTSP list:
   ```bash
-  python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_online.yaml \
-    --nvinfer-config configs/models/nvinfer_yolov11_10min_clean_fp32nms07.yml \
-    rtsp://localhost:8554/cam1 rtsp://localhost:8554/cam2 ... --no-display
+  python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
+    --sources rtsp://localhost:8554/cam1 rtsp://localhost:8554/cam2 ... \
+    --no-display --no-sync
   ```
 - [x] **Launcher DONE**: `scripts/eval/mediamtx_loop.sh start <scene_dir> [port]` / `stop` — starts MediaMTX (docker, idempotent) + one looped real-time ffmpeg per camera, prints the `rtsp://` pipeline command; `stop` tears down. Validated (syntax + args + ffmpeg present); needs docker to actually run.
 
@@ -179,7 +179,7 @@ Required: (a) **common routes between zones**, (b) **most-used entry/exit points
 ## 5. UI (mentor: "interactive UI will be good")
 
 Three pieces, separate lifecycles:
-- [ ] **Zone editor** — browser canvas: load a camera frame / top-down map, click polygons, name+tag (entry/exit/aisle/checkout), save `configs/zones/<scene>.json`. Reuse the zero-dep server pattern of `scripts/datasets/reid_label_app.py` (or `streamlit-drawable-canvas`).
+- [ ] **Zone editor** — browser canvas: load a camera frame / top-down map, click polygons, name+tag (entry/exit/aisle/checkout), save `configs/zones/<scene>.json`. The old label-app prototype is archived under `old_stuff/retired_20260620/scripts/datasets/`; reuse only if needed.
 - [ ] **Grafana + TimescaleDB** — ops/time-series panels: people-per-zone-over-time, throughput, occupancy + GID-count/FPS health for the days-long run. Live, no code.
 - [ ] **Streamlit** — analyst views Grafana can't do: flow map, top-routes table, entry/exit bar charts, journey replay.
 - [ ] (optional) Live zone overlay + per-zone counts on the OSD video (extend `src/reid/visualization.py`).

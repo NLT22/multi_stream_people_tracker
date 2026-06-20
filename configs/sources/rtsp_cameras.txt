@@ -5,7 +5,7 @@
 #
 # Format: rtsp://[user:password@]host:port/path
 #
-# IMPORTANT — when using RTSP sources you must also set in pipeline.yaml:
+# IMPORTANT — when using RTSP sources you must also set in the selected pipeline YAML:
 #   (This is handled automatically by the pipeline builder in Milestone 2+)
 #   - nvstreammux: live-source=1
 #   - nveglglessink: sync=0, async=0

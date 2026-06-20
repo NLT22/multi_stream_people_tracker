@@ -5,6 +5,53 @@ Recovered handoff notes after the SSD/GitHub recovery on 2026-06-20.
 Use this file as the short memory for the next agent: what was restored, what was
 tested, what was rejected, and what can be undone.
 
+## Production Cleanup on 2026-06-20
+
+The root project was reduced to the real production path:
+
+- YOLO11 MMP detector
+- NvDCF tracker
+- SGIE Swin-Tiny ReID
+- long eval / MediaMTX helpers
+- Docker tracker service
+
+Archived to `old_stuff/retired_20260620/`:
+
+- old pipeline and tracker ablations
+- NvDeepSORT configs
+- old detector/ReID nvinfer configs
+- dataset conversion, training, benchmark, and anchor-guided scripts
+- old/rejected ONNX models
+- stale setup scripts that depended on archived training files
+
+Deleted local generated artifacts:
+
+- `output/`
+- Python `__pycache__/`
+- TensorRT `.engine` files
+- generated `configs/models/*.runtime_*.yml`
+
+Production defaults were updated in:
+
+- `src/config/runtime.py`
+- `src/config/args.py`
+- `src/pipeline/runner.py`
+- `README.md`
+- `configs/README.md`
+- `models/README.md`
+- `docker-compose.yml`
+- `scripts/setup/docker_smoke_test.sh`
+- `scripts/eval/mediamtx_loop.sh`
+- `scripts/eval/mediamtx_multienv.sh`
+
+Undo:
+
+```bash
+git revert <cleanup-commit>
+```
+
+or selectively restore one archived file with `git mv old_stuff/retired_20260620/<path> <path>`.
+
 ## Current Best Production Path
 
 Target:

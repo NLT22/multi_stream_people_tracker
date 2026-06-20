@@ -9,18 +9,18 @@ import yaml
 from src.reid.config import ReIDConfig
 
 
-DEFAULT_CONFIG_PATH = "configs/pipelines/pipeline.yaml"
+DEFAULT_CONFIG_PATH = "configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml"
 
 
 def _load_defaults(config_path: str) -> dict:
-    """Read pipeline.yaml and turn it into CLI defaults for this app."""
+    """Read the selected pipeline YAML and turn it into CLI defaults."""
     _c = ReIDConfig()
     defaults = {
         "sources": ["configs/sources/video_files.txt"],
-        "nvinfer_config": "configs/models/nvinfer_yolov11_people.yml",
-        "reid_sgie_config": None,
+        "nvinfer_config": "configs/models/nvinfer_yolov11_mmp.yml",
+        "reid_sgie_config": "configs/models/nvinfer_reid_swin_sgie_all.yml",
         "nvdsanalytics_config": None,
-        "tracker_config": "configs/tracker/nvdeepsort_reid_swin.yaml",
+        "tracker_config": "configs/tracker/nvdcf_accuracy_mmp_recall_sgie.yaml",
         "tracker_width": 640,
         "tracker_height": 384,
         "tracker_sub_batches": None,
@@ -167,5 +167,4 @@ def _load_defaults(config_path: str) -> dict:
         defaults["disable_embedding_quality_gate"] = not reid["embedding_quality_gate"]
 
     return defaults
-
 

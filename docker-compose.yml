@@ -1,136 +1,12 @@
 services:
-  # ── YOLO fine-tune on MMPTracking_short ────────────────────────────────────
-  yolo_train:
-    image: pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
-    shm_size: "16gb"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu, compute, utility]
-    working_dir: /app
-    volumes:
-      - ./scripts:/app/scripts:ro
-      - ./dataset/mmp_yolo:/app/dataset/mmp_yolo
-      - ./dataset/MMPTracking_short:/app/dataset/MMPTracking_short:ro
-      - ./output/train:/app/output/train
-      - ./models/yolov11:/app/models/yolov11
-    environment:
-      - YOLO_EPOCHS=${YOLO_EPOCHS:-30}
-      - YOLO_BATCH=${YOLO_BATCH:-16}
-      - YOLO_PATIENCE=${YOLO_PATIENCE:-10}
-      - YOLO_WEIGHTS=${YOLO_WEIGHTS:-yolo11n.pt}
-      - YOLO_WORKERS=${YOLO_WORKERS:-4}
-      - HOST_UID=${HOST_UID:-1000}
-      - HOST_GID=${HOST_GID:-1000}
-    command:
-      - bash
-      - -c
-      - |
-        trap 'chown -R "$$HOST_UID:$$HOST_GID" /app/dataset/mmp_yolo /app/output/train /app/models/yolov11 2>/dev/null || true' EXIT
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq &&
-        apt-get install -y --no-install-recommends libxcb1 libgl1 libglib2.0-0 >/dev/null &&
-        rm -rf /var/lib/apt/lists/*
-        pip uninstall -y opencv-python opencv-contrib-python opencv-contrib-python-headless >/dev/null 2>&1 || true
-        pip install "numpy<2" ultralytics pandas pyyaml -q &&
-        pip uninstall -y opencv-python opencv-contrib-python >/dev/null 2>&1 || true
-        pip install --force-reinstall --no-deps opencv-python-headless -q &&
-        rm -f /app/dataset/mmp_yolo/labels/*.cache &&
-        python scripts/datasets/mmp_to_yolo.py &&
-        python scripts/train/train_yolo_mmp.py \
-          --epochs $$YOLO_EPOCHS \
-          --batch $$YOLO_BATCH \
-          --patience $$YOLO_PATIENCE \
-          --weights $$YOLO_WEIGHTS \
-          --workers $$YOLO_WORKERS
-    stdin_open: true
-    tty: true
-
-  # ── ReID fine-tune on MTA (legacy) ─────────────────────────────────────────
-  reid_train:
-    image: pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
-    shm_size: "16gb"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu, compute, utility]
-    working_dir: /app
-    volumes:
-      - ./scripts:/app/scripts:ro
-      - ./dataset/mta/MTA_reid:/app/dataset/mta/MTA_reid:ro
-      - ./output/reid:/app/output/reid
-    environment:
-      - HOST_UID=${HOST_UID:-1000}
-      - HOST_GID=${HOST_GID:-1000}
-    command:
-      - bash
-      - -c
-      - |
-        trap 'chown -R "$$HOST_UID:$$HOST_GID" /app/output/reid 2>/dev/null || true' EXIT
-        pip install timm tqdm albumentations -q &&
-        python scripts/train/finetune_reid_mta.py \
-          --epochs 50 --batch 32 --accum-steps 1 \
-          --workers 4 --output output/reid
-    stdin_open: true
-    tty: true
-
-  # ── ReID fine-tune on MMPTracking_short ────────────────────────────────────
-  reid_train_mmp:
-    image: pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
-    shm_size: "16gb"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu, compute, utility]
-    working_dir: /app
-    volumes:
-      - ./scripts:/app/scripts:ro
-      - ./dataset/MMPTracking_short:/app/dataset/MMPTracking_short:ro
-      - ./output/reid_mmp:/app/output/reid_mmp
-    environment:
-      - REID_EPOCHS=${REID_EPOCHS:-40}
-      - REID_PKP=${REID_PKP:-24}
-      - REID_PKK=${REID_PKK:-4}
-      - REID_RESUME=${REID_RESUME:-}
-      - HOST_UID=${HOST_UID:-1000}
-      - HOST_GID=${HOST_GID:-1000}
-    command:
-      - bash
-      - -c
-      - |
-        trap 'chown -R "$$HOST_UID:$$HOST_GID" /app/output/reid_mmp 2>/dev/null || true' EXIT
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq &&
-        apt-get install -y --no-install-recommends libxcb1 libgl1 libglib2.0-0 >/dev/null &&
-        rm -rf /var/lib/apt/lists/*
-        pip uninstall -y opencv-python opencv-contrib-python opencv-contrib-python-headless >/dev/null 2>&1 || true
-        pip install "numpy<2" timm tqdm pandas -q &&
-        pip install --force-reinstall --no-deps opencv-python-headless -q &&
-        python scripts/train/finetune_reid_mmp.py \
-          --epochs $$REID_EPOCHS \
-          --pk-p $$REID_PKP \
-          --pk-k $$REID_PKK \
-          --output output/reid_mmp \
-          $${REID_RESUME:+--resume $$REID_RESUME}
-    stdin_open: true
-    tty: true
-
-  # ── Main tracker pipeline (DeepStream) ─────────────────────────────────────
   tracker:
     build: .
     image: multi_stream_people_tracker:latest
     gpus: all
+    network_mode: host
+    stdin_open: true
+    tty: true
 
-    # GPU access
     deploy:
       resources:
         reservations:
@@ -141,45 +17,28 @@ services:
 
     environment:
       - NVIDIA_DRIVER_CAPABILITIES=video,compute,utility,graphics
-      # Uncomment when running with display:
-      # - DISPLAY=${DISPLAY}
 
     volumes:
-      # Source/config bind mounts for development. Edits on the host are visible
-      # immediately inside the container; rebuild only when dependencies change.
       - ./configs:/app/configs
       - ./src:/app/src
       - ./scripts:/app/scripts
-
-      # Models are writable so TensorRT engines persist next to each model.
-      # First run builds .engine files (~1-3 min); subsequent runs reuse them.
       - ./models:/app/models
-
-      # Videos are mounted at /videos for reproducible Docker source paths.
-      # Usage: VIDEO_DIR=/absolute/path/to/videos docker compose up
-      - ${VIDEO_DIR:-./dataset/mtmc_4cam/videos}:/videos:ro
-
-      # Dataset (read-only): mtmc_4cam / mtmc_12cam / Wildtrack videos
       - ./dataset:/app/dataset:ro
-
-      # Output (videos, trimmed clips) persists on the host.
       - ./output:/app/output
 
-      # X11 socket — only needed when displaying a window (not --no-display).
-      # Uncomment and set X11_SOCKET_DIR when running with a display:
-      #   X11_SOCKET_DIR=/tmp/.X11-unix docker compose run --rm tracker python3 -m src.main
+      # Optional local video directory mounted at /videos.
+      - ${VIDEO_DIR:-./dataset/MMPTracking_short}:/videos:ro
+
+      # Uncomment only for display output.
       # - ${X11_SOCKET_DIR:-/tmp/.X11-unix}:/tmp/.X11-unix
 
-    # Default: run the pipeline on the docker source list (edit video_files_docker.txt first).
-    # Production MMPTracking_short run with live micro-batch cross-camera fusion:
-    #   docker compose run --rm tracker python3 -m src.main \
-    #     --config configs/pipelines/pipeline_mmp_10cam_quality.yaml \
-    #     --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
-    #     --no-display --no-sync --micro-batch-fusion \
-    #     --save-video output/video/lobby_0.mp4 \
-    #     --export-predictions output/eval/lobby_0
-    command: python3 -m src.main --sources configs/sources/video_files_docker.txt --no-display --save-video --show-trajectories
-
-    network_mode: host
-    stdin_open: true
-    tty: true
+    command:
+      - python3
+      - -m
+      - src.main
+      - --config
+      - configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml
+      - --sources
+      - configs/sources/video_files_docker.txt
+      - --no-display
+      - --no-sync

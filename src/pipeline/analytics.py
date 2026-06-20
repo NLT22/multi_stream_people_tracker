@@ -3,7 +3,7 @@ overcrowding) and print/export per-camera counts.
 
 This is the pipeline-native NVIDIA analytic (nvdsanalytics) — counts/events in
 configured regions, attached as frame user meta. It complements the offline
-occupancy heatmap (scripts/eval/camera_heatmap.py), which is a density map.
+occupancy heatmap, which is a density map.
 
 The plugin uses the bounding-box bottom-centre (foot point) for all rules, so
 ROI/line geometry is in foot-point space — the same point the heatmap uses.

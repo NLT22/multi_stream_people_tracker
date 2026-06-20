@@ -23,7 +23,7 @@ from src.reid.visualization import TrajectoryVisualizer
 from src.utils.platform_utils import get_sink_element
 
 
-DEFAULT_CONFIG_PATH = "configs/pipelines/pipeline.yaml"
+DEFAULT_CONFIG_PATH = "configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml"
 
 
 def run(config: PipelineRunConfig):
@@ -387,5 +387,4 @@ def run(config: PipelineRunConfig):
             print(f"[reid] Predictions exported to: {export_predictions}")
         if analytics_probe is not None:
             analytics_probe.close()
-
 

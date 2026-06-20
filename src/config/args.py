@@ -13,7 +13,7 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                     "auto engine/config per batch)")
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH,
                         help="Pipeline YAML used for default values. CLI flags "
-                             "override it. Default: configs/pipelines/pipeline.yaml")
+                             "override it. Default: production SGIE preset.")
     parser.add_argument(
         "--sources", nargs="+", default=defaults["sources"],
         help="One .txt list file, OR one folder of videos, OR one/more "
@@ -48,14 +48,13 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "rebuild it on this run.")
     parser.add_argument("--nvinfer-config", default=defaults["nvinfer_config"],
                         help="nvinfer config. Default comes from the pipeline YAML. "
-                             "MMP detector: configs/models/nvinfer_yolov11_mmp.yml; "
-                             "generic people: configs/models/nvinfer_yolov11_people.yml")
+                             "Production: configs/models/nvinfer_yolov11_mmp.yml")
     parser.add_argument("--reid-sgie-config", default=defaults["reid_sgie_config"],
                         help="Optional secondary nvinfer (SGIE) config that "
                              "extracts per-person ReID embeddings as "
                              "output-tensor-meta. Use with a reidType:0 perf "
                              "tracker for realtime cross-camera ReID. "
-                             "E.g. configs/models/nvinfer_reid_swin_sgie.yml")
+                             "Production: configs/models/nvinfer_reid_swin_sgie_all.yml")
     parser.add_argument("--nvdsanalytics-config",
                         default=defaults["nvdsanalytics_config"],
                         help="Optional gst-nvdsanalytics config (ROI occupancy, "
@@ -63,10 +62,9 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "exported (with --export-predictions), and drawn on the "
                              "video. E.g. configs/analytics/nvdsanalytics_mmp.txt")
     parser.add_argument("--tracker-config", default=defaults["tracker_config"],
-                        help="Tracker config. Default comes from pipeline.yaml. "
-                             "Recommended demo: nvdeepsort_reid_swin.yaml. "
-                             "Alternatives: nvdcf_accuracy.yaml, "
-                             "nvdeepsort_reid.yaml, nvdcf_perf.yaml")
+                        help="Tracker config. Default comes from the pipeline YAML. "
+                             "Production quality: nvdcf_accuracy_mmp_recall_sgie.yaml; "
+                             "performance: nvdcf_accuracy_mmp_recall_sgie_reid0.yaml")
     parser.add_argument("--tracker-width", type=int,
                         default=defaults["tracker_width"],
                         help="nvtracker input width. Match detector input for "
@@ -276,4 +274,3 @@ def parse_args(argv: list[str] | None = None):
     defaults = _load_defaults(config_args.config)
     parser = build_arg_parser(defaults)
     return parser.parse_args(argv)
-

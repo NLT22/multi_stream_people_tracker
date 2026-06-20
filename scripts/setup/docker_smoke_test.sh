@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/setup/docker_cmd.sh"
 
@@ -30,18 +30,20 @@ required=(
   Dockerfile
   docker-compose.yml
   configs/sources/video_files_docker.txt
-  configs/models/nvinfer_yolov11_people.yml
-  configs/tracker/nvdeepsort_reid_swin.yaml
-  models/yolov11/yolo11n.onnx
+  configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml
+  configs/models/nvinfer_yolov11_mmp.yml
+  configs/models/nvinfer_reid_swin_sgie_all.yml
+  configs/tracker/nvdcf_accuracy_mmp_recall_sgie.yaml
+  models/yolov11/yolo11n_mmp.onnx
   models/yolov8/libnvds_infercustomparser_yolov8.so
-  models/reid/swin_tiny_market1501_aicity156_featuredim256.onnx
+  models/reid/swin_tiny_mmp_reid_all.onnx
 )
 for path in "${required[@]}"; do
   if [[ ! -e "$path" ]]; then
     echo "Missing $path"
-    if [[ "$path" == "models/yolov11/yolo11n.onnx" || "$path" == "models/reid/swin_tiny_market1501_aicity156_featuredim256.onnx" ]]; then
-      echo "Prepare it with:"
-      echo "  ./scripts/setup/prepare_models.sh"
+    if [[ "$path" == models/* ]]; then
+      echo "Prepare tracked model files with:"
+      echo "  git lfs pull"
     fi
     exit 1
   fi
@@ -53,9 +55,7 @@ echo "== Video mount =="
 VIDEO_DIR="${VIDEO_DIR:-$ROOT_DIR/dataset/mtmc_4cam/videos}"
 if [[ ! -d "$VIDEO_DIR" ]]; then
   echo "VIDEO_DIR does not exist: $VIDEO_DIR"
-  echo "Prepare the default dataset with:"
-  echo "  ./scripts/datasets/prepare_dataset.sh"
-  echo "Or set it with:"
+  echo "Set it with:"
   echo "  VIDEO_DIR=/absolute/path/to/videos $0 --all"
   exit 1
 fi
@@ -80,7 +80,7 @@ if [[ "$DO_RUN" == "1" ]]; then
   echo ""
   echo "== Container import smoke test =="
   if ! "${DOCKER[@]}" run --rm --gpus all --entrypoint bash multi_stream_people_tracker:latest \
-      -lc "python3 -c \"import pyservicemaker; import yaml; from src.pipeline.model_utils import infer_person_class_id; print('person_class_id=', infer_person_class_id('configs/models/nvinfer_yolov11_people.yml'))\""; then
+      -lc "python3 -c \"import pyservicemaker; import yaml; from src.pipeline.model_utils import infer_person_class_id; print('person_class_id=', infer_person_class_id('configs/models/nvinfer_yolov11_mmp.yml'))\""; then
     echo ""
     echo "[ERROR] Container GPU smoke test failed."
     echo "Check NVIDIA Container Toolkit and Docker GPU access:"

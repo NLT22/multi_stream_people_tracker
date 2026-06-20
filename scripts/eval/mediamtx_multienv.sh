@@ -60,6 +60,6 @@ done
 printf '%s\n' "${urls[@]}" > "$PLDIR/urls.txt"     # for the orchestrator
 echo "[multienv] $ncam cameras across ${#ENV_SCENES[@]} envs, each looping its scenes"
 echo; echo "pipeline command:"
-echo "  python -m src.main --config configs/pipelines/pipeline_mmp_realtime_20cam.yaml \\"
-echo "    ${urls[*]} --no-display"
+echo "  python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \\"
+echo "    --sources ${urls[*]} --no-display --no-sync"
 echo; echo "stop: $0 stop"

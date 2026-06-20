@@ -1,183 +1,131 @@
 # Multi-Stream People Tracker
 
-Real-time multi-camera people tracking and cross-camera re-identification (MTMC)
-on **DeepStream 9.0** / pyservicemaker. Per-camera detection + tracking + ReID
-embeddings run on the GPU every frame; a decoupled **micro-batch fusion** stage
-clusters embeddings across cameras to assign stable Global IDs — the same
-architecture used in production MTMC systems (NVIDIA Metropolis, AI City Challenge
-winners), not per-frame online matching.
+Production-focused DeepStream 9.0 / pyservicemaker pipeline for multi-camera
+people tracking and cross-camera identity assignment on MMPTracking data.
 
-Primary dataset: **MMPTracking_short**. Detector: YOLO11n fine-tuned on MMP.
-Tracker: NvDCF (legacy DCF) + Swin-Tiny ReID.
+The current system is intentionally narrow:
 
-## Results (MMPTracking_short, RTX 5060 Ti)
+- detector: YOLO11n fine-tuned on MMPTracking_short
+- tracker: NvDCF
+- ReID: Swin-Tiny as a secondary nvinfer (SGIE) on person crops
+- global IDs: live buffered MTMC grouping, evaluated per environment
 
-| Metric | Value |
-|--------|-------|
-| Global IDF1 (8 non-retail scenes, avg) | **0.81** |
-| Throughput @10 cameras | **37.6 FPS/cam** |
-| Throughput @20 cameras | **18.8 FPS/cam** (1.88× real-time) |
+Experimental training scripts, older model variants, NvDeepSORT configs, and
+ablation presets are archived under `old_stuff/retired_20260620/`.
 
-Per-scene IDF1 and the throughput methodology are in
-[Old materials/report/](Old%20materials/report/).
+## Production Presets
 
----
+| Preset | Use |
+|--------|-----|
+| `configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml` | Quality default. Best known 20-cam target result. |
+| `configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml` | Lower-VRAM/FPS-headroom preset. SGIE still drives global ReID; NvDCF internal ReID is disabled. |
+
+Production model/config chain:
+
+```text
+pipeline_mmp_nvdcf_online_sgie.yaml
+  detector -> configs/models/nvinfer_yolov11_mmp.yml
+           -> models/yolov11/yolo11n_mmp.onnx
+
+  SGIE ReID -> configs/models/nvinfer_reid_swin_sgie_all.yml
+            -> models/reid/swin_tiny_mmp_reid_all.onnx
+
+  tracker -> configs/tracker/nvdcf_accuracy_mmp_recall_sgie.yaml
+```
+
+## Current Verified Result
+
+20-camera mixed-environment eval, 600 seconds, grouped per environment:
+
+```text
+quality preset:
+  avg FPS/cam: 9.99
+  avg VRAM:    ~12.7 GB
+  mean IDF1:   0.8344
+
+performance preset:
+  avg FPS/cam: 10.60
+  avg VRAM:    ~9.34 GB
+  mean IDF1:   0.8098
+```
+
+Retail is still the weak environment. Details and recovery notes are in
+[CHANGE.md](CHANGE.md).
 
 ## Setup
 
-### Local (DeepStream 9.0 installed on host)
-
 ```bash
-./setup_venv.sh           # installs pyservicemaker from the DeepStream SDK wheel
+./setup_venv.sh
 source venv/bin/activate
+git lfs pull
 ```
 
-Prerequisites: Ubuntu 24.04, NVIDIA driver 590+, CUDA 13.1, DeepStream 9.0,
-Python 3.12, TensorRT 10.14.
+Requirements: Ubuntu 24.04, NVIDIA driver/CUDA compatible with DeepStream 9.0,
+TensorRT, Python 3.12, and the DeepStream pyservicemaker wheel installed by
+`setup_venv.sh`.
 
-### Docker
+## Run
+
+Single command using the production default:
+
+```bash
+python -m src.main \
+  --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
+  --sources configs/sources/val_20cam_mixed.txt \
+  --no-display --no-sync \
+  --export-predictions output/eval/manual_run \
+  --live-buffered-window 200
+```
+
+Long production-style eval:
+
+```bash
+PIPECFG=configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
+  bash scripts/eval/run_long_eval.sh 600 configs/sources/val_20cam_mixed.txt \
+  "cafe:0-3,lobby:4-7,office:8-11,industry:12-15,retail:16-19"
+```
+
+Performance preset:
+
+```bash
+PIPECFG=configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml \
+  bash scripts/eval/run_long_eval.sh 600 configs/sources/val_20cam_mixed.txt \
+  "cafe:0-3,lobby:4-7,office:8-11,industry:12-15,retail:16-19"
+```
+
+## RTSP Simulation
+
+Use MediaMTX helpers when testing live ingest behavior:
+
+```bash
+scripts/eval/mediamtx_loop.sh start dataset/MMPTracking_10minute/val/64pm_office_0
+scripts/eval/mediamtx_loop.sh stop
+```
+
+The helper prints RTSP URLs and a matching `src.main` command.
+
+## Docker
 
 ```bash
 docker compose build tracker
-docker compose run --rm tracker python3 -m src.main \
-    --config configs/pipelines/pipeline_mmp_10cam_quality.yaml \
-    --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
-    --no-display --no-sync --micro-batch-fusion \
-    --save-video output/video/lobby_0.mp4 \
-    --export-predictions output/eval/lobby_0
+docker compose run --rm tracker
 ```
 
-The first run builds TensorRT `.engine` files (1–3 min); they persist under
-`models/` via the bind mount. `.engine` files are GPU-specific and gitignored.
-
----
-
-## Run the pipeline
-
-```bash
-source venv/bin/activate
-
-python -m src.main \
-    --config configs/pipelines/pipeline_mmp_10cam_quality.yaml \
-    --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
-    --no-display --no-sync \
-    --micro-batch-fusion \
-    --save-video output/video/lobby_0.mp4 \
-    --export-predictions output/eval/lobby_0
-```
-
-- `--micro-batch-fusion` runs the in-pipeline cross-camera fusion (live Global
-  IDs). The annotated video shows near-realtime IDs; the exported predictions
-  hold the converged authoritative IDs.
-- Drop the flag for the plain gallery baseline.
-- Scenes: `lobby_0 lobby_3 cafe_shop_0 cafe_shop_3 industry_safety_0
-  industry_safety_4 office_0 office_2` (and the `retail_*` set).
-
-### Evaluate
-
-```bash
-python -m src.eval.metrics_mmp \
-    --short-root dataset/MMPTracking_short --scene lobby_0 \
-    --pred-dir output/eval/lobby_0
-```
-
-For an offline (or very long stream) cross-camera merge instead of the in-pipeline
-fusion, run the validated post-pass on an export:
-
-```bash
-python -m src.eval.online_fusion \
-    --pred-dir output/eval/lobby_0 --out-dir output/eval/lobby_0_fused \
-    --threshold 0.55 --geo-weight 0.25 \
-    --mmp-short-root dataset/MMPTracking_short --scene lobby_0
-```
-
----
-
-## Architecture
-
-```
-[nvurisrcbin ×N] → [nvstreammux] → [nvinfer/YOLO11] → [nvtracker + Swin ReID]
-                                                              │
-                                          [SourceIdCollectorProbe]  (pre-tiler, exact source_id)
-                                                              │
-                                          [nvmultistreamtiler]
-                                                              │
-                                          [CrossCameraGalleryProbe]  ← per-camera IDs + live
-                                                              │         micro-batch fusion → Global IDs
-                                                       [nvosdbin] → sink / video / CSV
-```
-
-1. **Perception (per camera, every frame):** YOLO11 detection → NvDCF tracking →
-   Swin-Tiny ReID embeddings.
-2. **Fusion (micro-batch cadence):** `MicroBatchFusion` clusters tracklet
-   embeddings across cameras (geometry-disambiguated) into stable Global IDs.
-
-Key source:
-
-| File | Role |
-|------|------|
-| `src/main.py` | entry point, pipeline wiring, CLI |
-| `src/reid/gallery.py` | per-camera gallery + live fusion wiring |
-| `src/reid/micro_batch_fusion.py` | streaming cross-camera fusion engine |
-| `src/eval/online_fusion.py` | fusion as an offline/near-realtime post-pass |
-| `src/eval/metrics_mmp.py` | MOTA / IDF1 / Global IDF1 |
-| `src/reid/geometry.py` | ground-plane geometry from MMP calibration |
-
-Deeper notes (configs, presets, tuning, regression anchors) are in
-[CLAUDE.md](CLAUDE.md).
-
-### Runtime modes — production vs experimental
-
-| | Blessed production path | Experimental (opt-in / off by default) |
-|---|---|---|
-| Detector | `yolo11n_mmp.onnx` (`nvinfer_yolov11_mmp.yml`) | SGIE-decoupled ReID, alternate detectors |
-| Tracker | NvDCF **legacy DCF** (`nvdcf_accuracy_mmp_recall_all.yaml`) | NvDeepSORT, VPI DCF (`visualTrackerType:2`) |
-| Cross-camera ID | Micro-batch fusion (`--micro-batch-fusion`, cooccur geometry) | trajectory geometry (`--geo-mode trajectory`); pose feet (archived in `old_stuff/`) |
-
-The experimental geometry modes (trajectory, pose) and SGIE/NvDeepSORT paths are
-**off by default** — A/B tests showed no gain on the overlapping MMP cameras
-(see `report/`). Use the production path unless you are explicitly researching a
-different camera topology.
-
-Run the unit tests (no GPU/DeepStream needed):
-
-```bash
-python -m pytest tests/ -v          # or: python tests/test_fusion.py
-```
-
----
+The compose file now contains only the production tracker service. Training and
+dataset-conversion services were archived with the old experiment scripts.
 
 ## Layout
 
 ```text
-configs/    pipeline presets + nvinfer / nvtracker / source configs
-            (pipelines/, models/, tracker/, sources/, labels/)
-models/     YOLO + Swin-ReID ONNX (TensorRT .engine built on first run; gitignored)
-dataset/    MMPTracking_short (primary benchmark)
-src/        config/, dataset/, pipeline/, reid/, eval/, utils/ + main.py
-scripts/    datasets/, train/, eval/, benchmark/, setup/
-tests/      unit tests (run: python tests/test_*.py  or  pytest)
-docs/       reference papers (PDF)
-report/     dated progress reports
-old_stuff/  archived milestones, reports, and legacy (MTA / Wildtrack / …) code
+configs/    production pipeline/model/tracker/source configs
+models/     production ONNX models and YOLO parser library
+scripts/    eval and Docker smoke helpers only
+src/        pipeline, config, ReID/gallery, MTMC, metrics
+tests/      lightweight regression tests
+docs/       production notes and references
+report/     dated experiment reports
+old_stuff/  archived experiments and retired source files
 ```
 
-Model ONNX files are tracked via Git LFS; run `git lfs pull` after cloning.
-
----
-
-## Training
-
-```bash
-python scripts/datasets/mmp_to_yolo.py        # convert MMP → YOLO format
-python scripts/train/train_yolo_mmp.py     # fine-tune YOLO11n detector
-python scripts/train/finetune_reid_mmp.py --train-all-nonretail   # Swin-Tiny ReID
-```
-
-Docker training services: `yolo_train`, `reid_train_mmp` (see `docker-compose.yml`).
-
----
-
-The earlier learning-project history (DeepStream milestones 1–8, MTA / Wildtrack /
-mtmc_4cam experiments, daily reports, full command log) is preserved under
-[old_stuff/](old_stuff/).
+Generated outputs, TensorRT engines, runtime nvinfer configs, Python caches, and
+GUI cache files are local artifacts and are gitignored.

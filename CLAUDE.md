@@ -134,10 +134,8 @@ See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, bench
 
 | File | Dataset | Notes |
 |------|---------|-------|
-| `configs/pipelines/pipeline.yaml` | generic | default fallback (people detector) |
-| `configs/pipelines/pipeline_mmp.yaml` | MMPTracking_short | MMP fine-tuned detector + Swin ReID |
-| `configs/pipelines/pipeline_mmp_nvdcf_realtime_baseline.yaml` | MMPTracking_short | NvDCF realtime, no online merge |
-| `configs/pipelines/pipeline_mmp_nvdcf_online.yaml` | MMPTracking_short | NvDCF + online global merge |
+| `configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml` | MMPTracking_short / mixed 20cam | Production quality default: YOLO11 + NvDCF + SGIE ReID |
+| `configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml` | MMPTracking_short / mixed 20cam | Production performance preset: NvDCF internal ReID off, SGIE still drives global IDs |
 
 ### Metadata Iteration
 
@@ -149,33 +147,23 @@ First run on a new GPU auto-builds `.engine` files (1–3 min for YOLO11n). Engi
 
 Config file paths inside nvinfer YAML configs are **relative to the config file's directory**, not the shell CWD.
 
-### VRAM Pressure (RTX 3050Ti 4GB)
+### VRAM Pressure
 
-- Use `--tile-w 640 --tile-h 360` for smaller tiles.
-- Add `interval: 2` in nvinfer config to skip inference frames.
-- For ReID training OOM: `--pk-p 16 --pk-k 4 --accum-steps 4 --grad-ckpt`.
-- `retail_*` scenes with 6 cameras may need `nvdcf_accuracy_mmp_retail_lowmem.yaml`.
+- Prefer `pipeline_mmp_nvdcf_online_sgie_reid0.yaml` for lower VRAM.
+- Use `--no-display --no-sync` for evaluation/soak runs.
+- If more headroom is needed, test SGIE `interval` changes before changing the detector.
 
 ### Training Custom Models
 
-```bash
-# YOLO detector on MMPTracking_short
-python scripts/datasets/mmp_to_yolo.py          # convert dataset
-python scripts/train/train_yolo_mmp.py       # fine-tune YOLO11n
-
-# Swin-Tiny ReID on MMPTracking_short
-python scripts/train/finetune_reid_mmp.py    # outputs output/reid_mmp/swin_tiny_mmp_reid.onnx
-```
-
-YOLO warm-start: `yolo11n.pt` (COCO) or the previous `yolo11n_mmp.onnx` weights.
-ReID warm-start: `models/reid/swin_tiny_market1501_aicity156_featuredim256.onnx`
-(the base the deployed `swin_tiny_mmp_reid_all` was fine-tuned from).
+Training and dataset-conversion scripts are archived under
+`old_stuff/retired_20260620/`. The root project is now production/eval focused.
+Restore archived scripts only when intentionally starting a new training cycle.
 
 ## Regression Anchors
 
 | Scene | Preset | Global IDF1 |
 |-------|--------|-------------|
-| `lobby_0` (nearline) | `pipeline_mmp_nvdcf_realtime_baseline.yaml` | 0.8365 |
-| `industry_safety_0` (nearline) | same | 0.8360 |
+| mixed 20cam, processed 600s | `pipeline_mmp_nvdcf_online_sgie.yaml` | mean 0.8344 |
+| mixed 20cam, processed 600s | `pipeline_mmp_nvdcf_online_sgie_reid0.yaml` | mean 0.8098 |
 
 Current nearline best config: `threshold=0.62`, `margin=0.02`, `geo_weight=0.25`, `geo_min_overlaps=8`, `window_frames=125`.

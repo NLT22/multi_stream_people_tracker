@@ -5,8 +5,8 @@ Thin orchestration only:
   - src/config/runtime.py  : defaults from YAML + gallery tuning
   - src/pipeline/runner.py : pipeline assembly + run()
 
-  python -m src.main --config configs/pipelines/pipeline_mmp_10cam_quality.yaml \
-      --mmp-short-dataset dataset/MMPTracking_short:lobby_0 --no-display"""
+  python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
+      --sources configs/sources/val_20cam_mixed.txt --no-display --no-sync"""
 
 from src.reid import gallery
 from src.config.args import parse_args

@@ -6,9 +6,8 @@
 #   stop :  scripts/eval/mediamtx_loop.sh stop
 #
 # Then point the pipeline at the printed rtsp:// list:
-#   python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_online.yaml \
-#     --nvinfer-config configs/models/nvinfer_yolov11_10min_clean_fp32nms07.yml \
-#     rtsp://localhost:8554/cam1 ... --no-display
+#   python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
+#     --sources rtsp://localhost:8554/cam01 ... --no-display --no-sync
 set -u
 CMD="${1:-}"; SCENE="${2:-}"; PORT="${3:-8554}"
 PIDFILE="/tmp/mediamtx_loop_ffmpeg.pids"
@@ -52,7 +51,6 @@ for f in $cams; do
 done
 echo "looping $(echo "$cams" | wc -l) cameras -> RTSP (forever, native fps)"
 echo; echo "pipeline command:"
-echo "  python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_online.yaml \\"
-echo "    --nvinfer-config configs/models/nvinfer_yolov11_10min_clean_fp32nms07.yml \\"
-echo "    ${urls[*]} --no-display --no-sync"
+echo "  python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \\"
+echo "    --sources ${urls[*]} --no-display --no-sync"
 echo; echo "stop with: $0 stop"
