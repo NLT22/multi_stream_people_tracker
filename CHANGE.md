@@ -125,6 +125,48 @@ raw online gallery, untrimmed GT mean:    0.2138
 This means the target is met for the processed 20-cam 10-minute segment, but
 retail remains the weak environment and should be the next quality focus.
 
+Optional performance preset tested on 2026-06-20:
+
+- `configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml`
+- `configs/tracker/nvdcf_accuracy_mmp_recall_sgie_reid0.yaml`
+
+This keeps SGIE ReID for exported/global embeddings, but disables NvDCF internal
+tracker ReID (`reidType:0`). It matches the anchor-guided idea more closely:
+tracking supplies detections/local tracks, while dense ReID drives the global
+assignment stage.
+
+600s processed-segment result:
+
+```text
+reidType:2 + SGIE quality preset:
+  avg FPS/cam: 9.99
+  avg VRAM:    ~12.7 GB
+  mean IDF1:   0.8344
+
+reidType:0 + SGIE performance preset:
+  avg FPS/cam: 10.60
+  avg VRAM:    ~9.34 GB
+  mean IDF1:   0.8098
+```
+
+Per-scene `reidType:0 + SGIE`:
+
+```text
+64pm_cafe_shop_0        0.8715
+64pm_lobby_0            0.9024
+64pm_office_0           0.8776
+64pm_industry_safety_0  0.8478
+64pm_retail_0           0.5498
+MEAN                    0.8098
+```
+
+Verdict:
+
+- Keep `pipeline_mmp_nvdcf_online_sgie.yaml` as the quality default for now.
+- Use `pipeline_mmp_nvdcf_online_sgie_reid0.yaml` when production needs lower
+  VRAM or more FPS headroom.
+- Retail remains the quality limiter in both paths.
+
 Single-pass product validation before the SSD recovery:
 
 ```bash
