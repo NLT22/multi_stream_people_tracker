@@ -68,6 +68,14 @@ Additional root cleanup:
 - added `scripts/setup/production_smoke.sh` as a cheap non-GPU production wiring
   check
 
+Archived additional non-production prototypes:
+
+- `src/eval/detect_eval_mmp.py`
+- `src/eval/reid_reentry_merge.py`
+- `src/analytics/`
+- `src/storage/`
+- `tests/test_reentry_merge.py`
+
 ## Current Best Production Path
 
 Target:

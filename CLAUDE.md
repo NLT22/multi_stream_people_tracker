@@ -15,12 +15,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./setup_venv.sh
 source venv/bin/activate
 
-# Run the MMP pipeline on a scene (primary workflow)
+# Run the production pipeline on the current source list
 python -m src.main \
-    --config configs/pipelines/pipeline_mmp.yaml \
-    --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
+    --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
+    --sources configs/sources/val_20cam_mixed.txt \
     --no-display --no-sync \
-    --export-predictions output/eval/mmp_lobby0
+    --export-predictions output/eval/manual_run \
+    --live-buffered-window 200
 ```
 
 ## Tests
@@ -41,22 +42,12 @@ The unit tests under `tests/` (run `python tests/test_*.py` or `pytest`) cover t
 # Build DeepStream image
 docker compose build tracker
 
-# Run pipeline scene
-docker compose run --rm tracker \
-    python3 -m src.main \
-        --config configs/pipelines/pipeline_mmp.yaml \
-        --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
-        --no-display --no-sync \
-        --export-predictions output/eval/mmp_lobby0
-
-# Train YOLO (PyTorch image, not DeepStream)
-docker compose run --rm yolo_train
-
-# Train ReID
-docker compose run --rm reid_train_mmp
+# Run production tracker service
+docker compose run --rm tracker
 ```
 
-Docker services: `tracker` (DeepStream), `yolo_train` (PyTorch), `reid_train_mmp` (PyTorch). Training services use `shm_size: "16gb"` to avoid DataLoader `/dev/shm` errors.
+Docker service: `tracker` (DeepStream). Training services were archived with the
+retired training scripts.
 
 If you previously ran with `sudo docker compose`, fix file ownership before switching to host venv:
 ```bash
@@ -65,24 +56,12 @@ sudo chown -R $USER:$USER output dataset/mmp_yolo models/yolov11
 
 ## Eval Pipeline
 
-The typical workflow for one scene:
+Production long eval:
 
 ```bash
-# 1. Export predictions
-python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_realtime_baseline.yaml \
-    --mmp-short-dataset dataset/MMPTracking_short:lobby_0 \
-    --no-display --no-sync --export-predictions output/eval/mmp_lobby0
-
-# 2. Nearline merge (geometry-assisted)
-python -m src.eval.nearline_merge \
-    --pred-dir output/eval/mmp_lobby0 --out-dir output/eval/mmp_lobby0_nearline \
-    --threshold 0.65 --margin 0.03 --geo-weight 0.25 \
-    --mmp-short-root dataset/MMPTracking_short --scene lobby_0
-
-# 3. Eval metrics
-python -m src.eval.metrics_mmp \
-    --short-root dataset/MMPTracking_short --scene lobby_0 \
-    --pred-dir output/eval/mmp_lobby0_nearline
+PIPECFG=configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
+  bash scripts/eval/run_long_eval.sh 600 configs/sources/val_20cam_mixed.txt \
+  "cafe:0-3,lobby:4-7,office:8-11,industry:12-15,retail:16-19"
 ```
 
 See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, benchmarks). MTA/Wildtrack/MTMC/FastReID/YOLOv8/pose support has been moved to `old_stuff/` — the pipeline is now MMP-only.
@@ -128,7 +107,7 @@ See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, bench
 - `src/reid/geometry.py` — ground-plane geometry from MMPTracking calibration JSONs
 - `src/config/loader.py` — PipelineConfig YAML loader
 - `src/eval/mmp_metrics/` — MOTA/IDF1/Global IDF1 engine (`core.py`) + CLI (`cli.py`); `src/eval/metrics_mmp.py` is a thin `-m` shim
-- `src/eval/nearline_merge.py` — delayed geometry+embedding-assisted Global ID remapping
+- `src/mtmc/live_buffered.py` — production live-buffered MTMC consumer for long eval
 
 ### Config Presets
 

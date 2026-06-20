@@ -127,7 +127,7 @@ family as our anchor-guided. We run *our* clustering in *their* architecture, ba
 - Note: all of SQLite / Postgres+Timescale / OpenSearch / Milvus are **free to self-host**; Elasticsearch is free on the Basic tier (AGPLv3), paid only for advanced features / Elastic Cloud.
 
 ### Implementation
-- [x] **Batched DB sink** — DONE: `src/storage/db_sink.py` (`TrackDBSink`, SQLite, WAL, executemany flush every N rows, indices built at close). `scripts/eval/ingest_to_db.py` loads anchor output (cam_predictions + tracklet_bev + zone events) → DB. Tested: office_0 → 194,223 track rows + 76,315 zone events (22MB), queries (per-zone enters, per-cam occupancy-in-window) work, indices `(cam_id,ts)`+`(global_id,ts)`. Model-free/CPU; ran alongside the FP16 batch without slowing it.
+- [x] **Batched DB sink prototype** — archived under `old_stuff/retired_20260620/src/storage/`. It proved SQLite batch insert was viable, but it is not wired into the current production pipeline.
   - [ ] TODO: live path = call `add_track`/`add_zone_event` from the gallery probe / MTMC (currently offline ingest from CSV). Apply **min-dwell debounce to zone-enter events** (current ingest emits raw per-frame → 76k jittery enters; should reuse `zone_analytics` debounce). Schema maps to TimescaleDB hypertable on `ts`; add `gallery` (embedding vector) table + retention policy for multi-host.
 
 ---
@@ -165,7 +165,7 @@ Required: (a) **common routes between zones**, (b) **most-used entry/exit points
 - [ ] Output `zone_occupancy_timeseries.csv` (ts_bucket, zone, n_unique, n_enter). Natural TimescaleDB continuous aggregate over the §3 track stream.
 
 ### Implementation steps
-- [x] `src/analytics/zones.py` — DONE: `Zone` (named polygon + tags), load/save JSON, point-in-polygon (`matplotlib.path`), `auto_grid_zones` fallback.
+- [x] `src/analytics/zones.py` prototype — archived under `old_stuff/retired_20260620/src/analytics/`. Restore only when implementing the real analytics product path.
 - [x] `scripts/eval/zone_analytics.py` — DONE: consumes `tracklet_bev.csv` (world foot + global_id) → `routes_transitions.csv`, `routes_top.csv`, `entry_exit_ranking.csv`, `zone_occupancy_timeseries.csv` (n_unique + n_enter) + `flow_map.png`. **`--min-dwell` debounce** (default 15f) kills ground-plane boundary jitter (essential — raw gave 43 spurious entries/bucket). Model-free/CPU. Tested on `64pm_office_0`.
   - **Lesson:** auto-grid zones produce oscillating routes (people straddle arbitrary cell boundaries) → **needs SEMANTIC zones (§5 editor) + min-dwell**; coarse 2×2 + 3s dwell already gives sane throughput. Quality bounded by GID stability (held-out caveat) + ground-plane noise → keep zones coarse/semantic.
 - [ ] Live path: zone-assign in the gallery probe / MTMC → write zone events to DB.

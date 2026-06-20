@@ -126,7 +126,7 @@ dataset-conversion services were archived with the old experiment scripts.
 configs/    production pipeline/model/tracker/source configs
 models/     production ONNX models and YOLO parser library
 scripts/    eval and Docker smoke helpers only
-src/        pipeline, config, ReID/gallery, MTMC, metrics
+src/        production pipeline, config, ReID/gallery, MTMC, metrics
 tests/      lightweight regression tests
 docs/       production notes and references
 report/     dated experiment reports

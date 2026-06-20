@@ -39,6 +39,10 @@ for retired in [
     "src/mtmc/incremental_mtmc.py",
     "src/mtmc/run_incremental.py",
     "src/eval/offline_anchor.py",
+    "src/eval/detect_eval_mmp.py",
+    "src/eval/reid_reentry_merge.py",
+    "src/analytics/zones.py",
+    "src/storage/db_sink.py",
 ]:
     assert not Path(retired).exists(), retired
 

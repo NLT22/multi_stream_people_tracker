@@ -12,6 +12,7 @@ Moved here:
 - old model variants and rejected/redundant ONNX files
 - stale setup helpers that depended on archived training scripts
 - old incremental MTMC simulator files and historical anchor notes
+- analytics/storage prototypes and detection/re-entry offline eval helpers
 
 The active production path remains in the root project:
 
