@@ -22,6 +22,20 @@ def env_of(scene: str) -> str:
     return "_".join(parts[:-1]) if parts and parts[-1].isdigit() else scene
 
 
+def keep_crop(row: dict[str, str], min_width: int, min_height: int, min_area: int, drop_edge: bool) -> bool:
+    x1 = int(float(row.get("x1", 0)))
+    y1 = int(float(row.get("y1", 0)))
+    x2 = int(float(row.get("x2", 0)))
+    y2 = int(float(row.get("y2", 0)))
+    width = x2 - x1
+    height = y2 - y1
+    if width < min_width or height < min_height or width * height < min_area:
+        return False
+    if drop_edge and (x1 <= 1 or y1 <= 1):
+        return False
+    return True
+
+
 def load_labels(labels_dir: Path) -> dict[str, str]:
     labels: dict[str, str] = {}
     for path in sorted(labels_dir.glob("labels_*.json")):
@@ -37,22 +51,30 @@ def main() -> None:
     parser.add_argument("--crop-root", type=Path, default=Path("dataset/mmp_exact_reid_original"))
     parser.add_argument("--out-dir", type=Path, default=Path("dataset/mmp_exact_reid_original_labeled"))
     parser.add_argument("--splits", nargs="+", default=["train"], choices=["train", "val"])
+    parser.add_argument("--exclude-envs", nargs="*", default=[])
+    parser.add_argument("--min-width", type=int, default=16)
+    parser.add_argument("--min-height", type=int, default=48)
+    parser.add_argument("--min-area", type=int, default=1200)
+    parser.add_argument("--drop-edge", action="store_true")
+    parser.add_argument("--retail-drop-edge", action="store_true")
     args = parser.parse_args()
 
     crop_root = args.crop_root.resolve()
     out_root = args.out_dir.resolve()
     labels = load_labels(args.labels_dir)
+    exclude_envs = set(args.exclude_envs)
 
     identities = sorted(
         {
-            f"{key.split('/')[0]}::{env_of(key.split('/')[1])}::{group}"
+            f"{env_of(key.split('/')[1])}::{group}"
             for key, group in labels.items()
             if group != "JUNK"
+            if env_of(key.split("/")[1]) not in exclude_envs
         }
     )
     ident_to_pid = {ident: i for i, ident in enumerate(identities)}
     print(f"[apply-exact] {len(labels)} labeled tracks -> {len(identities)} identities")
-    print(f"[apply-exact] per env: {dict(Counter(i.split('::')[1] for i in identities))}")
+    print(f"[apply-exact] per env: {dict(Counter(i.split('::')[0] for i in identities))}")
 
     for split in args.splits:
         src = crop_root / split / "manifest.csv"
@@ -77,7 +99,7 @@ def main() -> None:
             "x2",
             "y2",
         ]
-        kept = dropped = 0
+        kept = dropped = filtered = excluded = 0
         with src.open(encoding="utf-8", newline="") as fin, dst.open("w", encoding="utf-8", newline="") as fout:
             reader = csv.DictReader(fin)
             writer = csv.DictWriter(fout, fieldnames=fields)
@@ -88,14 +110,25 @@ def main() -> None:
                 if group is None or group == "JUNK":
                     dropped += 1
                     continue
-                ident = f"{key.split('/')[0]}::{env_of(key.split('/')[1])}::{group}"
+                env = env_of(row["scene"])
+                if env in exclude_envs:
+                    excluded += 1
+                    continue
+                drop_edge = args.drop_edge or (args.retail_drop_edge and env == "retail")
+                if not keep_crop(row, args.min_width, args.min_height, args.min_area, drop_edge):
+                    filtered += 1
+                    continue
+                ident = f"{env_of(key.split('/')[1])}::{group}"
                 row = {k: row.get(k, "") for k in fields}
                 row["pid"] = ident_to_pid[ident]
                 row["pid_key"] = key
                 row["rel_path"] = os.path.relpath(crop_root / row["rel_path"], out_root)
                 writer.writerow(row)
                 kept += 1
-        print(f"[apply-exact] {split}: kept={kept} dropped={dropped} -> {dst}")
+        print(
+            f"[apply-exact] {split}: kept={kept} dropped={dropped} "
+            f"excluded={excluded} filtered={filtered} -> {dst}"
+        )
 
 
 if __name__ == "__main__":

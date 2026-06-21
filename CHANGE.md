@@ -238,6 +238,159 @@ Verdict:
   VRAM or more FPS headroom.
 - Retail remains the quality limiter in both paths.
 
+## Exact ReID Relabel Training on 2026-06-21
+
+Manual exact-source ReID labels are now tracked in:
+
+```text
+reid_labels_exact/
+```
+
+These labels are for the official MMPTracking zip-source crop cache, not the old
+10-minute extracted cache. They should be treated as the exact ReID label source
+of truth.
+
+Updated:
+
+- `scripts/datasets/apply_reid_labels_exact.py`
+
+New options:
+
+- `--exclude-envs`
+- `--min-width`
+- `--min-height`
+- `--min-area`
+- `--drop-edge`
+- `--retail-drop-edge`
+
+Purpose:
+
+- apply manual identity regrouping to official MMPTracking crops
+- remove small/non-person-looking crops with bbox filters
+- drop edge crops for retail when requested
+- train one full-environment model and one no-retail model from the same exact
+  source cache
+
+Exact-source crop cache used:
+
+```text
+dataset/mmp_exact_reid_original/train/manifest.csv
+dataset/mmp_exact_reid_original/val/manifest.csv
+
+train: 416,011 crops, 308 scene-local pids, 44 train scenes
+val:   211,391 crops, 168 scene-local pids, 24 val scenes
+```
+
+Clean labeled training roots created locally:
+
+```text
+dataset/mmp_exact_reid_labeled_clean_full_envmerge
+dataset/mmp_exact_reid_labeled_clean_noretail_envmerge
+```
+
+Cleaning commands:
+
+```bash
+./venv/bin/python scripts/datasets/apply_reid_labels_exact.py \
+  --labels-dir reid_labels_exact \
+  --crop-root dataset/mmp_exact_reid_original \
+  --out-dir dataset/mmp_exact_reid_labeled_clean_full_envmerge \
+  --splits train \
+  --min-width 20 --min-height 56 --min-area 1800 --retail-drop-edge
+
+./venv/bin/python scripts/datasets/apply_reid_labels_exact.py \
+  --labels-dir reid_labels_exact \
+  --crop-root dataset/mmp_exact_reid_original \
+  --out-dir dataset/mmp_exact_reid_labeled_clean_noretail_envmerge \
+  --splits train \
+  --exclude-envs retail \
+  --min-width 20 --min-height 56 --min-area 1800 --retail-drop-edge
+```
+
+Important correction:
+
+- An earlier local attempt accidentally scoped identities by time prefix and
+  produced 72 full-env / 57 no-retail identities.
+- That was wrong for the user's relabel intent.
+- The correct exact-source identity key is `env::manual_person`, giving 14
+  identities per environment.
+
+Training commands:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
+  --crop-root dataset/mmp_exact_reid_labeled_clean_full_envmerge \
+  --output output/reid_exact_experiments/full_env_envmerge_e20 \
+  --epochs 20 --pk-p 16 --pk-k 4 --accum-steps 2 \
+  --batches-per-epoch 220 --workers 4 \
+  --max-crops-per-pid 2500 --early-stop 6
+
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
+  --crop-root dataset/mmp_exact_reid_labeled_clean_noretail_envmerge \
+  --output output/reid_exact_experiments/noretail_envmerge_e20 \
+  --epochs 20 --pk-p 16 --pk-k 4 --accum-steps 2 \
+  --batches-per-epoch 220 --workers 4 \
+  --max-crops-per-pid 2500 --early-stop 6
+```
+
+Training summary:
+
+```text
+full env:
+  relabeled train: 378,969 kept crops, 70 manual identities
+  filtered:        37,042 small/edge crops
+  trainer sample:  164,818 crops
+  best val_gap:    0.550 at epoch 3
+  early stop:   epoch 9
+  ONNX:         output/reid_exact_experiments/full_env_envmerge_e20/swin_tiny_mmp_exact_reid.onnx
+
+no retail:
+  relabeled train: 259,717 kept crops, 56 manual identities
+  excluded retail: 155,601 crops
+  filtered:        693 small/edge crops
+  trainer sample:  129,818 crops
+  best val_gap:    0.440 at epoch 15
+  completed:       epoch 20
+  ONNX:            output/reid_exact_experiments/noretail_envmerge_e20/swin_tiny_mmp_exact_reid.onnx
+```
+
+Original-val retrieval eval used:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/eval/eval_reid_mmp_exact.py \
+  --crop-root dataset/mmp_exact_reid_original \
+  --split val \
+  --weights <onnx> \
+  --batch 128 \
+  --max-crops-per-scene-camera 50
+```
+
+Comparison on the same sampled original validation crops:
+
+```text
+models/reid/swin_tiny_mmp_reid_all.onnx
+  cross-camera top1: 0.5317
+  cross-camera mAP:  0.4027
+
+full-env exact relabel envmerge e20
+  cross-camera top1: 0.3317
+  cross-camera mAP:  0.1848
+
+no-retail exact relabel envmerge e20
+  cross-camera top1: 0.3037
+  cross-camera mAP:  0.1815
+```
+
+Verdict:
+
+- Do not promote either newly trained ONNX.
+- Keep production on `models/reid/swin_tiny_mmp_reid_all.onnx`.
+- The manual labels are still useful, but the current trainer starts from
+  ImageNet Swin-Tiny, not the deployed model's original trainable checkpoint.
+- Next ReID improvement should recover the deployed model's trainable checkpoint
+  or add a distillation/fine-tune path from deployed embeddings before spending
+  more long training time.
+
 ## Exact MMPTracking Detector Training/Eval on 2026-06-20
 
 Added source-clean YOLO detector tooling that reads the official MMPTracking zip

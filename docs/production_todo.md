@@ -127,6 +127,7 @@ scripts/eval/mediamtx_multienv.sh stop
   retrieval eval.
 - [x] Add exact MMPTracking zip-source ReID training helper and run an initial
   controlled training baseline.
+- [x] Add exact-source manual ReID labels and test full-env/no-retail retraining.
 
 ## 3. Next Priority
 
@@ -324,6 +325,63 @@ Verdict:
 - The likely blocker is still missing the original trainable production ReID
   checkpoint; this run starts from ImageNet Swin-Tiny.
 - Keep production on `models/reid/swin_tiny_mmp_reid_all.onnx`.
+
+Exact-source manual relabel experiment, 2026-06-21:
+
+```text
+labels: reid_labels_exact/
+
+official crop cache:
+  train: 416,011 crops, 308 scene-local pids
+  val:   211,391 crops, 168 scene-local pids
+
+cleaned full-env train:
+  relabeled train:    378,969 kept crops, 70 manual identities
+  filtered:           37,042 small/edge crops
+  sampled by trainer: 164,818 crops
+  best val_gap:       0.550 at epoch 3
+
+cleaned no-retail train:
+  relabeled train:    259,717 kept crops, 56 manual identities
+  excluded retail:    155,601 crops
+  filtered:           693 small/edge crops
+  sampled by trainer: 129,818 crops
+  best val_gap:       0.440 at epoch 15
+```
+
+Important correction:
+
+```text
+An earlier local run accidentally scoped manual identities by time prefix and
+created 72 full-env / 57 no-retail identities. That was superseded. The correct
+identity key is env::manual_person, so each environment has exactly 14 manual
+identities.
+```
+
+Original-val retrieval comparison, 50 crops per scene-camera:
+
+```text
+deployed production ONNX:
+  cross-camera top1: 0.5317
+  cross-camera mAP:  0.4027
+
+full-env exact relabel envmerge e20:
+  cross-camera top1: 0.3317
+  cross-camera mAP:  0.1848
+
+no-retail exact relabel envmerge e20:
+  cross-camera top1: 0.3037
+  cross-camera mAP:  0.1815
+```
+
+Verdict:
+
+- Do not promote either exact-relabel ONNX.
+- Keep production on `models/reid/swin_tiny_mmp_reid_all.onnx`.
+- Keep `reid_labels_exact/` as the manual exact-source label set.
+- More training from ImageNet Swin-Tiny is unlikely to be the shortest path.
+  Recover the trainable checkpoint behind the deployed ONNX or add a
+  distillation/fine-tune path from deployed embeddings first.
 
 ### 3.1 RTSP Production Validation
 
