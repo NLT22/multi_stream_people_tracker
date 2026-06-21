@@ -5,6 +5,20 @@ Recovered handoff notes after the SSD/GitHub recovery on 2026-06-20.
 Use this file as the short memory for the next agent: what was restored, what was
 tested, what was rejected, and what can be undone.
 
+## SSD Source Cutover on 2026-06-21
+
+The active eval source manifest is now pinned to the current SSD project root:
+
+- `/media/pc/c88ba509-53f0-4c97-9e44-e33483754b08/multi_stream_people_tracker`
+
+Updated:
+
+- `configs/sources/val_20cam_mixed.txt`
+- archived reference manifests under `old_stuff/retired_20260620/configs/sources/`
+
+The interrupted long eval that still referenced the old HDD mount was stopped before
+the cutover.
+
 ## Production Cleanup on 2026-06-20
 
 The root project was reduced to the real production path:
