@@ -860,3 +860,29 @@ Apply exact-source manual labels:
   --out-dir dataset/mmp_exact_reid_original_labeled \
   --splits train
 ```
+
+Reuse existing 10-minute labels for exact-source MMPTracking:
+
+- Added `scripts/datasets/convert_10min_reid_labels_to_exact.py`.
+- The converter maps old keys like `63am_cafe_shop_0|0` to exact keys like
+  `63am/cafe_shop_0/1` by scene-local rank.
+- This handles scenes where the old 10-minute crop cache and exact-source crop
+  converter have different global pid offsets.
+- Generated reviewable labels under `reid_labels_exact_from_10min/`.
+
+Verified conversion:
+
+```text
+total=308 matched=308 missing=0
+identities after apply: 72
+```
+
+Command:
+
+```bash
+./venv/bin/python scripts/datasets/convert_10min_reid_labels_to_exact.py \
+  --labels-dir reid_labels \
+  --exact-crop-root dataset/mmp_exact_reid_original \
+  --out-dir reid_labels_exact_from_10min \
+  --strict
+```
