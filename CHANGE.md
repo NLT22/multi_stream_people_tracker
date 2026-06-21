@@ -757,3 +757,66 @@ Verdict:
 - keep SGIE production on `models/reid/swin_tiny_mmp_reid_all.onnx`
 - recover the original trainable ReID checkpoint before expecting retraining to
   beat production
+
+## ReID Manual Label + ONNX GPU Fix on 2026-06-21
+
+The earlier ONNX Runtime CPU fallback note is fixed for the ReID Python tooling:
+
+- `requirements.txt` now installs `onnxruntime-gpu`, not CPU-only
+  `onnxruntime`.
+- `scripts/eval/eval_reid_mmp_exact.py` preloads CUDA/cuDNN libraries from the
+  venv before creating an ONNXRuntime session.
+- `old_stuff/retired_20260620/scripts/datasets/consolidate_reid_identities.py`
+  does the same preload, because it is still useful for manual ReID label
+  proposals.
+
+Verified smoke result:
+
+```text
+models/reid/swin_tiny_mmp_reid_all.onnx
+providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
+```
+
+Manual ReID labels should still be made in the old 10-minute crop-cache ID
+space, then applied back into a grouped/labeled cache. The existing
+`reid_labels/*.json` files do not directly match the raw official zip
+`person_id` space.
+
+Local cache compatibility symlink used for the retired label app:
+
+```bash
+ln -sfn reid_cache_ssd/MMPTracking_10minute_reid_cache \
+  dataset/MMPTracking_10minute_reid_cache
+```
+
+Optional auto proposal before manual cleanup:
+
+```bash
+./venv/bin/python old_stuff/retired_20260620/scripts/datasets/consolidate_reid_identities.py \
+  --cache-root dataset/MMPTracking_10minute_reid_cache \
+  --split train \
+  --reid-onnx models/reid/swin_tiny_mmp_reid_all.onnx \
+  --threshold 0.45 \
+  --make-montages
+```
+
+Manual label server:
+
+```bash
+./venv/bin/python old_stuff/retired_20260620/scripts/datasets/reid_label_app.py
+```
+
+Open:
+
+```text
+http://localhost:8000
+```
+
+Apply labels into the training cache:
+
+```bash
+./venv/bin/python old_stuff/retired_20260620/scripts/datasets/apply_reid_labels.py \
+  --labels-dir reid_labels \
+  --cache-root dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache \
+  --out-dir dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled
+```

@@ -27,6 +27,17 @@ MEAN = np.asarray([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
 STD = np.asarray([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
 
 
+def _preload_onnxruntime_gpu() -> None:
+    """Let ORT find CUDA/cuDNN wheels installed inside the venv."""
+    preload = getattr(ort, "preload_dlls", None)
+    if preload is None:
+        return
+    try:
+        preload(cuda=True, cudnn=True, msvc=False)
+    except Exception as exc:
+        print(f"[reid-eval] warning: onnxruntime GPU preload failed: {exc}")
+
+
 def _read_manifest(
     root: Path,
     split: str,
@@ -78,6 +89,7 @@ def _embed(
     weights: Path,
     batch_size: int,
 ) -> np.ndarray:
+    _preload_onnxruntime_gpu()
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     available = set(ort.get_available_providers())
     providers = [p for p in providers if p in available]

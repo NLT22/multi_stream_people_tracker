@@ -48,6 +48,12 @@ def load_manifest(cache_root: Path, split: str) -> list[dict]:
 def embed_tracks(cache_root: Path, rows: list[dict], onnx: str,
                  crops_per_track: int, batch: int) -> dict[int, np.ndarray]:
     import onnxruntime as ort
+    preload = getattr(ort, "preload_dlls", None)
+    if preload is not None:
+        try:
+            preload(cuda=True, cudnn=True, msvc=False)
+        except Exception as exc:
+            print(f"[reid] warning: onnxruntime GPU preload failed: {exc}")
     providers = (["CUDAExecutionProvider", "CPUExecutionProvider"]
                  if "CUDAExecutionProvider" in ort.get_available_providers()
                  else ["CPUExecutionProvider"])

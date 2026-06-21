@@ -521,3 +521,48 @@ Keep zones coarse; fine-grained ground-plane analytics will be noisy.
 - Is retail IDF1 a hard product requirement, or is mean IDF1 the acceptance gate?
 - Should production default be quality preset or performance preset after RTSP
   validation?
+
+## 8. ReID Manual Label Workflow
+
+The existing manual labels in `reid_labels/*.json` were created for the old
+`MMPTracking_10minute_reid_cache` scene-track IDs. Use the crop-cache workflow
+for regrouping; do not apply those labels directly to raw official zip
+`person_id` values.
+
+Prepare the local SSD cache path expected by the retired label app:
+
+```bash
+ln -sfn reid_cache_ssd/MMPTracking_10minute_reid_cache \
+  dataset/MMPTracking_10minute_reid_cache
+```
+
+Create or refresh the auto proposal:
+
+```bash
+./venv/bin/python old_stuff/retired_20260620/scripts/datasets/consolidate_reid_identities.py \
+  --cache-root dataset/MMPTracking_10minute_reid_cache \
+  --split train \
+  --reid-onnx models/reid/swin_tiny_mmp_reid_all.onnx \
+  --threshold 0.45 \
+  --make-montages
+```
+
+Run the manual label UI:
+
+```bash
+./venv/bin/python old_stuff/retired_20260620/scripts/datasets/reid_label_app.py
+```
+
+Then open `http://localhost:8000`, save labels to `reid_labels/`, and apply
+them:
+
+```bash
+./venv/bin/python old_stuff/retired_20260620/scripts/datasets/apply_reid_labels.py \
+  --labels-dir reid_labels \
+  --cache-root dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache \
+  --out-dir dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled
+```
+
+ONNXRuntime GPU is the expected host-side runtime for ReID eval/proposal tools.
+`requirements.txt` uses `onnxruntime-gpu`, and the ReID eval/proposal scripts
+preload venv CUDA/cuDNN libraries before creating sessions.
