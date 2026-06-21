@@ -595,31 +595,16 @@ Run the exact-source manual label UI:
 Open `http://localhost:8000`. The cards are keyed by exact-source `pid_key`,
 for example `63am/cafe_shop_0/1`, meaning `time/scene/raw_pid`.
 
-Existing 10-minute manual ReID labels can be reused for the original
-MMPTracking crop manifest. Convert them through scene-local rank mapping:
-
-```bash
-./venv/bin/python scripts/datasets/convert_10min_reid_labels_to_exact.py \
-  --labels-dir reid_labels \
-  --exact-crop-root dataset/mmp_exact_reid_original \
-  --out-dir reid_labels_exact_from_10min \
-  --strict
-```
-
-Verified on the current exact train manifest:
-
-```text
-total=308 matched=308 missing=0
-```
-
-Use `reid_labels_exact_from_10min` directly, or open it with the exact label UI
-for manual review before applying.
+Do not reuse the old `reid_labels/` files for this exact-source path. Those
+labels were made against the 10-minute extracted crop-cache ID space. The
+official MMPTracking person IDs reset per scene, so exact-source regrouping must
+be reviewed/saved again in `reid_labels_exact/`.
 
 Apply labels into a trainable grouped cache:
 
 ```bash
 ./venv/bin/python scripts/datasets/apply_reid_labels_exact.py \
-  --labels-dir reid_labels_exact_from_10min \
+  --labels-dir reid_labels_exact \
   --crop-root dataset/mmp_exact_reid_original \
   --out-dir dataset/mmp_exact_reid_original_labeled \
   --splits train
