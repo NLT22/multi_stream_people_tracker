@@ -586,3 +586,99 @@ git checkout -- src/eval/export.py tests/test_export.py
 
 To revert the SGIE production path, remove the SGIE config files listed above
 and switch `PIPECFG` back to the non-SGIE online pipeline.
+
+## Exact MMPTracking ReID Training Baseline on 2026-06-21
+
+Added:
+
+- `scripts/train/finetune_reid_mmp_exact.py`
+
+Purpose:
+
+- train Swin-Tiny ReID from the official MMPTracking zip-derived crop cache
+- avoid the older extracted `MMPTracking_10minute` cache path
+- export an ONNX candidate with the same normalized 256-d feature interface used
+  by the SGIE ReID path
+
+Crop cache command:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/datasets/mmp_exact_to_reid.py \
+  --output-dir dataset/mmp_exact_reid_trainrun \
+  --splits train val \
+  --sample-rate 100 \
+  --max-crops-per-scene 1000 \
+  --clean
+```
+
+Crop cache result:
+
+```text
+train: 43,728 crops, 308 identities, 44 scene zips
+val:   23,571 crops, 168 identities, 24 scene zips
+```
+
+Training command:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
+  --crop-root dataset/mmp_exact_reid_trainrun \
+  --output output/reid_mmp_exact_trainrun_e10 \
+  --epochs 10 \
+  --pk-p 16 --pk-k 4 \
+  --accum-steps 2 \
+  --batches-per-epoch 120 \
+  --workers 4 \
+  --early-stop 0
+```
+
+Training output:
+
+```text
+output/reid_mmp_exact_trainrun_e10/best.pth
+output/reid_mmp_exact_trainrun_e10/last.pth
+output/reid_mmp_exact_trainrun_e10/swin_tiny_mmp_exact_reid_weights.pth
+output/reid_mmp_exact_trainrun_e10/swin_tiny_mmp_exact_reid.onnx
+```
+
+Balanced exact-source val eval:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/eval/eval_reid_mmp_exact.py \
+  --crop-root dataset/mmp_exact_reid_trainrun \
+  --split val \
+  --weights output/reid_mmp_exact_trainrun_e10/swin_tiny_mmp_exact_reid.onnx \
+  --batch 64 \
+  --max-crops-per-scene 200
+```
+
+Result:
+
+```text
+new exact-trained e10:
+  cross-camera top1: 0.3675
+  cross-camera mAP:  0.2064
+
+deployed production ONNX baseline:
+  cross-camera top1: 0.5504
+  cross-camera mAP:  0.4263
+```
+
+Verdict:
+
+- rejected for production promotion
+- keep `models/reid/swin_tiny_mmp_reid_all.onnx` as the SGIE production ReID
+  model
+- the exact trainer is useful infrastructure, but this initial run starts from
+  ImageNet Swin-Tiny because no original trainable ReID checkpoint is present in
+  the repo
+- next serious ReID attempt should recover the original ReID `.pth` checkpoint
+  or run longer training with a stricter exact-val gate before DeepStream IDF1
+  validation
+
+Known eval environment issue:
+
+- ONNX Runtime falls back to CPU because `libcudnn.so.9` is missing from the
+  current venv runtime path
+- this only slows the Python retrieval eval; it does not change the DeepStream
+  TensorRT production path

@@ -125,6 +125,8 @@ scripts/eval/mediamtx_multienv.sh stop
   frames.
 - [x] Add exact MMPTracking zip-source ReID crop conversion and deployed-ONNX
   retrieval eval.
+- [x] Add exact MMPTracking zip-source ReID training helper and run an initial
+  controlled training baseline.
 
 ## 3. Next Priority
 
@@ -215,6 +217,58 @@ This confirms retail is an embedding-quality/generalization problem, not only a
 tracking or clustering problem. Exact-source ReID training is not productionized
 yet because the repo currently has the deployed ONNX, not the original trainable
 Swin checkpoint.
+
+Initial exact-source ReID training baseline:
+
+```bash
+./venv/bin/python scripts/datasets/mmp_exact_to_reid.py \
+  --output-dir dataset/mmp_exact_reid_trainrun \
+  --splits train val \
+  --sample-rate 100 \
+  --max-crops-per-scene 1000 \
+  --clean
+
+./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
+  --crop-root dataset/mmp_exact_reid_trainrun \
+  --output output/reid_mmp_exact_trainrun_e10 \
+  --epochs 10 \
+  --pk-p 16 --pk-k 4 \
+  --accum-steps 2 \
+  --batches-per-epoch 120 \
+  --workers 4 \
+  --early-stop 0
+```
+
+Crop cache:
+
+```text
+train: 43,728 crops, 308 identities, 44 scene zips
+val:   23,571 crops, 168 identities, 24 scene zips
+```
+
+The 10-epoch model exported successfully, but did not beat the deployed ReID
+model on balanced exact-source val crops:
+
+```text
+output/reid_mmp_exact_trainrun_e10/swin_tiny_mmp_exact_reid.onnx
+  cross-camera top1: 0.3675
+  cross-camera mAP:  0.2064
+
+models/reid/swin_tiny_mmp_reid_all.onnx
+  cross-camera top1: 0.5504
+  cross-camera mAP:  0.4263
+```
+
+Verdict:
+
+- Do not promote the new 10-epoch exact-trained ONNX.
+- Keep production on `models/reid/swin_tiny_mmp_reid_all.onnx`.
+- For real ReID improvement, recover the original trainable Swin/ReID
+  checkpoint or run a longer controlled fine-tune with a stronger validation
+  gate before any DeepStream promotion.
+- ONNX Runtime eval currently falls back to CPU because this venv cannot load
+  `libcudnn.so.9`; that slows eval but does not affect DeepStream/TensorRT
+  production inference.
 
 ### 3.1 RTSP Production Validation
 
