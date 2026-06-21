@@ -391,6 +391,106 @@ Verdict:
   or add a distillation/fine-tune path from deployed embeddings before spending
   more long training time.
 
+## YOLO11x ReID Crop Verification on 2026-06-21
+
+Added:
+
+- `scripts/datasets/filter_reid_crops_yolo.py`
+
+Purpose:
+
+- use a stronger pretrained COCO person detector such as `yolo11x.pt` as an
+  offline ReID crop-quality gate
+- keep only crops where YOLO detects a person
+- write a new manifest without copying image files
+- write `rejected_yolo.csv` for visual audit / rollback
+
+Command used:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/datasets/filter_reid_crops_yolo.py \
+  --input-root dataset/mmp_exact_reid_labeled_clean_full_envmerge \
+  --output-root dataset/mmp_exact_reid_labeled_clean_full_envmerge_yolo11x \
+  --weights yolo11x.pt \
+  --splits train \
+  --batch 64 --imgsz 320 --conf 0.15
+
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/datasets/filter_reid_crops_yolo.py \
+  --input-root dataset/mmp_exact_reid_labeled_clean_noretail_envmerge \
+  --output-root dataset/mmp_exact_reid_labeled_clean_noretail_envmerge_yolo11x \
+  --weights yolo11x.pt \
+  --splits train \
+  --batch 64 --imgsz 320 --conf 0.15
+```
+
+Filtering result:
+
+```text
+full env:
+  kept:     323,026
+  rejected: 55,943
+  identities kept: 70
+  rejected per env:
+    cafe_shop:       1,583
+    industry_safety: 4,049
+    lobby:           4,178
+    office:          5,126
+    retail:          41,007
+
+no retail:
+  kept:     244,784
+  rejected: 14,933
+  identities kept: 56
+```
+
+This confirmed the user's intuition: retail has a much larger crop-quality
+problem than the other environments.
+
+Retraining on YOLO11x-verified crops:
+
+```text
+full-env yolo11x e20:
+  trainer sample: 163,743 crops, 70 identities
+  best val_gap:   0.550 at epoch 13
+  early stop:     epoch 19
+  original-val retrieval:
+    top1: 0.3257
+    mAP:  0.1976
+
+no-retail yolo11x e20:
+  trainer sample: 128,744 crops, 56 identities
+  best val_gap:   0.456 at epoch 20
+  original-val retrieval:
+    top1: 0.2988
+    mAP:  0.1774
+```
+
+Comparison:
+
+```text
+deployed production ONNX:
+  top1: 0.5317
+  mAP:  0.4027
+
+cleaned full-env before YOLO11x:
+  top1: 0.3317
+  mAP:  0.1848
+
+YOLO11x-verified full-env:
+  top1: 0.3257
+  mAP:  0.1976
+```
+
+Verdict:
+
+- YOLO11x crop verification is useful and exposed the retail crop-noise problem.
+- It improved full-env mAP slightly, but did not improve top1 and remains far
+  below the deployed model.
+- Do not promote the YOLO11x-trained ONNX models.
+- Keep production on `models/reid/swin_tiny_mmp_reid_all.onnx`.
+- The remaining blocker is still model initialization / representation quality:
+  training from ImageNet Swin-Tiny is too weak even with cleaner crops.
+
 ## Exact MMPTracking Detector Training/Eval on 2026-06-20
 
 Added source-clean YOLO detector tooling that reads the official MMPTracking zip

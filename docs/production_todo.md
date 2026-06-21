@@ -128,6 +128,8 @@ scripts/eval/mediamtx_multienv.sh stop
 - [x] Add exact MMPTracking zip-source ReID training helper and run an initial
   controlled training baseline.
 - [x] Add exact-source manual ReID labels and test full-env/no-retail retraining.
+- [x] Add YOLO11x crop verification for exact-source ReID training data and
+  test retraining on verified crops.
 
 ## 3. Next Priority
 
@@ -382,6 +384,52 @@ Verdict:
 - More training from ImageNet Swin-Tiny is unlikely to be the shortest path.
   Recover the trainable checkpoint behind the deployed ONNX or add a
   distillation/fine-tune path from deployed embeddings first.
+
+YOLO11x crop verification experiment, 2026-06-21:
+
+```text
+script: scripts/datasets/filter_reid_crops_yolo.py
+weights: yolo11x.pt
+gate: person class, conf >= 0.15, imgsz 320
+
+full env:
+  kept:              323,026
+  rejected:          55,943
+  identities kept:   70
+  retail rejected:   41,007
+
+no retail:
+  kept:              244,784
+  rejected:          14,933
+  identities kept:   56
+```
+
+Retraining/eval on original validation crops:
+
+```text
+deployed production ONNX:
+  top1: 0.5317
+  mAP:  0.4027
+
+full-env exact relabel, geometry-clean only:
+  top1: 0.3317
+  mAP:  0.1848
+
+full-env exact relabel, YOLO11x verified:
+  top1: 0.3257
+  mAP:  0.1976
+
+no-retail exact relabel, YOLO11x verified:
+  top1: 0.2988
+  mAP:  0.1774
+```
+
+Verdict:
+
+- YOLO11x verification is a useful crop-cleaning/audit tool.
+- It confirms retail has the largest crop-quality problem.
+- It does not solve the ReID model-quality gap by itself.
+- Do not promote the YOLO11x-trained ONNX models.
 
 ### 3.1 RTSP Production Validation
 
