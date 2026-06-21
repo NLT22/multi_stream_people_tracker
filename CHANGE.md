@@ -19,6 +19,29 @@ Updated:
 The interrupted long eval that still referenced the old HDD mount was stopped before
 the cutover.
 
+Long-eval verification after the cutover:
+
+- Command: `PIPECFG=configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml bash scripts/eval/run_long_eval.sh 600 configs/sources/val_20cam_mixed.txt "cafe:0-3,lobby:4-7,office:8-11,industry:12-15,retail:16-19"`
+- Result: completed naturally, no dangling DeepStream/consumer/monitor processes.
+- Runtime summary from `output/logs/long_stability.csv`:
+  - avg FPS/cam `9.884`, min `9.6`, max `10.2`
+  - GPU util avg `99.2%`
+  - VRAM `12604-12711 MB`
+  - RSS `6171-6369 MB`
+- Buffered MTMC final per-env GID totals:
+  - cafe `11`, lobby `8`, office `9`, industry `12`, retail `9`
+- Buffered long-run IDF1, scored by joining `_eval_assign.csv` back onto the
+  per-camera boxes and evaluating each 4-camera env separately:
+  - cafe_shop_0 `0.7580`
+  - industry_safety_0 `0.7470`
+  - lobby_0 `0.8589`
+  - office_0 `0.8294`
+  - retail_0 `0.5584`
+  - mean scene Global IDF1 `0.7503`
+
+Do not use the evaluator's printed mixed-scene `Grand Global IDF1` for this run:
+MMP person IDs reset per scene, so the grand cross-scene GT IDs collide.
+
 ## Production Cleanup on 2026-06-20
 
 The root project was reduced to the real production path:
