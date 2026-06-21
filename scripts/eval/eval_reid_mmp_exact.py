@@ -1,4 +1,4 @@
-"""Evaluate the deployed ReID ONNX on exact MMPTracking crop manifests.
+"""Evaluate a ReID ONNX on MMPTracking crop manifests.
 
 Metrics are retrieval-style:
 
@@ -6,6 +6,8 @@ Metrics are retrieval-style:
 - cross-camera mAP: AP over gallery crops from different cameras
 
 This evaluates embedding quality only. It is not the end-to-end MTMC IDF1 score.
+Manifests may use either the exact-cache `cam` column or the older crop-cache
+`cam_id` column.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ def _read_manifest(
     split: str,
     max_crops: int | None,
     max_crops_per_scene: int | None,
+    max_crops_per_scene_camera: int | None,
 ) -> list[dict[str, str]]:
     manifest = root / split / "manifest.csv"
     if not manifest.exists():
@@ -37,7 +40,17 @@ def _read_manifest(
     rows: list[dict[str, str]] = []
     with manifest.open(encoding="utf-8", newline="") as fh:
         scene_counts: dict[str, int] = {}
+        scene_camera_counts: dict[tuple[str, str], int] = {}
         for row in csv.DictReader(fh):
+            cam = row.get("cam", row.get("cam_id"))
+            if cam is None:
+                raise KeyError(f"manifest row missing cam/cam_id: {row}")
+            if max_crops_per_scene_camera is not None:
+                scene_cam = (row["scene"], cam)
+                count = scene_camera_counts.get(scene_cam, 0)
+                if count >= max_crops_per_scene_camera:
+                    continue
+                scene_camera_counts[scene_cam] = count + 1
             if max_crops_per_scene is not None:
                 scene = row["scene"]
                 count = scene_counts.get(scene, 0)
@@ -101,7 +114,7 @@ def _eval_retrieval(
     max_queries: int | None,
 ) -> dict[str, float | int]:
     pids = np.asarray([int(r["pid"]) for r in rows], dtype=np.int64)
-    cams = np.asarray([int(r["cam"]) for r in rows], dtype=np.int64)
+    cams = np.asarray([int(r.get("cam", r.get("cam_id"))) for r in rows], dtype=np.int64)
     scenes = np.asarray([r["scene"] for r in rows], dtype=object)
 
     # Only query crops that have at least one same-pid crop in another camera.
@@ -160,6 +173,7 @@ def main() -> None:
     parser.add_argument("--batch", type=int, default=64)
     parser.add_argument("--max-crops", type=int, default=None)
     parser.add_argument("--max-crops-per-scene", type=int, default=None)
+    parser.add_argument("--max-crops-per-scene-camera", type=int, default=None)
     parser.add_argument("--max-queries", type=int, default=None)
     args = parser.parse_args()
 
@@ -168,7 +182,13 @@ def main() -> None:
     if not weights.exists():
         raise SystemExit(f"weights not found: {weights}")
 
-    rows = _read_manifest(root, args.split, args.max_crops, args.max_crops_per_scene)
+    rows = _read_manifest(
+        root,
+        args.split,
+        args.max_crops,
+        args.max_crops_per_scene,
+        args.max_crops_per_scene_camera,
+    )
     print(f"[reid-eval] crops={len(rows)} split={args.split} root={root}")
     embeddings = _embed(rows, root, weights, args.batch)
     metrics = _eval_retrieval(rows, embeddings, args.max_queries)

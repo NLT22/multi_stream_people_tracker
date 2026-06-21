@@ -682,3 +682,78 @@ Known eval environment issue:
   current venv runtime path
 - this only slows the Python retrieval eval; it does not change the DeepStream
   TensorRT production path
+
+## ReID Regrouping Correction on 2026-06-21
+
+Issue found:
+
+- The first exact-source ReID training run used fragmented identities:
+  `time/scene/raw_pid`.
+- That produced 308 train identities and ignored the manual regrouping work.
+- The `reid_labels/*.json` files are for the old extracted 10-minute crop cache,
+  not for most raw official zip JSON IDs.
+
+Correct regrouped cache:
+
+```text
+dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled
+```
+
+This cache maps old scene-track IDs into manually verified identities:
+
+```text
+train: 1,405,634 crops, 70 grouped identities
+val:     558,611 crops, scene-local validation monitor
+```
+
+Compatibility fixes:
+
+- `scripts/train/finetune_reid_mmp_exact.py` now accepts both manifest schemas:
+  `cam` and `cam_id`.
+- `scripts/eval/eval_reid_mmp_exact.py` also accepts both `cam` and `cam_id`.
+- `scripts/eval/eval_reid_mmp_exact.py` adds
+  `--max-crops-per-scene-camera` so validation sampling keeps cross-camera
+  positives instead of accidentally taking only the first camera in each scene.
+
+Regrouped training command:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
+  --crop-root dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled \
+  --output output/reid_mmp_regrouped_e10 \
+  --epochs 10 \
+  --pk-p 16 --pk-k 4 \
+  --accum-steps 2 \
+  --batches-per-epoch 120 \
+  --workers 4 \
+  --max-crops-per-pid 2000 \
+  --early-stop 0
+```
+
+Training result:
+
+```text
+output/reid_mmp_regrouped_e10/swin_tiny_mmp_exact_reid.onnx
+best validation gap came early; later epochs overfit more
+```
+
+Balanced old-cache val eval, 50 crops per scene-camera:
+
+```text
+new regrouped e10:
+  cross-camera top1: 0.4188
+  cross-camera mAP:  0.2931
+
+deployed production ONNX:
+  cross-camera top1: 0.6919
+  cross-camera mAP:  0.6159
+```
+
+Verdict:
+
+- regrouping was necessary and is the correct training direction
+- the new short regrouped run still does not beat the deployed ONNX
+- do not copy it into `models/reid/`
+- keep SGIE production on `models/reid/swin_tiny_mmp_reid_all.onnx`
+- recover the original trainable ReID checkpoint before expecting retraining to
+  beat production

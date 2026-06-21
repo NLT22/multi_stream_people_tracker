@@ -270,6 +270,61 @@ Verdict:
   `libcudnn.so.9`; that slows eval but does not affect DeepStream/TensorRT
   production inference.
 
+Important correction:
+
+- ReID training must use the manually regrouped identity labels when training
+  from the old 10-minute crop cache.
+- The label files in `reid_labels/*.json` map old extracted-cache scene-track
+  IDs, for example `63am_cafe_shop_0|0 -> P0`; they do not directly match most
+  raw person IDs in the official zip JSON labels.
+- The existing regrouped cache is:
+
+```text
+dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled
+```
+
+Regrouped training smoke:
+
+```bash
+./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
+  --crop-root dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled \
+  --output output/reid_mmp_regrouped_e10 \
+  --epochs 10 \
+  --pk-p 16 --pk-k 4 \
+  --accum-steps 2 \
+  --batches-per-epoch 120 \
+  --workers 4 \
+  --max-crops-per-pid 2000 \
+  --early-stop 0
+```
+
+Regrouped train cache:
+
+```text
+train: 140,000 sampled crops, 70 manually regrouped identities
+val:   220,930 sampled crops, 112 scene-local validation identities
+```
+
+Balanced old-cache validation, 50 crops per scene-camera:
+
+```text
+new regrouped e10:
+  cross-camera top1: 0.4188
+  cross-camera mAP:  0.2931
+
+deployed production ONNX:
+  cross-camera top1: 0.6919
+  cross-camera mAP:  0.6159
+```
+
+Verdict:
+
+- The regrouping correction is real and required.
+- The new regrouped 10-epoch run is still rejected for production promotion.
+- The likely blocker is still missing the original trainable production ReID
+  checkpoint; this run starts from ImageNet Swin-Tiny.
+- Keep production on `models/reid/swin_tiny_mmp_reid_all.onnx`.
+
 ### 3.1 RTSP Production Validation
 
 - [ ] Run a real RTSP smoke with MediaMTX and the SGIE quality preset.

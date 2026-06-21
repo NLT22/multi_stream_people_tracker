@@ -1,11 +1,12 @@
-"""Fine-tune Swin-Tiny ReID from exact MMPTracking zip-derived crops.
+"""Fine-tune Swin-Tiny ReID from MMPTracking ReID crop manifests.
 
 Build crops first with:
 
   python scripts/datasets/mmp_exact_to_reid.py --output-dir dataset/mmp_exact_reid
 
-This trainer intentionally reads the exact-source crop cache manifest, not the
-older extracted MMPTracking_10minute MP4/CSV cache.
+For the old manually regrouped identities, use the labeled cache:
+
+  --crop-root dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled
 """
 
 from __future__ import annotations
@@ -56,10 +57,13 @@ class ExactReidCropDataset(Dataset):
         with manifest.open(encoding="utf-8", newline="") as fh:
             for row in csv.DictReader(fh):
                 pid = int(row["pid"])
+                cam_value = row.get("cam", row.get("cam_id"))
+                if cam_value is None:
+                    raise KeyError(f"manifest row missing cam/cam_id: {row}")
                 sample = CropSample(
                     image_path=root / row["rel_path"],
                     pid=pid,
-                    cam=int(row["cam"]),
+                    cam=int(cam_value),
                     scene=row["scene"],
                 )
                 rows_by_pid.setdefault(pid, []).append(sample)
