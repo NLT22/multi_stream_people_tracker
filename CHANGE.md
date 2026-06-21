@@ -820,3 +820,43 @@ Apply labels into the training cache:
   --cache-root dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache \
   --out-dir dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled
 ```
+
+Original MMPTracking, not 10-minute extraction:
+
+- Added `scripts/datasets/reid_label_app_exact.py`.
+- Added `scripts/datasets/apply_reid_labels_exact.py`.
+- These tools label exact-source `pid_key` values such as
+  `63am/cafe_shop_0/1`, produced by `scripts/datasets/mmp_exact_to_reid.py`.
+- This is the correct manual regrouping path when the source is
+  `dataset/MMPTracking/MMPTracking_training` / `MMPTracking_validation`, not
+  `dataset/MMPTracking_10minute`.
+
+Build exact-source crops from the official MMPTracking tree:
+
+```bash
+./venv/bin/python scripts/datasets/mmp_exact_to_reid.py \
+  --mmp-root dataset/MMPTracking \
+  --output-dir dataset/mmp_exact_reid_original \
+  --splits train \
+  --sample-rate 20 \
+  --clean
+```
+
+Run exact-source manual label UI:
+
+```bash
+./venv/bin/python scripts/datasets/reid_label_app_exact.py \
+  --crop-root dataset/mmp_exact_reid_original \
+  --split train \
+  --out-dir reid_labels_exact
+```
+
+Apply exact-source manual labels:
+
+```bash
+./venv/bin/python scripts/datasets/apply_reid_labels_exact.py \
+  --labels-dir reid_labels_exact \
+  --crop-root dataset/mmp_exact_reid_original \
+  --out-dir dataset/mmp_exact_reid_original_labeled \
+  --splits train
+```

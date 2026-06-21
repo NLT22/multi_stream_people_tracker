@@ -566,3 +566,55 @@ them:
 ONNXRuntime GPU is the expected host-side runtime for ReID eval/proposal tools.
 `requirements.txt` uses `onnxruntime-gpu`, and the ReID eval/proposal scripts
 preload venv CUDA/cuDNN libraries before creating sessions.
+
+### 8.1 Original MMPTracking Manual Labels
+
+For the official MMPTracking source tree, use the exact-source label tools. This
+does not use the extracted 10-minute videos or the old 10-minute crop cache.
+
+Build exact-source crops from the official image/label zips:
+
+```bash
+./venv/bin/python scripts/datasets/mmp_exact_to_reid.py \
+  --mmp-root dataset/MMPTracking \
+  --output-dir dataset/mmp_exact_reid_original \
+  --splits train \
+  --sample-rate 20 \
+  --clean
+```
+
+Run the exact-source manual label UI:
+
+```bash
+./venv/bin/python scripts/datasets/reid_label_app_exact.py \
+  --crop-root dataset/mmp_exact_reid_original \
+  --split train \
+  --out-dir reid_labels_exact
+```
+
+Open `http://localhost:8000`. The cards are keyed by exact-source `pid_key`,
+for example `63am/cafe_shop_0/1`, meaning `time/scene/raw_pid`.
+
+Apply labels into a trainable grouped cache:
+
+```bash
+./venv/bin/python scripts/datasets/apply_reid_labels_exact.py \
+  --labels-dir reid_labels_exact \
+  --crop-root dataset/mmp_exact_reid_original \
+  --out-dir dataset/mmp_exact_reid_original_labeled \
+  --splits train
+```
+
+Train on the grouped exact-source cache:
+
+```bash
+PYTHONUNBUFFERED=1 ./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
+  --crop-root dataset/mmp_exact_reid_original_labeled \
+  --output output/reid_mmp_exact_original_labeled \
+  --epochs 80 \
+  --pk-p 16 --pk-k 4 \
+  --accum-steps 2 \
+  --batches-per-epoch 400 \
+  --workers 4 \
+  --early-stop 12
+```
