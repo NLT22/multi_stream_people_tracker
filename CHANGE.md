@@ -30,14 +30,23 @@ Long-eval verification after the cutover:
   - RSS `6171-6369 MB`
 - Buffered MTMC final per-env GID totals:
   - cafe `11`, lobby `8`, office `9`, industry `12`, retail `9`
-- Buffered long-run IDF1, scored by joining `_eval_assign.csv` back onto the
-  per-camera boxes and evaluating each 4-camera env separately:
+- Diagnostic long-run IDF1, scored by joining `_eval_assign.csv` back onto the
+  per-camera boxes and evaluating each 4-camera env separately against the
+  untrimmed GT:
   - cafe_shop_0 `0.7580`
   - industry_safety_0 `0.7470`
   - lobby_0 `0.8589`
   - office_0 `0.8294`
   - retail_0 `0.5584`
   - mean scene Global IDF1 `0.7503`
+
+This `0.7503` diagnostic is not directly comparable to the accepted target
+closure numbers below. It uses untrimmed GT/full-scene scoring, while the target
+closure score uses grouped per-detection assignments filtered to the frames
+actually processed during the 600s run. The accepted regression anchors remain:
+
+- quality preset: mean processed-segment IDF1 `0.8344`
+- performance `reidType:0 + SGIE` preset: mean processed-segment IDF1 `0.8098`
 
 Do not use the evaluator's printed mixed-scene `Grand Global IDF1` for this run:
 MMP person IDs reset per scene, so the grand cross-scene GT IDs collide.
