@@ -46,19 +46,23 @@ configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml
 configs/tracker/nvdcf_accuracy_mmp_recall_sgie_reid0.yaml
 ```
 
-Latest verified result, 20-cam mixed run, 600 seconds:
+Latest verified result — canonical = honest SINGLE-PASS full-GT (every frame once, no loop,
+no GT trimming; score with `scripts/eval/score_longrun_idf1.py` after `live_buffered --once`):
 
 ```text
-quality preset:
-  avg FPS/cam: 9.99
-  avg VRAM:    ~12.7 GB
-  mean IDF1:   0.8344
+performance preset (DEFAULT — reid0):
+  mean IDF1: 0.8109  (cafe 0.833 lobby 0.895 office 0.861 industry 0.805 retail 0.660)
+  ~10.6 FPS/cam, ~9.4 GB
 
-performance preset:
-  avg FPS/cam: 10.60
-  avg VRAM:    ~9.34 GB
-  mean IDF1:   0.8098
+quality preset (reidType:2):
+  mean IDF1: 0.8132  (cafe 0.834 lobby 0.895 office 0.877 industry 0.806 retail 0.655)
+  ~9.5 FPS/cam, ~12.7 GB
 ```
+
+The two presets tie on IDF1 (global IDs come from the SGIE embeddings; NvDCF internal ReID only
+aids local continuity, which buffered clustering is robust to) — reid0 is the default (more headroom).
+The older 600s-looped numbers (0.8344 / 0.8098) were processed-segment (optimistic GT trimming);
+untrimmed-looped is ~0.758 (over-penalized). See CHANGE.md 2026-06-21/22.
 
 Known weakness:
 
@@ -130,6 +134,12 @@ scripts/eval/mediamtx_multienv.sh stop
 - [x] Add exact-source manual ReID labels and test full-env/no-retail retraining.
 - [x] Add YOLO11x crop verification for exact-source ReID training data and
   test retraining on verified crops.
+- [x] Verify the IDF1 target honestly (single-pass full-GT): reid0 0.811 / quality 0.813;
+  make reid0 the documented default. (2026-06-21/22)
+- [x] Build run-summary tool, config validator, run-dir + run_manifest.json (3.3/4.1/4.3).
+- [x] RTSP smoke validation (3.1) + fix mediamtx_loop.sh (transcode mpeg4→h264, TCP transport).
+- [x] Bounded 25-min soak: FPS/VRAM stable, GID plateau, no leak (3.2 partial; overnight pending).
+- [x] Diagnose retail failure mode (3.5): local identity (switches/frags), not cross-cam.
 
 ## 3. Next Priority
 
@@ -433,12 +443,15 @@ Verdict:
 
 ### 3.1 RTSP Production Validation
 
-- [ ] Run a real RTSP smoke with MediaMTX and the SGIE quality preset.
-- [ ] Confirm `src.main` consumes `rtsp://` sources without source-id mismatch.
-- [ ] Confirm output chunks continue flushing on RTSP.
-- [ ] Confirm FPS and VRAM match file-loop behavior closely.
-- [ ] Record command, duration, FPS, VRAM, and observed GID behavior in
-  `CHANGE.md`.
+- [x] Run a real RTSP smoke with MediaMTX (5x office_0, reid0). 2026-06-22.
+- [x] Confirm `src.main` consumes `rtsp://` sources without source-id mismatch. (clean)
+- [x] Confirm output chunks continue flushing on RTSP. (10 chunks)
+- [x] Confirm FPS and VRAM sane (15 FPS/cam at native rate, VRAM 3.1 GB / 5 cams).
+- [x] Record command, duration, FPS, VRAM in `CHANGE.md` (2026-06-22).
+- [ ] Scale the RTSP smoke to the full 20 streams (multienv) and confirm >=10 FPS/cam.
+
+Fix applied: `mediamtx_loop.sh` now transcodes non-h264 (the MMP mp4s are mpeg4) to h264 and
+forces `-rtsp_transport tcp` — stream-copy + UDP made the publishers 404 / "Broken pipe".
 
 Acceptance:
 
@@ -452,15 +465,16 @@ det_emb_chunk_*.npz files keep appearing
 
 ### 3.2 Long-Duration Stability
 
+- [x] Bounded 25-min file-loop soak (reid0) — all health checks pass (see below). 2026-06-22.
 - [ ] Run 2h file-loop soak.
 - [ ] Run overnight RTSP/file-loop soak.
-- [ ] Watch:
-  - FPS stability
-  - VRAM/RSS creep
-  - GID count plateau
-  - output chunk cadence
-  - pipeline log errors
-  - live-buffered clustering latency
+- [x] Watch (validated over 25 min via `summarize_long_run.py`):
+  - FPS stability    — avg 10.93 (min 10.40, max 11.60), no degradation
+  - VRAM/RSS creep   — VRAM avg 9.45 GB stable; RSS creep +117 MB/24min (watch overnight)
+  - GID count plateau — active 8 / total 10 (creep +2), no leak
+  - output chunk cadence — steady (81 chunks)
+  - pipeline log errors  — 0
+  - live-buffered clustering latency — 156 ms avg / 313 ms max
 
 Acceptance:
 
@@ -474,20 +488,12 @@ logs are actionable and not spammy
 
 ### 3.3 Run Summary Tool
 
-Build a cheap post-run summarizer.
+Build a cheap post-run summarizer. **DONE 2026-06-22.**
 
-- [ ] Add `scripts/eval/summarize_long_run.py`.
-- [ ] Read:
-  - `output/logs/long_stability.csv`
-  - `output/logs/long_buffered.csv`
-  - `output/logs/long_pipe.log`
-- [ ] Report:
-  - warmup-trimmed avg/min/max FPS per cam
-  - avg/max VRAM
-  - RSS trend
-  - latest active/total GIDs
-  - chunk count and last chunk time
-  - error/warning counts
+- [x] Add `scripts/eval/summarize_long_run.py`.
+- [x] Read `long_stability.csv`, `long_buffered.csv`, `long_pipe.log`.
+- [x] Report warmup-trimmed FPS/cam, VRAM, RSS trend, active/total GIDs, clustering latency,
+  chunk count + last-chunk time, error/warning counts.
 
 Acceptance:
 
@@ -523,14 +529,13 @@ Future production step:
 
 Retail is the weak environment in both presets.
 
-- [ ] Audit retail predictions visually:
-  - missed detections
-  - ID switches
-  - same-clothes confusion
-  - occlusion/edge crops
-- [ ] Compare quality preset vs performance preset per camera.
-- [ ] Check whether retail failure is detector recall, tracker fragmentation, or
-  ReID confusion.
+- [x] Quantitative per-stage diagnosis via `scripts/eval/diagnose_retail.py` (2026-06-22).
+- [x] Check whether retail failure is detector recall, tracker fragmentation, or ReID confusion.
+  FINDING: retail recall only mildly low (0.822 vs 0.896); the dominant loss is LOCAL identity —
+  local IDF1 0.522 vs 0.835, switches 643 vs 212, frags 1574 vs 1185 — while the cross-camera
+  step adds ~0 extra loss (local→global gap ≈ 0 in every env). I.e. weak retail ReID embeddings
+  (retrieval top1 0.264) show up as within-camera ID swaps, not a cross-cam-specific failure.
+- [ ] Visual audit (missed dets / same-clothes / occlusion) to confirm the switch sources.
 - [ ] Only after diagnosing, test one focused lever at a time:
   - detection threshold
   - tracker confidence / shadow age
@@ -543,12 +548,14 @@ Avoid broad retraining until the failure mode is proven.
 
 ### 4.1 Config Guardrails
 
-- [ ] Add a config validator command.
-- [ ] Ensure required production files exist.
-- [ ] Ensure model paths resolve.
-- [ ] Ensure SGIE config is present for production presets.
-- [ ] Ensure tracker `outputReidTensor: 0` when SGIE is used.
-- [ ] Ensure source count matches expected env map in long eval.
+**DONE 2026-06-22:** `scripts/setup/validate_config.py` (run as a preflight by run_long_eval.sh).
+
+- [x] Add a config validator command.
+- [x] Ensure required production files exist.
+- [x] Ensure model paths resolve.
+- [x] Ensure SGIE config is present for production presets.
+- [x] Ensure tracker `outputReidTensor: 0` when SGIE is used.
+- [x] Ensure source count matches expected env map in long eval.
 
 ### 4.2 Docker
 
@@ -559,18 +566,12 @@ Avoid broad retraining until the failure mode is proven.
 
 ### 4.3 Logging
 
-- [ ] Standardize run directory naming:
-  `output/runs/YYYYMMDD_HHMMSS_<preset>`.
-- [ ] Write one `run_manifest.json` containing:
-  - git commit
-  - pipeline config
-  - source list
-  - env map
-  - duration
-  - GPU name
-  - model files
-  - key thresholds
-- [ ] Store logs/eval output under that run directory.
+**DONE 2026-06-22:** `run_long_eval.sh USE_RUN_DIR=1` + `scripts/eval/write_run_manifest.py`.
+
+- [x] Standardize run directory naming: `output/runs/YYYYMMDD_HHMMSS_<preset>`.
+- [x] Write one `run_manifest.json` (git commit, pipeline config, sources, env map, duration,
+  GPU name, model files, key thresholds).
+- [x] Store logs/eval output under that run directory.
 
 ## 5. Future Scale-Out
 

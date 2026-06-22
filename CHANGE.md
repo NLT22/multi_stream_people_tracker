@@ -1209,3 +1209,41 @@ Retail (~0.66) remains the lone weak env in both.
 
 Caveat learned: score AFTER `live_buffered --once` fully finishes writing `_eval_assign.csv` — scoring
 mid-write gives a bogus low number (a partial file scored reid0 at 0.258 before the 776k-row file completed).
+
+## Production-readiness tooling + validation pass (2026-06-22)
+
+Implemented and evaluated the tractable production_todo items.
+
+New tooling (all tested):
+- `scripts/eval/summarize_long_run.py` (3.3): one-shot run health report (warmup-trimmed
+  FPS/cam, VRAM, RSS creep, GID plateau, clustering latency, chunk cadence, error counts).
+- `scripts/setup/validate_config.py` (4.1): preflight guardrail — config/model paths resolve,
+  SGIE present, tracker `outputReidTensor:0`, source-count vs env-map. Passes both presets.
+- `scripts/eval/write_run_manifest.py` + `run_long_eval.sh` `USE_RUN_DIR=1` (4.3): timestamped
+  `output/runs/<ts>_<preset>/` with `run_manifest.json` (git commit, gpu, models, thresholds).
+  run_long_eval now runs the validator preflight (abort on fail) + writes the manifest.
+- `scripts/eval/diagnose_retail.py` (3.5): per-env recall / local-IDF1 / switches / frags /
+  global-IDF1 from a buffered export.
+
+3.2 bounded soak — reid0, 1500s 20-cam file-loop (`output/runs/20260622_085207_sgie_reid0`):
+  FPS/cam avg 10.93 (min 10.40, max 11.60), VRAM avg 9.45 / max 9.7 GB, GPU 99%,
+  GIDs active 8 / total 10 (creep +2 → PLATEAUED, no gallery leak), clustering 156 ms avg,
+  RSS creep +117 MB / 24 min (small; watch on a true overnight run), 0 pipe-log errors.
+  Acceptance met for a bounded soak; the literal 2h/overnight soak is still pending.
+
+3.1 RTSP smoke — MediaMTX + 5 office_0 streams, reid0:
+  src.main consumes rtsp:// with NO source-id mismatch, FPS/cam 15.0 (keeps up with native
+  rate), chunks flush (10), VRAM 3.1 GB / GPU 41% (5 cams). RTSP path validated.
+  FIX: `mediamtx_loop.sh` stream-copied mpeg4 (the MMP mp4s) into RTSP → publishers 404'd.
+  Now transcodes non-h264 to h264 (libx264) AND forces `-rtsp_transport tcp` (the publishers
+  were dying with "Broken pipe" over default UDP). Streams now stable.
+
+3.5 retail diagnosis (first loop of the soak; retail scored on its 4 mixed-benchmark cams):
+  recall: retail 0.822 vs others 0.896 (mildly low)
+  local IDF1: retail 0.522 vs others 0.835 (BAD); switches 643 vs 212; frags 1574 vs 1185
+  local→global gap ≈ 0 for ALL envs.
+  VERDICT: retail is limited at the LOCAL (single-camera) identity level — heavy ID
+  switching/fragmentation, only mildly low detector recall — and the cross-camera step adds
+  ~0 extra loss. This is consistent with weak retail ReID embeddings (doc retrieval top1 0.264)
+  manifesting as within-camera ID swaps, NOT a cross-camera-specific failure. Levers, in order:
+  retail ReID embedding quality / tighter assignment to cut switches, then detector recall.

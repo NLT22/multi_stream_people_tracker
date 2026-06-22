@@ -39,16 +39,25 @@ if ! docker ps --format '{{.Names}}' | grep -q '^mediamtx_loop$'; then
   echo "started MediaMTX on :$PORT"; sleep 2
 fi
 
-# 2. one looped, real-time ffmpeg per camera (-re paces to native fps, -c copy = no re-encode)
-# sequential cam01..camNN names (avoids collisions when a list spans multiple scenes)
+# 2. one looped, real-time ffmpeg per camera (-re paces to native fps).
+# RTP/RTSP needs h264, so stream-copy only h264 sources; transcode anything else
+# (e.g. the MMP mp4s are mpeg4 — stream-copy fails with "no stream available"/404).
 : > "$PIDFILE"; urls=(); i=0
 for f in $cams; do
   i=$((i + 1)); name=$(printf "cam%02d" "$i")
-  ffmpeg -re -stream_loop -1 -i "$f" -c copy -f rtsp "rtsp://localhost:$PORT/$name" \
-    -loglevel error >/dev/null 2>&1 &
+  codec=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$f")
+  if [ "$codec" = "h264" ]; then
+    venc=(-c:v copy)
+  else
+    venc=(-c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p)
+  fi
+  ffmpeg -re -stream_loop -1 -i "$f" "${venc[@]}" -an \
+    -f rtsp -rtsp_transport tcp "rtsp://localhost:$PORT/$name" \
+    -loglevel error >"/tmp/mediamtx_ff_$name.log" 2>&1 &
   echo $! >> "$PIDFILE"
   urls+=("rtsp://localhost:$PORT/$name")
 done
+echo "(video codec: ${codec:-?} -> $([ "$codec" = h264 ] && echo copy || echo 'transcode h264'))"
 echo "looping $(echo "$cams" | wc -l) cameras -> RTSP (forever, native fps)"
 echo; echo "pipeline command:"
 echo "  python -m src.main --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \\"
