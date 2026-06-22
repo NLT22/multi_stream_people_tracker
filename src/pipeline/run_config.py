@@ -58,6 +58,7 @@ class PipelineRunConfig:
     reid_sgie_config: str | None = None
     nvdsanalytics_config: str | None = None
     heatmap_overlay: bool = False
+    buffered_remap: str | None = None
     export_only: bool = False
     geometry: Any = None
     reid_config: Any = None

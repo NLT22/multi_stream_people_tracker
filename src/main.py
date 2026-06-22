@@ -73,6 +73,7 @@ def main(argv: list[str] | None = None) -> None:
         reid_sgie_config=args.reid_sgie_config,
         nvdsanalytics_config=args.nvdsanalytics_config,
         heatmap_overlay=args.heatmap_overlay,
+        buffered_remap=args.buffered_remap,
         export_only=args.export_only,
         geometry=geometry,
         reid_config=reid_config,

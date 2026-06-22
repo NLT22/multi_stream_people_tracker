@@ -9,6 +9,7 @@ Tuning lives in a typed ReIDConfig (src/reid/config.py), built from CLI args
 via configure_from_args(args) and passed into the probe as self._cfg.
 """
 
+import os
 import traceback
 
 import pyservicemaker as psm
@@ -81,7 +82,8 @@ class CrossCameraGalleryProbe(
                  frame_sizes: dict | None = None,
                  geometry: "GroundPlaneGeometry | None" = None,
                  config: "ReIDConfig | None" = None,
-                 passthrough_export: bool = False):
+                 passthrough_export: bool = False,
+                 buffered_remap_path: str | None = None):
         super().__init__()
         self._cfg = config if config is not None else ReIDConfig()
         # passthrough_export: skip the expensive online cross-camera matching +
@@ -110,6 +112,14 @@ class CrossCameraGalleryProbe(
         self._ts = TrackletStore(self._cfg)       # owns the tracklet memory
         self._tracklets = self._ts.tracklets      # alias (only mutated, never rebound)
         self._frame_count = 0
+
+        # Route (a): consume live_buffered's gids-csv ((cam,ltid)->gid) as the OSD
+        # display remap, so labels show the authoritative buffered/anchor-guided
+        # Global IDs (with ~window latency) instead of the volatile online greedy
+        # IDs. Falls back to the online/fusion gid for tracks not yet clustered.
+        self._buffered_remap_path = buffered_remap_path
+        self._buffered_track_gid: dict[tuple[int, int], int] = {}
+        self._buffered_remap_mtime = 0.0
 
         # Micro-batch cross-camera fusion (opt-in). When enabled, a live
         # MicroBatchFusion engine periodically clusters tracklet embeddings
@@ -338,8 +348,34 @@ class CrossCameraGalleryProbe(
                   f"active_gids={active}  "
                   f"total_gids_ever_assigned={self._gs._next_gid - 1}")
 
+    def _reload_buffered_remap(self) -> None:
+        """Reload live_buffered's (cam,ltid)->gid map if the file changed (cheap stat)."""
+        path = self._buffered_remap_path
+        if not path:
+            return
+        try:
+            mt = os.path.getmtime(path)
+        except OSError:
+            return
+        if mt == self._buffered_remap_mtime:
+            return
+        self._buffered_remap_mtime = mt
+        m: dict[tuple[int, int], int] = {}
+        try:
+            with open(path) as f:
+                next(f, None)  # header: group,cam_id,local_track_id,global_id
+                for line in f:
+                    p = line.strip().split(",")
+                    if len(p) >= 4:
+                        m[(int(p[1]), int(p[2]))] = int(p[3])
+            self._buffered_track_gid = m
+        except (OSError, ValueError):
+            pass
+
     def _draw_labels(self, frame_meta, rows: list[DetectionRow]) -> None:
         """Write the Global-ID label + style onto each person's OSD box."""
+        if self._buffered_remap_path:
+            self._reload_buffered_remap()
         row_by_key = {(row.src, row.track_id): row for row in rows}
         for obj_meta in frame_meta.object_items:
             if obj_meta.class_id != self._person_class_id:
@@ -355,7 +391,11 @@ class CrossCameraGalleryProbe(
             row = row_by_key.get((src, obj_meta.object_id))
             if row is None:
                 continue
-            draw_gid = self._display_gid(row.gid)
+            if self._buffered_remap_path:
+                bgid = self._buffered_track_gid.get((src, obj_meta.object_id))
+                draw_gid = bgid if bgid is not None else self._display_gid(row.gid)
+            else:
+                draw_gid = self._display_gid(row.gid)
             label = f"GID:{draw_gid if draw_gid is not None else '?'} "
             set_object_label(obj_meta, label)
             style_object_by_id(obj_meta, draw_gid)

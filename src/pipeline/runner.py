@@ -273,7 +273,8 @@ def run(config: PipelineRunConfig):
             frame_sizes=frame_sizes if not pretiler else None,
             geometry=geometry,
             config=reid_config,
-            passthrough_export=config.export_only)
+            passthrough_export=config.export_only,
+            buffered_remap_path=config.buffered_remap)
         if config.export_only:
             print("[reid] export-only mode: online matching/drawing OFF; "
                   "Global IDs via offline live_buffered")
