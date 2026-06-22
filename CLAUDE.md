@@ -16,8 +16,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 source venv/bin/activate
 
 # Run the production pipeline on the current source list
+# Default = reid0 perf preset: same honest IDF1 as the quality preset (~0.81) but
+# faster (~10.6 FPS/cam) and leaner (~9.4 GB). See Config Presets / Regression Anchors.
 python -m src.main \
-    --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
+    --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml \
     --sources configs/sources/val_20cam_mixed.txt \
     --no-display --no-sync \
     --export-predictions output/eval/manual_run \
@@ -113,8 +115,8 @@ See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, bench
 
 | File | Dataset | Notes |
 |------|---------|-------|
-| `configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml` | MMPTracking_short / mixed 20cam | Production quality default: YOLO11 + NvDCF + SGIE ReID |
-| `configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml` | MMPTracking_short / mixed 20cam | Production performance preset: NvDCF internal ReID off, SGIE still drives global IDs |
+| `configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml` | MMPTracking_short / mixed 20cam | **Production default (recommended):** NvDCF internal ReID off, SGIE drives global IDs. Ties the quality preset on IDF1 (~0.81) but faster/leaner. |
+| `configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml` | MMPTracking_short / mixed 20cam | Quality preset: YOLO11 + NvDCF (reidType:2) + SGIE ReID. Double-ReID buys ~0 IDF1 over reid0 (global IDs come from SGIE); keep only if local-track continuity matters. |
 
 ### Metadata Iteration
 
@@ -140,9 +142,16 @@ Restore archived scripts only when intentionally starting a new training cycle.
 
 ## Regression Anchors
 
-| Scene | Preset | Global IDF1 |
+Use **honest single-pass full-GT** as the canonical measure (every frame processed once, no loop,
+no GT trimming) — score with `scripts/eval/score_longrun_idf1.py` AFTER `live_buffered --once` finishes.
+
+| Eval | Preset | Mean Global IDF1 |
 |-------|--------|-------------|
-| mixed 20cam, processed 600s | `pipeline_mmp_nvdcf_online_sgie.yaml` | mean 0.8344 |
-| mixed 20cam, processed 600s | `pipeline_mmp_nvdcf_online_sgie_reid0.yaml` | mean 0.8098 |
+| honest single-pass full-GT (canonical) | `..._reid0.yaml` (default) | **0.8109** (~10.6 FPS/cam, 9.4 GB) |
+| honest single-pass full-GT (canonical) | `..._sgie.yaml` (quality) | **0.8132** (~9.5 FPS/cam, 12.7 GB) |
+| 600s looped, processed-segment (optimistic) | `..._sgie.yaml` | 0.8344 |
+| 600s looped, full untrimmed GT (over-penalized) | `..._sgie.yaml` | 0.758 |
+
+Per-scene (single-pass, reid0): cafe 0.833, lobby 0.895, office 0.861, industry 0.805, **retail 0.660** (lone weak env).
 
 Current nearline best config: `threshold=0.62`, `margin=0.02`, `geo_weight=0.25`, `geo_min_overlaps=8`, `window_frames=125`.

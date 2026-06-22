@@ -1167,3 +1167,45 @@ Correction after review:
 - Reason: MMPTracking person IDs reset per scene, and the old labels were made
   against the 10-minute extracted crop-cache ID space. Exact-source regrouping
   must be done/reviewed again in `reid_labels_exact/`.
+
+## Eval-Method Clarification + Honest Single-Pass IDF1 (2026-06-21, verification)
+
+Reconciled the IDF1 numbers after a question about eval method. Three measures of the
+SAME SGIE production pipeline, all per-env grouped, retail on `_clean` GT:
+
+- **Honest SINGLE-PASS, full GT (unambiguous):** every frame processed once, no loop, no trim.
+  cafe 0.834, lobby 0.895, office 0.877, industry 0.806, retail 0.655 — **MEAN 0.8132**.
+  ⇒ Target genuinely met (0.813 >= 0.8); 4/5 scenes clear 0.8; **retail (0.655) is the lone weak env**.
+- **600s looped run, processed-segment GT** (Codex headline, GT filtered to frames the time-limited
+  run reached): MEAN ~0.834. Optimistic but defensible for a time-limited soak.
+- **600s looped run, full untrimmed GT:** MEAN 0.758 — depressed because at ~10 FPS the 600s window
+  does not reach every GT frame, so unprocessed frames are charged as FN. NOT a fair capability measure.
+
+Why they differ: looped+time-limited scoring either over-trims (processed-segment, 0.834) or
+over-penalizes (untrimmed, 0.758). Single-pass avoids both → 0.813 is the number to stand behind.
+
+Throughput (600s looped run): ~9.5-10 FPS/cam, GPU ~100%, VRAM ~12.7 GB (gate met).
+
+Added `scripts/eval/score_longrun_idf1.py` (honest per-env scorer from `_eval_assign.csv`;
+`--processed-only` reproduces the optimistic processed-segment variant). The earlier dedicated
+`eval_soak_idf1.py` was archived; this is its reconstruction.
+
+## Perf preset (reidType:0) honest single-pass IDF1 + finding (2026-06-21)
+
+Ran the perf preset `pipeline_mmp_nvdcf_online_sgie_reid0.yaml` (NvDCF internal ReID OFF,
+SGIE drives global IDs) through the SAME honest single-pass full-GT protocol:
+
+  cafe 0.833, lobby 0.895, office 0.861, industry 0.805, retail 0.660 — **MEAN 0.8109**
+  Throughput: ~10.6 FPS/cam, ~9.4 GB VRAM.
+
+vs quality preset (reidType:2) honest single-pass MEAN **0.8132**, ~9.5 FPS/cam, ~12.7 GB.
+
+**Finding: the perf preset matches the quality preset on IDF1 (0.811 vs 0.813, −0.002) while being
+faster (10.6 vs 9.5 FPS/cam) and lighter (9.4 vs 12.7 GB).** Reason: global IDs come from the SGIE
+embeddings (identical in both presets); the in-tracker NvDCF ReID (reidType:2) only aids LOCAL track
+continuity, which the buffered per-env clustering is robust to. ⇒ the double-ReID "quality" preset
+buys ~0 IDF1; **the reid0 perf preset is the better default** (same accuracy, more headroom).
+Retail (~0.66) remains the lone weak env in both.
+
+Caveat learned: score AFTER `live_buffered --once` fully finishes writing `_eval_assign.csv` — scoring
+mid-write gives a bogus low number (a partial file scored reid0 at 0.258 before the 776k-row file completed).
