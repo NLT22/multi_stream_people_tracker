@@ -271,7 +271,11 @@ def run(config: PipelineRunConfig):
             frame_numbers=frame_numbers if not pretiler else None,
             frame_sizes=frame_sizes if not pretiler else None,
             geometry=geometry,
-            config=reid_config)
+            config=reid_config,
+            passthrough_export=config.export_only)
+        if config.export_only:
+            print("[reid] export-only mode: online matching/drawing OFF; "
+                  "Global IDs via offline live_buffered")
 
         if pretiler:
             # One pre-tiler probe on the tracker: exact source_id (no geometric

@@ -1302,3 +1302,28 @@ Added the analytics/demo features (production_todo §6):
 - `src/pipeline/heatmap_overlay.py` + `--heatmap-overlay` — live occupancy-heatmap overlay drawn
   post-tiler on the video (shows in live view and --save-video). try/except-guarded.
 - `scripts/eval/make_demo.sh` — one-command annotated demo video + offline heatmaps.
+
+## Lean-config measurement + export-only mode (2026-06-22)
+
+Added `--export-only` (gallery `passthrough_export`): exports per-detection rows + embeddings but
+skips the online cross-camera matching + OSD label drawing; Global IDs come from offline live_buffered.
+
+Measured (reid0, single-pass full-GT, 20-cam):
+  full eval (gallery+export+tiler+OSD): 10.6 FPS / 0.811
+  --export-only (no matching/draw):     11.1 FPS / 0.816
+  ceiling (--disable-gallery --no-tiler, no export): 10.94 FPS
+
+KEY FINDING (overturns the earlier "instrumentation is the bottleneck" hypothesis): stripping the
+gallery + tiler + OSD + export entirely only reaches ~10.9 FPS — within noise of the full 10.6. So the
+Python gallery/export/OSD/tiler overhead is NOT the throughput limiter. The ~11 FPS ceiling is the GPU
+perception path: YOLO11n detector (every frame) + NvDCF tracker + the SGIE element's per-frame object
+preprocessing at 20 cams on the RTX 5060 Ti. (Interval sweep already showed SGIE *inference* density
+isn't it either — so the cost is the detector + the SGIE crop/preprocess fixed per-frame overhead.)
+
+Implications:
+- export-only is still worth it: removes the throwaway online greedy GIDs (authoritative IDs are
+  offline anyway) and holds IDF1 (0.816); ~5% FPS. It is the correct production-ingest architecture.
+- Real throughput levers are GPU-side, NOT instrumentation: detector interval (skip frames, tracker
+  bridges — risk to recall/IDF1), INT8 detector+SGIE (~1.5–2x, needs calibration), or a lighter detector.
+- The old 18-FPS bench had NO SGIE element (in-tracker ReID i5, integrated/cheap) — the SGIE second
+  pass + its per-frame object preprocessing is the main structural cost of the live-quality fix.

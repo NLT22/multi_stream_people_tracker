@@ -55,6 +55,12 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "output-tensor-meta. Use with a reidType:0 perf "
                              "tracker for realtime cross-camera ReID. "
                              "Production: configs/models/nvinfer_reid_swin_sgie_all.yml")
+    parser.add_argument("--export-only", action="store_true",
+                        default=False,
+                        help="Lean ingest: export per-detection rows + embeddings but "
+                             "skip the online cross-camera matching + label drawing "
+                             "(Global IDs are computed offline by src.mtmc.live_buffered). "
+                             "Much higher throughput; use for production ingest / eval.")
     parser.add_argument("--heatmap-overlay", action="store_true",
                         default=defaults["heatmap_overlay"],
                         help="Draw a live occupancy-heatmap overlay on the tiled "

@@ -80,9 +80,15 @@ class CrossCameraGalleryProbe(
                  frame_numbers: dict | None = None,
                  frame_sizes: dict | None = None,
                  geometry: "GroundPlaneGeometry | None" = None,
-                 config: "ReIDConfig | None" = None):
+                 config: "ReIDConfig | None" = None,
+                 passthrough_export: bool = False):
         super().__init__()
         self._cfg = config if config is not None else ReIDConfig()
+        # passthrough_export: skip the expensive online cross-camera matching +
+        # OSD label drawing, but still export per-detection rows + embeddings so
+        # the authoritative Global IDs are computed offline by src.mtmc.live_buffered.
+        # This is the lean production-ingest path (much higher throughput).
+        self._passthrough_export = passthrough_export
         self._id_map = id_map
         self._embeddings = embeddings
         self._frame_numbers = frame_numbers  # source_id → frame_number from pre-tiler
@@ -219,6 +225,15 @@ class CrossCameraGalleryProbe(
                     raw_embedding=embedding,
                     foot_world=foot_world,   # (X_mm, Y_mm) or None
                 ))
+
+            # Lean ingest: export raw rows + embeddings, skip online matching/draw.
+            # Cross-camera Global IDs are recomputed offline by live_buffered.
+            if self._passthrough_export:
+                for row in rows:
+                    row.gid = -1
+                if self._exporter is not None:
+                    self._export_rows(frame_meta, rows)
+                continue
 
             self._annotate_embedding_quality(rows)
             for row in rows:
