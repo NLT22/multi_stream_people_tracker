@@ -238,6 +238,12 @@ def run(config: PipelineRunConfig):
         pipeline.attach("analytics", psm.Probe("analytics_probe", analytics_probe))
         print(f"[reid] nvdsanalytics enabled: {nvdsanalytics_config}")
 
+    # frame_numbers/frame_sizes: shared dicts filled by SourceIdCollectorProbe
+    # (pre-tiler) and read by CrossCameraGalleryProbe + TrajectoryVisualizer so
+    # source-space bbox coordinates rescale to the canvas correctly.
+    frame_numbers: dict = {}
+    frame_sizes: dict = {}
+
     trajectory_visualizer = None
     if show_trajectories:
         trajectory_visualizer = TrajectoryVisualizer(
@@ -246,14 +252,9 @@ def run(config: PipelineRunConfig):
             sample_interval=trajectory_sample_interval,
             max_segments_per_track=trajectory_max_segments,
             pretiler=pretiler,
+            frame_sizes=frame_sizes,
         )
 
-    # frame_numbers/frame_sizes: shared dicts filled by
-    # SourceIdCollectorProbe (pre-tiler) and read by CrossCameraGalleryProbe
-    # (post-tiler) so the exporter records the correct per-source frame index
-    # and source-space bbox coordinates.
-    frame_numbers: dict = {}
-    frame_sizes: dict = {}
 
     gallery_probe = None
     if disable_gallery:

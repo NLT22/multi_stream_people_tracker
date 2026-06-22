@@ -21,7 +21,7 @@ from src.reid.visualization import _DisplayMetaWriter
 class HeatmapOverlayProbe(psm.BatchMetadataOperator):
     def __init__(self, canvas_w: int, canvas_h: int, *,
                  grid_w: int = 48, grid_h: int = 27, decay: float = 0.96,
-                 max_circles: int = 220, radius: int = 9, max_alpha: float = 0.5):
+                 max_circles: int = 360, radius: int = 18, max_alpha: float = 0.6):
         super().__init__()
         self._cw = max(1, int(canvas_w))
         self._ch = max(1, int(canvas_h))
@@ -78,9 +78,8 @@ class HeatmapOverlayProbe(psm.BatchMetadataOperator):
 
     def _color(self, v: float) -> "osd.Color":
         # blue (low) -> green (mid) -> red (high); alpha grows with density.
-        color = osd.Color()
-        color.red = float(min(1.0, 2.0 * v))
-        color.green = float(max(0.0, 1.0 - abs(2.0 * v - 1.0)))
-        color.blue = float(max(0.0, 1.0 - 2.0 * v))
-        color.alpha = float(self._max_alpha * (0.25 + 0.75 * v))
-        return color
+        r = min(1.0, 2.0 * v)
+        g = max(0.0, 1.0 - abs(2.0 * v - 1.0))
+        b = max(0.0, 1.0 - 2.0 * v)
+        a = self._max_alpha * (0.25 + 0.75 * v)
+        return osd.Color(float(r), float(g), float(b), float(a))

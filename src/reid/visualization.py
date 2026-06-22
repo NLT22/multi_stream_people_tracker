@@ -32,7 +32,9 @@ class TrajectoryVisualizer:
         line_width: int = 2,
         draw_points: bool = True,
         pretiler: bool = False,
+        frame_sizes: dict | None = None,
     ):
+        self._frame_sizes = frame_sizes
         self._tile_w = tile_w
         self._tile_h = tile_h
         self._cols = max(1, cols)
@@ -70,10 +72,18 @@ class TrajectoryVisualizer:
         if self._pretiler:
             return x, y
 
+        # row["rect"] is in SOURCE scale (_local_rect divided by tile/frame).
+        # Rescale back to the canvas tile so the trail sits on the person, not
+        # compressed into the tile corner.
         src = row["src"]
         col = src % self._cols
         tile_row = src // self._cols
-        return x + col * self._tile_w, y + tile_row * self._tile_h
+        fw = fh = None
+        if self._frame_sizes and src in self._frame_sizes:
+            fw, fh = self._frame_sizes[src]
+        sx = self._tile_w / fw if fw else 1.0
+        sy = self._tile_h / fh if fh else 1.0
+        return col * self._tile_w + x * sx, tile_row * self._tile_h + y * sy
 
     def _prune_inactive(self, active_keys: set[tuple[int, int]], frame_count: int) -> None:
         # Keep recent inactive histories briefly so short tracker gaps do not
