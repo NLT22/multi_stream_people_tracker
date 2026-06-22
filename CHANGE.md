@@ -1247,3 +1247,15 @@ New tooling (all tested):
   ~0 extra loss. This is consistent with weak retail ReID embeddings (doc retrieval top1 0.264)
   manifesting as within-camera ID swaps, NOT a cross-camera-specific failure. Levers, in order:
   retail ReID embedding quality / tighter assignment to cut switches, then detector recall.
+
+## Persistence sink (production_todo 3.4) — 2026-06-22
+
+`scripts/eval/persist_run.py`: append-only, idempotent SQLite sink built around the existing
+export/log schema (NOT the archived analytics/storage prototype). Ingests a run dir into tables
+runs / detections / assignments / health / buffered / chunks (keyed by run_id; re-ingest is a
+no-op unless --replace). Verified on a 4-cam 90s run: 114.8k detections, 104k assignments,
+8 global IDs, 23 chunks (256-dim), health/buffered rows; idempotency + --replace confirmed.
+
+  python scripts/eval/persist_run.py --run-dir output/runs/<ts>_<preset> --db output/runs.sqlite
+
+Still future (Section 3.4): TimescaleDB/Postgres + pgvector only if/when needed.

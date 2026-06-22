@@ -510,14 +510,12 @@ but thin for a real system.
 
 Recommended first step:
 
-- [ ] Add simple append-only SQLite or hourly Parquet sink for:
-  - per-detection rows
-  - global assignments
-  - run health metrics
-  - chunk metadata
+- [x] Add simple append-only SQLite sink (`scripts/eval/persist_run.py`, 2026-06-22) for
+  per-detection rows, global assignments, run health metrics, chunk metadata + run provenance.
+  Idempotent per run_id (`--replace` to overwrite); built around the current export/log schema,
+  NOT the archived analytics/storage prototype.
 
-Do not reintroduce the archived analytics/storage prototype directly. Rebuild a
-small production sink around the current export/log schema.
+  `python scripts/eval/persist_run.py --run-dir output/runs/<ts>_<preset> --db output/runs.sqlite`
 
 Future production step:
 
