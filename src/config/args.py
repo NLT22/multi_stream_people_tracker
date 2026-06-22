@@ -55,6 +55,11 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "output-tensor-meta. Use with a reidType:0 perf "
                              "tracker for realtime cross-camera ReID. "
                              "Production: configs/models/nvinfer_reid_swin_sgie_all.yml")
+    parser.add_argument("--heatmap-overlay", action="store_true",
+                        default=defaults["heatmap_overlay"],
+                        help="Draw a live occupancy-heatmap overlay on the tiled "
+                             "video (post-tiler); shows in the live view and in "
+                             "--save-video. Needs the tiled (non --no-tiler) path.")
     parser.add_argument("--nvdsanalytics-config",
                         default=defaults["nvdsanalytics_config"],
                         help="Optional gst-nvdsanalytics config (ROI occupancy, "

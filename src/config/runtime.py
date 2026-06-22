@@ -20,6 +20,7 @@ def _load_defaults(config_path: str) -> dict:
         "nvinfer_config": "configs/models/nvinfer_yolov11_mmp.yml",
         "reid_sgie_config": "configs/models/nvinfer_reid_swin_sgie_all.yml",
         "nvdsanalytics_config": None,
+        "heatmap_overlay": False,
         "tracker_config": "configs/tracker/nvdcf_accuracy_mmp_recall_sgie.yaml",
         "tracker_width": 640,
         "tracker_height": 384,
@@ -111,6 +112,8 @@ def _load_defaults(config_path: str) -> dict:
     defaults["gpu_id"] = raw.get("gpu_id", defaults["gpu_id"])
     defaults["pretiler"] = runtime.get("pretiler", defaults["pretiler"])
     defaults["no_tiler"] = runtime.get("no_tiler", defaults["no_tiler"])
+    defaults["heatmap_overlay"] = runtime.get(
+        "heatmap_overlay", defaults["heatmap_overlay"])
     defaults["save_video"] = runtime.get("save_video", defaults["save_video"])
     defaults["record_bitrate"] = runtime.get(
         "record_bitrate", defaults["record_bitrate"])

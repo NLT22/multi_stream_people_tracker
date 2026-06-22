@@ -72,6 +72,7 @@ def main(argv: list[str] | None = None) -> None:
         loop_video=args.loop_video,
         reid_sgie_config=args.reid_sgie_config,
         nvdsanalytics_config=args.nvdsanalytics_config,
+        heatmap_overlay=args.heatmap_overlay,
         geometry=geometry,
         reid_config=reid_config,
     ))

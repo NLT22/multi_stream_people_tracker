@@ -81,6 +81,9 @@ def run(config: PipelineRunConfig):
     #   accessible via obj_reid_items post-tracker, which the two-probe path
     #   handles correctly through SourceIdCollectorProbe.
     pretiler = pretiler or no_tiler
+    if config.heatmap_overlay and pretiler:
+        print("[reid] WARNING: --heatmap-overlay needs the tiled post-tiler path; "
+              "ignored with --no-tiler/pretiler.")
     try:
         uris, is_live = resolve_sources(sources)
     except (FileNotFoundError, ValueError, NotADirectoryError) as e:
@@ -307,6 +310,11 @@ def run(config: PipelineRunConfig):
         })
         if not pretiler and gallery_probe is not None:
             pipeline.attach("tiler", psm.Probe("reid_probe", gallery_probe))
+        if config.heatmap_overlay:
+            from src.pipeline.heatmap_overlay import HeatmapOverlayProbe
+            pipeline.attach("tiler", psm.Probe(
+                "heatmap_overlay", HeatmapOverlayProbe(total_w, total_h)))
+            print("[reid] live heatmap overlay enabled (post-tiler)")
 
     pipeline.link("mux", "pgie")
     pipeline.link("pgie", "tracker")

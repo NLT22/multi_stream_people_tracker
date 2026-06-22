@@ -1277,3 +1277,28 @@ ranking is unchanged — deployed still beats every retrain under the fixed eval
 "do not promote the ImageNet-init retrain" conclusion stands; only the absolute numbers were wrong.
 production_todo.md retrieval numbers annotated as understated. Open caveat: possible train/val
 identity leakage for the deployed model (separate from this code bug).
+
+## SGIE interval sweep (2026-06-22)
+
+Tested SGIE `interval` 4 & 9 vs baseline 0, single-pass full-GT, both presets:
+
+  reid0   i0 10.6 FPS / 0.811   i4 10.29 / 0.817   i9 10.76 / 0.817
+  quality i0  9.5 FPS / 0.813   i4 10.09 / 0.813   i9 10.39 / 0.816
+
+Findings: IDF1 holds within ±0.005 at every interval (density neither helps nor hurts — safe).
+But interval is NOT a meaningful throughput lever: reid0 is unchanged (it is detector/decode/tracker
+bound, not SGIE bound); quality gains only +0.6–0.9 FPS (interval trims only the SGIE share, while
+the in-tracker ReID + detector remain). The earlier "interval buys back the 18→10 drop" hypothesis is
+refuted. Keep interval=0 by default; optionally interval 4–9 on the quality preset for a small free
+bump. Real throughput lever is detector-side (INT8 / detector interval), not the SGIE.
+
+## Heatmap + demo features (2026-06-22)
+
+Added the analytics/demo features (production_todo §6):
+- `scripts/eval/heatmap_from_export.py` — per-camera occupancy heatmap (PNG + montage +
+  occupancy_stats.json) from cam_*_predictions.csv. Offline, tested.
+- `scripts/eval/bev_heatmap_from_export.py` — BEV/floor-plan heatmap merging a scene's cameras
+  into one ground map via src/reid/geometry.foot_to_world + calibration. Offline, tested.
+- `src/pipeline/heatmap_overlay.py` + `--heatmap-overlay` — live occupancy-heatmap overlay drawn
+  post-tiler on the video (shows in live view and --save-video). try/except-guarded.
+- `scripts/eval/make_demo.sh` — one-command annotated demo video + offline heatmaps.

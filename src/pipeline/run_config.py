@@ -57,5 +57,6 @@ class PipelineRunConfig:
     loop_video: bool = False
     reid_sgie_config: str | None = None
     nvdsanalytics_config: str | None = None
+    heatmap_overlay: bool = False
     geometry: Any = None
     reid_config: Any = None
