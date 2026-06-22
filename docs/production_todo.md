@@ -212,7 +212,24 @@ ReID crop/eval also reads the official zip files directly:
   --max-crops-per-scene 200
 ```
 
-Current deployed ReID ONNX on balanced exact-source val crops:
+> **CORRECTION 2026-06-22 — the retrieval numbers below were UNDERSTATED by an eval bug.**
+> `eval_reid_mmp_exact.py` pooled all 24 val scenes into ONE gallery. MMPTracking reuses
+> cam numbers 1–6 in every scene and each scene is an independent camera network, so the
+> gallery was flooded with ~23 unrelated scenes' distractors. Fixed: gallery is now scoped
+> per-scene (`--global-gallery` reproduces the old behaviour). Corrected (balanced, 40/scene-cam):
+>
+> | model | old (global, buggy) | **per-scene (correct)** |
+> |---|---|---|
+> | deployed `swin_tiny_mmp_reid_all` | top1 0.514 / mAP 0.389 | **top1 0.847 / mAP 0.773** |
+> | retrained `full_env_envmerge_e20` | top1 0.317 / mAP 0.168 | **top1 0.729 / mAP 0.546** |
+>
+> So the deployed model's real cross-camera top1 is ~0.85, not ~0.55. **The ranking is
+> unchanged — deployed still beats every retrain even under the fixed eval — so the "do not
+> promote the retrain" conclusions stand; only the absolute numbers were wrong.** Per-env
+> figures (incl. the retail "0.264") need a per-scene rerun. Caveat still open: possible
+> train/val identity leakage for the deployed model.
+
+Current deployed ReID ONNX on balanced exact-source val crops (OLD, global-gallery — understated):
 
 ```text
 cross-camera top1: 0.5504
@@ -226,8 +243,8 @@ env mean top1:
   retail:          0.2644
 ```
 
-This confirms retail is an embedding-quality/generalization problem, not only a
-tracking or clustering problem. Exact-source ReID training is not productionized
+This still indicates retail is the weakest env for embeddings (relative ranking holds), but the
+absolute gap was exaggerated by the eval bug above; it is not purely a tracking/clustering problem. Exact-source ReID training is not productionized
 yet because the repo currently has the deployed ONNX, not the original trainable
 Swin checkpoint.
 

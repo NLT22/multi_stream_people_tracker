@@ -1259,3 +1259,21 @@ no-op unless --replace). Verified on a 4-cam 90s run: 114.8k detections, 104k as
   python scripts/eval/persist_run.py --run-dir output/runs/<ts>_<preset> --db output/runs.sqlite
 
 Still future (Section 3.4): TimescaleDB/Postgres + pgvector only if/when needed.
+
+## Bugfix: exact-source ReID retrieval eval pooled all scenes (2026-06-22)
+
+`scripts/eval/eval_reid_mmp_exact.py` built ONE gallery from all 24 val scenes. MMPTracking
+reuses cam numbers 1-6 per scene and each scene is an independent camera network, so cross-camera
+retrieval must be scoped per-scene; the global gallery flooded every query with ~23 unrelated
+scenes' distractors and badly understated all models. Fixed: per-scene gallery is now default
+(`--global-gallery` reproduces old behaviour).
+
+Impact (balanced val, 40/scene-cam):
+  deployed swin_tiny_mmp_reid_all : global 0.514/0.389  ->  per-scene 0.847/0.773 (top1/mAP)
+  retrained full_env_envmerge_e20 : global 0.317/0.168  ->  per-scene 0.729/0.546
+
+⇒ deployed model's true cross-camera top1 is ~0.85 (not the ~0.55 in earlier reports). BUT the
+ranking is unchanged — deployed still beats every retrain under the fixed eval — so the
+"do not promote the ImageNet-init retrain" conclusion stands; only the absolute numbers were wrong.
+production_todo.md retrieval numbers annotated as understated. Open caveat: possible train/val
+identity leakage for the deployed model (separate from this code bug).

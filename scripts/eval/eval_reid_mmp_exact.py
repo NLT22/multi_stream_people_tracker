@@ -124,10 +124,17 @@ def _eval_retrieval(
     rows: list[dict[str, str]],
     embeddings: np.ndarray,
     max_queries: int | None,
+    per_scene: bool = True,
 ) -> dict[str, float | int]:
     pids = np.asarray([int(r["pid"]) for r in rows], dtype=np.int64)
     cams = np.asarray([int(r.get("cam", r.get("cam_id"))) for r in rows], dtype=np.int64)
     scenes = np.asarray([r["scene"] for r in rows], dtype=object)
+
+    # MMPTracking cam numbers (1..6) are reused in every scene, and each scene is an
+    # independent camera network. Cross-camera retrieval is only meaningful WITHIN a
+    # scene, so the gallery must be scoped to the query's scene. (Pooling all scenes
+    # floods the gallery with unrelated-scene distractors and biases the comparison.)
+    same_scene = (scenes[:, None] == scenes[None, :]) if per_scene else None
 
     # Only query crops that have at least one same-pid crop in another camera.
     query_idxs = []
@@ -147,6 +154,8 @@ def _eval_retrieval(
 
     for count, qi in enumerate(query_idxs, start=1):
         valid_gallery = cams != cams[qi]
+        if per_scene:
+            valid_gallery = valid_gallery & same_scene[qi]
         scores = embeddings[valid_gallery] @ embeddings[qi]
         gallery_pids = pids[valid_gallery]
         order = np.argsort(-scores)
@@ -187,6 +196,9 @@ def main() -> None:
     parser.add_argument("--max-crops-per-scene", type=int, default=None)
     parser.add_argument("--max-crops-per-scene-camera", type=int, default=None)
     parser.add_argument("--max-queries", type=int, default=None)
+    parser.add_argument("--global-gallery", action="store_true",
+                        help="pool all scenes into one gallery (old behaviour; "
+                             "incorrect for MMPTracking — scenes are independent)")
     args = parser.parse_args()
 
     root = Path(args.crop_root).resolve()
@@ -203,7 +215,9 @@ def main() -> None:
     )
     print(f"[reid-eval] crops={len(rows)} split={args.split} root={root}")
     embeddings = _embed(rows, root, weights, args.batch)
-    metrics = _eval_retrieval(rows, embeddings, args.max_queries)
+    metrics = _eval_retrieval(rows, embeddings, args.max_queries,
+                              per_scene=not args.global_gallery)
+    print(f"[reid-eval] gallery scope: {'GLOBAL (all scenes)' if args.global_gallery else 'per-scene'}")
 
     print("[reid-eval] metrics")
     for key, value in metrics.items():
