@@ -1354,3 +1354,19 @@ SESSION SUMMARY (2026-06-22) — what was done:
   bottleneck), detector interval (recovers 18 FPS but kills IDF1). Operating point: reid0 +
   --export-only = 11 FPS / 0.816, cross-camera offline via live_buffered.
 - Retail (~0.66) remains the one weak env; lever is retail ReID embeddings (blocked on checkpoint).
+
+## In-tracker ReID does NOT rescue detector-interval IDF1 (2026-06-22)
+
+Hypothesis: keeping NvDCF in-tracker ReID (reidType:2, quality preset) while skipping detector
+frames would let appearance re-association bridge the gaps and hold IDF1. Tested:
+
+  quality (reidType:2) + detector i1: 14.97 FPS / 0.6892   (vs reid0 i1: 15.05 / 0.679)
+  quality (reidType:2) + detector i2: 18.45 FPS / 0.6534   (vs reid0 i2: 18.22 / 0.651)
+
+REFUTED: in-tracker ReID gives only +0.01 IDF1 — noise. The detector-interval loss is a DETECTION
+problem, not a track-association one: on skipped frames the tracker emits motion-predicted boxes that
+(a) drift off the person → low IoU vs GT → counted as misses (recall), and (b) feed the SGIE
+misaligned crops → worse embeddings → worse clustering. Appearance re-association cannot fix a
+detection that was never run. Detector frame-skipping is a dead end for FPS+IDF1 with or without
+in-tracker ReID. Accuracy-preserving operating point remains detector-every-frame: 11 FPS / 0.816.
+Only INT8 (faster inference, no dropped frames) can raise FPS without losing accuracy.
