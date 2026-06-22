@@ -1327,3 +1327,30 @@ Implications:
   bridges — risk to recall/IDF1), INT8 detector+SGIE (~1.5–2x, needs calibration), or a lighter detector.
 - The old 18-FPS bench had NO SGIE element (in-tracker ReID i5, integrated/cheap) — the SGIE second
   pass + its per-frame object preprocessing is the main structural cost of the live-quality fix.
+
+## Detector-interval sweep — the FPS↔IDF1 tradeoff (2026-06-22)
+
+reid0 + --export-only, single-pass full-GT, varying the YOLO detector `interval`:
+
+  interval 0 (every frame):  11.1 FPS / 0.816 IDF1   (baseline, accuracy-preserving)
+  interval 1 (every 2nd):    15.05 FPS / 0.679 IDF1
+  interval 2 (every 3rd):    18.22 FPS / 0.651 IDF1
+
+CONCLUSION: detector frame-skipping DOES recover the old ~18 FPS (interval 2 = 18.2) but
+COLLAPSES IDF1 (0.816 → 0.65) — NvDCF does not bridge skipped detections well enough at this
+frame rate. So FPS and IDF1 cannot both be high via frame-skipping; the ~18-FPS regime is a
+~0.65-IDF1 regime. Keep detector interval 0. The only remaining ACCURACY-PRESERVING FPS lever
+is INT8 quantization (faster inference without dropping frames) — untested, needs a calibration
+set + an accuracy gate.
+
+SESSION SUMMARY (2026-06-22) — what was done:
+- Verified honest IDF1 (single-pass full-GT): reid0 0.811 / quality 0.813; made reid0 the default.
+- Fixed exact-source ReID eval (per-scene gallery; deployed top1 really ~0.85, not 0.55).
+- Production tooling: validate_config, summarize_long_run, write_run_manifest+USE_RUN_DIR,
+  persist_run (SQLite), diagnose_retail; RTSP smoke (fixed mediamtx_loop) + bounded soak.
+- Features: per-camera heatmap, BEV floor heatmap, live heatmap overlay (--heatmap-overlay),
+  make_demo.sh.
+- Throughput study: SGIE interval (safe, not a lever), lean/export-only (instrumentation NOT the
+  bottleneck), detector interval (recovers 18 FPS but kills IDF1). Operating point: reid0 +
+  --export-only = 11 FPS / 0.816, cross-camera offline via live_buffered.
+- Retail (~0.66) remains the one weak env; lever is retail ReID embeddings (blocked on checkpoint).
