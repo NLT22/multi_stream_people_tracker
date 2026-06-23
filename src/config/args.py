@@ -90,6 +90,14 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                         default=defaults["tracker_height"],
                         help="nvtracker input height. Match detector input for "
                              "best performance.")
+    parser.add_argument("--mux-width", type=int,
+                        default=defaults.get("mux_width", 1920),
+                        help="nvstreammux surface width. Inputs are scaled to this "
+                             "before PGIE/tracker/SGIE; match source res (e.g. 640) "
+                             "to avoid upscaling small inputs.")
+    parser.add_argument("--mux-height", type=int,
+                        default=defaults.get("mux_height", 1080),
+                        help="nvstreammux surface height (e.g. 360 for 640x360 inputs).")
     parser.add_argument("--tracker-sub-batches",
                         default=defaults["tracker_sub_batches"],
                         help="Optional nvtracker sub-batches string, e.g. "

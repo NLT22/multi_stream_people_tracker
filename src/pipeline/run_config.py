@@ -36,6 +36,11 @@ class PipelineRunConfig:
     tracker_width: int = 640
     tracker_height: int = 384
     tracker_sub_batches: str | None = None
+    # nvstreammux surface size. Inputs are scaled to this before PGIE/tracker/SGIE,
+    # so it drives per-object crop/preprocess cost. Default 1920x1080 (legacy); set to
+    # the source resolution (e.g. 640x360) to avoid upscaling small inputs.
+    mux_width: int = 1920
+    mux_height: int = 1080
     max_sources: int | None = None
     force_rebuild_engine: bool = False
     trim_seconds: float | None = None
