@@ -55,22 +55,26 @@ class GalleryStore:
         """Global IDs ranked by single-embedding or prototype similarity."""
         if not embedding:
             return []
+        # Convert the query ONCE (np.asarray on a Python list is element-wise and
+        # was being repeated per gid — the profiled per-detection hot spot).
+        q = np.asarray(embedding, dtype=np.float32)
         scores = []
         for gid, entry in self.gallery.items():
             if self._use_prototypes():
-                score = self._best_prototype_score(embedding, entry)
+                score = self._best_prototype_score(q, entry)
             else:
-                score = _cosine_similarity(embedding, entry.get("embedding", []))
+                score = _cosine_similarity(q, entry.get("embedding", []))
             scores.append((gid, score))
         return sorted(scores, key=lambda item: item[1], reverse=True)
 
     def score(self, gid: int, embedding: list[float]) -> float:
         if not embedding or gid not in self.gallery:
             return 0.0
+        q = np.asarray(embedding, dtype=np.float32)
         entry = self.gallery[gid]
         if self._use_prototypes():
-            return self._best_prototype_score(embedding, entry)
-        return _cosine_similarity(embedding, entry.get("embedding", []))
+            return self._best_prototype_score(q, entry)
+        return _cosine_similarity(q, entry.get("embedding", []))
 
     # ------------------------------------------------------------- mutation
     def allocate_gid(self) -> int:
