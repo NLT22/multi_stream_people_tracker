@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.6.24)  24 JUN 2026 16:01
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.6.24)  24 JUN 2026 17:07
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -862,33 +862,22 @@ LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7.80008> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 34.
  [1
 
-{C:/Users/nguye/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/vntex/t5.enc} <./Images/VSF_logo.jpg>] [2
+{C:/Users/nguye/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/vntex/t5.enc} <./Images/VSF_logo.jpg>]) (LoiNoiDau.tex [2
 
+]) (main.toc [3
 
-]
-File: Images/VSF_logo.jpg Graphic file (type jpg)
-<use Images/VSF_logo.jpg>
-Package pdftex.def Info: Images/VSF_logo.jpg  used on input line 63.
-(pdftex.def)             Requested size: 142.26378pt x 142.24985pt.
- [3] [4
-
-
-]) (LoiNoiDau.tex [5] [6
-
-
-]) (main.toc [7] [8])
+] [4])
 \tf@toc=\write5
 \openout5 = `main.toc'.
 
- [9] [10
-
-
-] (Abbreviations.tex
+ [5] (Abbreviations.tex
 Overfull \hbox (29.69043pt too wide) in paragraph at lines 7--39
  [][] 
  []
 
-[1]) (main.lof
+[1
+
+]) (main.lof
 LaTeX Font Info:    Trying to load font information for T5+cmtt on input line 6.
  (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/vntex\t5cmtt.fd
 File: t5cmtt.fd 1999/05/25 v2.5h Standard LaTeX font definitions
@@ -932,58 +921,33 @@ pdfTeX warning (ext4): destination with the same identifier (name{page.5}) has b
 <to be read again> 
                    \relax 
 l.266 
-       [5]
-pdfTeX warning (ext4): destination with the same identifier (name{page.6}) has been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.290 
-       [6]
-pdfTeX warning (ext4): destination with the same identifier (name{page.7}) has been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.299 \newpage
-               [7]
+       [5] [6] [7]
 Overfull \hbox (14.02707pt too wide) in paragraph at lines 327--328
 []\T5/ptm/m/n/13 MÎt ^^_i∫m kˇ thu™t quan trÂng: probe thu th™p \T5/cmtt/m/n/13 source_id \T5/ptm/m/n/13 (\T5/ptm/b/n/13 SourceIdCollectorProbe\T5/ptm/m/n/13 )
  []
 
-<Images/buffered_camera.png, id=495, 1284.8pt x 722.7pt>
+<Images/buffered_camera.png, id=474, 1284.8pt x 722.7pt>
 File: Images/buffered_camera.png Graphic file (type png)
 <use Images/buffered_camera.png>
 Package pdftex.def Info: Images/buffered_camera.png  used on input line 331.
 (pdftex.def)             Requested size: 418.82375pt x 235.58047pt.
-
-pdfTeX warning (ext4): destination with the same identifier (name{page.8}) has been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.335 
-       [8]
+[8]
 Overfull \hbox (44.09755pt too wide) in paragraph at lines 356--357
 []\T5/ptm/b/n/13 CrossCameraGalleryProbe \T5/ptm/m/n/13 l† GStreamer probe tÚy chønh g≠n sau \T5/cmtt/m/n/13 nvmultistreamtiler\T5/ptm/m/n/13 .
  []
 
-
-pdfTeX warning (ext4): destination with the same identifier (name{page.9}) has been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.359     \item \textbf
-                       {Thu th·∫≠p:} ƒê·ªçc embedding v√† bounding box c·ªßa... [9 <./Images/buffered_camera.png (PNG copy)>]
-pdfTeX warning (ext4): destination with the same identifier (name{page.10}) has been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.384 
-       [10]
-<Images/live_id.png, id=512, 1927.2pt x 1084.05pt>
+[9 <./Images/buffered_camera.png (PNG copy)>] [10]
+<Images/live_id.png, id=495, 1927.2pt x 1084.05pt>
 File: Images/live_id.png Graphic file (type png)
 <use Images/live_id.png>
 Package pdftex.def Info: Images/live_id.png  used on input line 391.
 (pdftex.def)             Requested size: 223.07211pt x 125.46538pt.
-<Images/buffered_camera2.png, id=513, 1284.8pt x 722.7pt>
+<Images/buffered_camera2.png, id=496, 1284.8pt x 722.7pt>
 File: Images/buffered_camera2.png Graphic file (type png)
 <use Images/buffered_camera2.png>
 Package pdftex.def Info: Images/buffered_camera2.png  used on input line 397.
 (pdftex.def)             Requested size: 223.07211pt x 125.47089pt.
-<Images/buffered_bev.png, id=514, 762.85pt x 1230.5975pt>
+<Images/buffered_bev.png, id=497, 762.85pt x 1230.5975pt>
 File: Images/buffered_bev.png Graphic file (type png)
 <use Images/buffered_bev.png>
 Package pdftex.def Info: Images/buffered_bev.png  used on input line 406.
@@ -994,32 +958,32 @@ Overfull \hbox (1.77882pt too wide) in paragraph at lines 418--419
  []
 
 [12 <./Images/buffered_bev.png (PNG copy)>] [13]
-<Images/hm23_cam0_occupancy.png, id=536, 642.4pt x 361.35pt>
+<Images/hm23_cam0_occupancy.png, id=518, 642.4pt x 361.35pt>
 File: Images/hm23_cam0_occupancy.png Graphic file (type png)
 <use Images/hm23_cam0_occupancy.png>
 Package pdftex.def Info: Images/hm23_cam0_occupancy.png  used on input line 452.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/hm23_cam0_footfall.png, id=537, 642.4pt x 361.35pt>
+<Images/hm23_cam0_footfall.png, id=519, 642.4pt x 361.35pt>
 File: Images/hm23_cam0_footfall.png Graphic file (type png)
 <use Images/hm23_cam0_footfall.png>
 Package pdftex.def Info: Images/hm23_cam0_footfall.png  used on input line 458.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/hm23_cam0_dwelltime.png, id=538, 642.4pt x 361.35pt>
+<Images/hm23_cam0_dwelltime.png, id=520, 642.4pt x 361.35pt>
 File: Images/hm23_cam0_dwelltime.png Graphic file (type png)
 <use Images/hm23_cam0_dwelltime.png>
 Package pdftex.def Info: Images/hm23_cam0_dwelltime.png  used on input line 464.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/hm23_bev_occupancy.png, id=539, 762.85pt x 1178.4025pt>
+<Images/hm23_bev_occupancy.png, id=521, 762.85pt x 1178.4025pt>
 File: Images/hm23_bev_occupancy.png Graphic file (type png)
 <use Images/hm23_bev_occupancy.png>
 Package pdftex.def Info: Images/hm23_bev_occupancy.png  used on input line 475.
 (pdftex.def)             Requested size: 145.68144pt x 225.0316pt.
-<Images/hm23_bev_footfall.png, id=540, 762.85pt x 1178.4025pt>
+<Images/hm23_bev_footfall.png, id=522, 762.85pt x 1178.4025pt>
 File: Images/hm23_bev_footfall.png Graphic file (type png)
 <use Images/hm23_bev_footfall.png>
 Package pdftex.def Info: Images/hm23_bev_footfall.png  used on input line 481.
 (pdftex.def)             Requested size: 145.68144pt x 225.0316pt.
-<Images/hm23_bev_dwelltime.png, id=541, 762.85pt x 1178.4025pt>
+<Images/hm23_bev_dwelltime.png, id=523, 762.85pt x 1178.4025pt>
 File: Images/hm23_bev_dwelltime.png Graphic file (type png)
 <use Images/hm23_bev_dwelltime.png>
 Package pdftex.def Info: Images/hm23_bev_dwelltime.png  used on input line 487.
@@ -1034,7 +998,7 @@ Overfull \hbox (30.77565pt too wide) in paragraph at lines 511--523
  [][] 
  []
 
-<Images/analytics.png, id=549, 1927.2pt x 1084.05pt>
+<Images/analytics.png, id=531, 1927.2pt x 1084.05pt>
 File: Images/analytics.png Graphic file (type png)
 <use Images/analytics.png>
 Package pdftex.def Info: Images/analytics.png  used on input line 527.
@@ -1104,20 +1068,20 @@ LaTeX Font Warning: Size substitutions with differences
 (Font)              up to 1.0pt have occurred.
 
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: AD663F2FBDB329F5D49217B148802A4A;12685.
+(rerunfilecheck)             Checksum: 87F6E528B1971440CB23D348A1699EDD;12685.
  ) 
 Here is how much of TeX's memory you used:
- 24826 strings out of 467871
- 464105 string characters out of 5418376
- 963951 words of memory out of 5000000
- 53103 multiletter control sequences out of 15000+600000
+ 24822 strings out of 467871
+ 464031 string characters out of 5418376
+ 963902 words of memory out of 5000000
+ 53101 multiletter control sequences out of 15000+600000
  686120 words of font info for 95 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  108i,11n,107p,886b,543s stack positions out of 10000i,1000n,20000p,200000b,200000s
  <C:\Users\nguye\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\tcrm1200.pk><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/symbol/usyr.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/symbol/usyr.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmb8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmbi8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmr8a.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmr8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmri8a.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmri8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/vnr/vntt12.pfb>
-Output written on main.pdf (40 pages, 11233841 bytes).
+Output written on main.pdf (35 pages, 11230332 bytes).
 PDF statistics:
- 716 PDF objects out of 1000 (max. 8388607)
- 138 named destinations out of 1000 (max. 500000)
+ 696 PDF objects out of 1000 (max. 8388607)
+ 136 named destinations out of 1000 (max. 500000)
  593 words of extra memory for PDF output out of 10000 (max. 10000000)
 

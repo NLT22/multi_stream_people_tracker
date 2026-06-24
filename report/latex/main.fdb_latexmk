@@ -1,16 +1,16 @@
 # Fdb version 4
-["bibtex main"] 1782291711.52275 "main.aux" "main.bbl" "main" 1782291714.12634 0
+["bibtex main"] 1782295641.77585 "main.aux" "main.bbl" "main" 1782295644.39873 0
   "./MyRef.bib" 1782277883 2775 1c0c90f7d7259431e23989d3d0382471 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/bibtex/bst/ieeetran/IEEEtran.bst" 1440622569 57748 7c8250ecf02814ce6ddc0cdbb63df1dd ""
-  "main.aux" 1782291713 15048 1645f0d64400bebf34fa6bec3c5b05ff "pdflatex"
+  "main.aux" 1782295643 15001 4f4feaaf360b6bf11adbcf7dcf27ff50 "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1782291711.76293 "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" "main.pdf" "main" 1782291714.12702 0
+["pdflatex"] 1782295642.02869 "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" "main.pdf" "main" 1782295644.39957 0
   "Abbreviations.tex" 1782276321 2397 ef29e26fd1b0873fc27d6066584d408e ""
   "Abstract.tex" 1782286301 2763 d0333478ef80489e98261ed5c5d16bad ""
-  "Bia.tex" 1782268971 3135 1b6a54a6c16f573810a4b8455026c4a5 ""
+  "Bia.tex" 1782295600 1568 14cd09e9539055d8e645c8abc3cf4d2b ""
   "C:/Users/nguye/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1782267598 89969 e95579120a3aa0ebc21d2737ca2ba701 ""
   "C:/Users/nguye/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/tcrm1200.pk" 1782277958 14064 c1f88a093292a17824faf2d09e691da3 ""
   "C:/Users/nguye/AppData/Local/MiKTeX/fonts/tfm/public/rsfs/rsfs10.tfm" 1782267591 688 37338d6ab346c2f1466b29e195316aa4 ""
@@ -215,16 +215,16 @@
   "Images/hm23_cam0_footfall.png" 1782285054 329607 54a5c84f620411194d395b41a6f9cf92 ""
   "Images/hm23_cam0_occupancy.png" 1782285054 321581 c462430dbc82136d228f10cd9c5ec10a ""
   "Images/live_id.png" 1782285054 2975330 6ab4e3d13547bd576e196fab78b4625c ""
-  "LoiNoiDau.tex" 1782286294 2250 a085939b45fe747c037dd26079f1c3c9 ""
+  "LoiNoiDau.tex" 1782295528 2095 1f4da46ab12542abaa4987bc4cdc613e ""
   "PhuLuc.tex" 1782278481 1693 006279da693ccdad2bb88e2aef4866c7 ""
-  "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" 1782291708 58139 c161a8de2a1882987dbc7a7abac65238 ""
-  "main.aux" 1782291713 15048 1645f0d64400bebf34fa6bec3c5b05ff "pdflatex"
-  "main.bbl" 1782291711 2870 6a537eed067cf1dccb6486d09139d784 "bibtex main"
-  "main.lof" 1782291713 873 16d1faf448a8b080e475cce75a38902a "pdflatex"
-  "main.lot" 1782291713 1080 86355a7700c1aa2e9bdd51cb116bd5db "pdflatex"
-  "main.out" 1782291713 12685 ad663f2fbdb329f5d49217b148802a4a "pdflatex"
-  "main.tex" 1782291708 58139 c161a8de2a1882987dbc7a7abac65238 ""
-  "main.toc" 1782291713 6562 b0a1e18864ac180d4ba42a6dc950fdc4 "pdflatex"
+  "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" 1782295638 58133 ee8db9078fa73090e115b1d1a098a668 ""
+  "main.aux" 1782295643 15001 4f4feaaf360b6bf11adbcf7dcf27ff50 "pdflatex"
+  "main.bbl" 1782295641 2870 6a537eed067cf1dccb6486d09139d784 "bibtex main"
+  "main.lof" 1782295643 872 5643fbfd5100db12cc8e15c7c0a849b1 "pdflatex"
+  "main.lot" 1782295643 1079 a3e3301e3338fecda84c94d65ecba497 "pdflatex"
+  "main.out" 1782295643 12685 87f6e528b1971440cb23d348a1699edd "pdflatex"
+  "main.tex" 1782295638 58133 ee8db9078fa73090e115b1d1a098a668 ""
+  "main.toc" 1782295643 6562 3ead0ea241e0a6515cde7f2274a982a8 "pdflatex"
   (generated)
   "main.aux"
   "main.lof"

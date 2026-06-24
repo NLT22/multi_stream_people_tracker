@@ -1,9 +1,9 @@
-\contentsline {table}{\numberline {2.1}{\ignorespaces Đặc điểm bộ dữ liệu MMPTrack}}{4}{table.caption.10}%
-\contentsline {table}{\numberline {3.1}{\ignorespaces Cấu hình gst-nvdsanalytics theo môi trường}}{15}{table.caption.16}%
-\contentsline {table}{\numberline {4.1}{\ignorespaces Cấu hình phần cứng thực nghiệm}}{17}{table.caption.18}%
-\contentsline {table}{\numberline {4.2}{\ignorespaces Kết quả Global IDF1 theo môi trường}}{18}{table.caption.19}%
-\contentsline {table}{\numberline {4.3}{\ignorespaces Thông lượng theo chế độ NvDCF}}{19}{table.caption.20}%
-\contentsline {table}{\numberline {4.4}{\ignorespaces So sánh Live ID và Buffered ID}}{20}{table.caption.21}%
-\contentsline {table}{\numberline {4.5}{\ignorespaces Độ chính xác heatmap theo môi trường}}{20}{table.caption.22}%
-\contentsline {table}{\numberline {4.6}{\ignorespaces Nghiên cứu tăng tốc FPS}}{21}{table.caption.23}%
-\contentsline {table}{\numberline {4.7}{\ignorespaces So sánh Swin-Tiny và OSNet trên tập MMP}}{21}{table.caption.24}%
+\contentsline {table}{\numberline {2.1}{\ignorespaces Đặc điểm bộ dữ liệu MMPTrack}}{4}{table.caption.8}%
+\contentsline {table}{\numberline {3.1}{\ignorespaces Cấu hình gst-nvdsanalytics theo môi trường}}{15}{table.caption.14}%
+\contentsline {table}{\numberline {4.1}{\ignorespaces Cấu hình phần cứng thực nghiệm}}{17}{table.caption.16}%
+\contentsline {table}{\numberline {4.2}{\ignorespaces Kết quả Global IDF1 theo môi trường}}{18}{table.caption.17}%
+\contentsline {table}{\numberline {4.3}{\ignorespaces Thông lượng theo chế độ NvDCF}}{19}{table.caption.18}%
+\contentsline {table}{\numberline {4.4}{\ignorespaces So sánh Live ID và Buffered ID}}{20}{table.caption.19}%
+\contentsline {table}{\numberline {4.5}{\ignorespaces Độ chính xác heatmap theo môi trường}}{20}{table.caption.20}%
+\contentsline {table}{\numberline {4.6}{\ignorespaces Nghiên cứu tăng tốc FPS}}{21}{table.caption.21}%
+\contentsline {table}{\numberline {4.7}{\ignorespaces So sánh Swin-Tiny và OSNet trên tập MMP}}{21}{table.caption.22}%
