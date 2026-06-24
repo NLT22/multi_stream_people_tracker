@@ -588,6 +588,76 @@ Avoid broad retraining until the failure mode is proven.
   GPU name, model files, key thresholds).
 - [x] Store logs/eval output under that run directory.
 
+### 4.4 Pipeline Audit Findings (2026-06-24)
+
+Findings from a static audit of `runner.py`, `run_config.py`, `config.py`,
+`nvinfer_reid_swin_sgie_all.yml`, and `nvdcf_accuracy_mmp_recall_sgie_reid0.yaml`.
+No code changed; items below are ranked by impact.
+
+#### 🔴 Correctness Bugs
+
+- [ ] **Display sink missing `async: 0`** (`src/pipeline/runner.py` ~line 401).
+  The display-only sink (`nveglglessink`) is added without `async: 0`. When used with
+  a tee split or dynamic RTSP sources, DeepStream can deadlock in PAUSED state.
+  Fix: add `"async": 0` alongside `"sync": sink_sync, "qos": 0`.
+
+- [ ] **Mux resolution 1920×1080 for 640×360 sources** (`src/pipeline/run_config.py`,
+  `mux_width`/`mux_height` defaults, labelled "legacy"). A 9× pixel upscale drives up
+  VRAM/bandwidth before YOLO inference. Should be set to 640×360 (source native) or
+  nearest encoder-friendly multiple.
+
+#### 🟠 Performance / Config Correctness
+
+- [ ] **SGIE `interval: 0`** (`configs/models/nvinfer_reid_swin_sgie_all.yml`).
+  Swin SGIE runs on every single frame/batch. Setting `interval: 1` (skip every other)
+  halves SGIE cost with negligible IDF1 impact at 10+ fps; `interval: 2` cuts 66%.
+  Measure IDF1 delta before committing.
+
+- [ ] **`minDetectorConfidence: 0.12` dead zone**
+  (`configs/tracker/nvdcf_accuracy_mmp_recall_sgie_reid0.yaml`).
+  The upstream nvinfer detector threshold is 0.25, so any detection with score
+  0.12–0.25 is filtered before reaching the tracker. This parameter has no effect in
+  its current range — raise it to 0.25 to match, or lower the nvinfer threshold if
+  more recall is intended.
+
+- [ ] **`maxTargetsPerStream: 220` over-provisioned**.
+  MMP scenes have 5–15 persons per camera. 220 slots wastes memory and slows internal
+  tracker bookkeeping. Set to 30–40.
+
+- [ ] **`earlyTerminationAge: 1` too aggressive**.
+  Tracks are terminated after a single missed frame. Brief occlusions (doorframes,
+  pillars) cause unnecessary ID fragmentation. Raise to 5–10 frames.
+
+- [ ] **`maxShadowTrackingAge: 240` (≈22.6 s) asymmetry with `earlyTerminationAge: 1`**.
+  Shadows live 22.6 s but active tracks die after 1 missed frame — conflicting policy.
+  If the intent is short occlusion tolerance, set `earlyTerminationAge` to ≥10 and
+  lower `maxShadowTrackingAge` proportionally (e.g. 60–90 frames / 6–9 s).
+
+- [ ] **`geo_weight` not in pipeline YAML → defaults to 0.35**
+  (`src/reid/config.py` default; CLAUDE.md canonical is 0.25).
+  Add `geo_weight: 0.25` explicitly to
+  `configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml` so the production
+  value is visible and reproducible.
+
+#### 🟡 Low-Impact / Hygiene
+
+- [ ] **Engine batch mismatch**: `engine_prep.py` builds engines at `batch=4`; at
+  runtime `batch = max(n_cameras, batch_size)` (line 116 `runner.py`), so a 20-camera
+  run rebuilds to batch=20 on first launch. Pre-build engines at the target camera
+  count or document expected one-time rebuild.
+
+- [ ] **Double Swin load in `_sgie.yaml` quality preset** (~0.4 GB VRAM). The NvDCF
+  internal ReID tensor and the Swin SGIE both load simultaneously. `reid0` preset
+  avoids this; prefer `reid0` for VRAM-constrained deployments.
+
+- [ ] **SGIE `maintain-aspect-ratio: 0`** (`nvinfer_reid_swin_sgie_all.yml`).
+  Person crops are stretched to fill the input tensor without letterboxing, distorting
+  aspect ratio. Enable `maintain-aspect-ratio: 1` and re-evaluate IDF1.
+
+- [ ] **`minIouDiff4NewTarget: 0.50`** may suppress new-target creation in dense scenes
+  where two detections are close but genuinely distinct people. Consider lowering to
+  0.35–0.40 if re-entering persons are missed.
+
 ## 5. Future Scale-Out
 
 Do not build this until the single-host system is stable.
