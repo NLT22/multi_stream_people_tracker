@@ -1,0 +1,21 @@
+property:
+  gpu-id: 0
+  onnx-file: ../../output/reid_mtmc_swin/swin_tiny_mmp_reid.onnx
+  net-scale-factor: 0.01735207
+  offsets: 123.675;116.28;103.53
+  model-color-format: 0
+  infer-dims: 3;256;128
+  maintain-aspect-ratio: 0
+  symmetric-padding: 0
+  batch-size: 64
+  network-mode: 2
+  process-mode: 2
+  network-type: 100
+  output-tensor-meta: 1
+  gie-unique-id: 2
+  operate-on-gie-id: 1
+  operate-on-class-ids: 0
+  input-object-min-width: 8
+  input-object-min-height: 16
+  interval: 0
+  output-blob-names: features

@@ -83,6 +83,18 @@ def _clamp_box(x1, y1, x2, y2):
     return x1, y1, x2, y2
 
 
+def _yolo_keep(bx1, by1, bx2, by2, min_w, min_h, min_aspect):
+    """Return True if box passes YOLO clean filters."""
+    w = bx2 - bx1
+    h = by2 - by1
+    if w < min_w or h < min_h:
+        return False
+    # aspect ratio h/w: flat boxes (person behind shelf showing only head/torso)
+    if min_aspect > 0 and h / w < min_aspect:
+        return False
+    return True
+
+
 def _process_camera(video: Path, wh: str, cam: str, frames: dict[int, list],
                     split: str, args, reid_writer) -> tuple[int, int]:
     """Decode one camera video sequentially; emit YOLO image+label and ReID crops."""
@@ -111,7 +123,8 @@ def _process_camera(video: Path, wh: str, cam: str, frames: dict[int, list],
                     if cb is None:
                         continue
                     bx1, by1, bx2, by2 = cb
-                    if (by2 - by1) < args.min_h or (bx2 - bx1) < args.min_w:
+                    if not _yolo_keep(bx1, by1, bx2, by2,
+                                      args.min_w, args.min_h, args.min_aspect):
                         continue
                     xc = (bx1 + bx2) / 2 / FRAME_W; yc = (by1 + by2) / 2 / FRAME_H
                     w = (bx2 - bx1) / FRAME_W; h = (by2 - by1) / FRAME_H
@@ -161,6 +174,10 @@ def main():
     # YOLO box filters (px on 1920x1080)
     ap.add_argument("--min-h", type=float, default=12)
     ap.add_argument("--min-w", type=float, default=6)
+    ap.add_argument("--min-aspect", type=float, default=0.0,
+                    help="min height/width ratio for YOLO boxes; 0=off. "
+                         "Use >=1.2 to drop flat boxes (person behind shelf showing "
+                         "only head/torso). Typical standing person: h/w ~2.5-4.")
     ap.add_argument("--keep-empty", action="store_true",
                     help="also write frames with no person (negatives)")
     # ReID crop filters (px) — ReID needs more pixels than detection

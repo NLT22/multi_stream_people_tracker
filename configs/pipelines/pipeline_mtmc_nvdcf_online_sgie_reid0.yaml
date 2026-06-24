@@ -1,0 +1,65 @@
+# MTMC_Tracking_2026 eval pipeline
+# YOLO trained on W000+W001 (low recall) + SGIE Swin ReID trained on MTMC.
+# Use with --sources configs/sources/mtmc_val_w022.txt (4 cam) or w020/w021 (16 cam).
+source_mode: video_files
+
+source_configs:
+  video_files:  configs/sources/video_files.txt
+  folder_input: configs/sources/folder_input.yaml
+  rtsp_cameras: configs/sources/rtsp_cameras.txt
+
+detection:
+  enabled: true
+  config_file: configs/models/nvinfer_yolov11_mtmc.yml
+  reid_sgie_config: configs/models/nvinfer_reid_swin_sgie_mtmc.yml
+
+tracker:
+  enabled: true
+  config_file: configs/tracker/nvdcf_accuracy_mmp_recall_sgie_reid0.yaml
+  tracker_width: 640
+  tracker_height: 384
+
+display:
+  osd_enabled: true
+  tiled_display: true
+  tile_width: 1280
+  tile_height: 720
+
+batch_size:
+gpu_id: 0
+
+runtime:
+  max_sources:
+  pretiler: false
+  no_tiler: false
+  show_trajectories: false
+  trajectory_history: 96
+  trajectory_sample_interval: 20
+  trajectory_max_segments: 24
+  save_video:
+  record_bitrate: 8000000
+  no_display: false
+
+reid:
+  similarity_threshold: 0.68
+  gallery_max_age: 1800
+  assignment_max_candidates: 80
+
+  id_stickiness: true
+  id_switch_margin: 0.12
+  ambiguous_match_rejection: true
+  match_ambiguity_margin: 0.06
+
+  global_merge: true
+  global_merge_threshold: 0.74
+  global_merge_min_embeddings: 6
+  global_merge_margin: 0.04
+  global_merge_interval: 10
+  global_merge_max_candidates: 60
+
+  tracklet_embedding: true
+  tracklet_embedding_interval: 5
+  tracklet_window: 8
+  tracklet_min_embeddings: 3
+  tracklet_max_age: 1800
+  embedding_quality_gate: true
