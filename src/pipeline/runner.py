@@ -66,6 +66,7 @@ def run(config: PipelineRunConfig):
     no_sync = config.no_sync
     loop_video = config.loop_video
     reid_sgie_config = config.reid_sgie_config
+    sidecar_reid_onnx = config.sidecar_reid_onnx
     nvdsanalytics_config = config.nvdsanalytics_config
     geometry = config.geometry
     reid_config = config.reid_config
@@ -208,6 +209,11 @@ def run(config: PipelineRunConfig):
     # SGIE is no longer required for 20cam@10FPS. Kept for flexibility.
     # `reid_src_element` is the element whose objects carry ReID embeddings.
     reid_src_element = "tracker"
+    sidecar = None
+    if sidecar_reid_onnx and reid_sgie_config:
+        print("[reid] WARNING: --sidecar-reid and --reid-sgie-config both set; "
+              "sidecar takes priority, SGIE ignored.")
+        reid_sgie_config = None
     if reid_sgie_config:
         import yaml as _yaml
         _sgie_raw = _yaml.safe_load(Path(reid_sgie_config).read_text()) or {}
@@ -223,6 +229,11 @@ def run(config: PipelineRunConfig):
         reid_src_element = "sgie_reid"
         print(f"[reid] decoupled ReID SGIE enabled "
               f"(batch={_sgie_batch}): {runtime_sgie_config}")
+    elif sidecar_reid_onnx:
+        from src.reid.sidecar import SidecarReID
+        sidecar = SidecarReID(sidecar_reid_onnx, uris, person_class_id)
+        print(f"[reid] sidecar ReID enabled (SGIE removed from graph): "
+              f"{sidecar_reid_onnx}")
 
     # Optional gst-nvdsanalytics: ROI occupancy / line-crossing / overcrowding
     # on the tracked objects. Counts attach as frame user meta (read by
@@ -293,12 +304,19 @@ def run(config: PipelineRunConfig):
             # (source_id exact), CrossCameraGalleryProbe reads id_map post-tiler.
             # source_id is resolved from id_map — no geometric tile guessing.
             print("[reid] two-probe mode: source_id via id_map (pre-tiler exact)")
+            src_collector = gallery.SourceIdCollectorProbe(
+                id_map, embeddings, person_class_id, debug=debug_similarity,
+                frame_numbers=frame_numbers, frame_sizes=frame_sizes,
+                sidecar=sidecar)
             pipeline.attach(reid_src_element, psm.Probe(
-                "src_collector",
-                gallery.SourceIdCollectorProbe(
-                    id_map, embeddings, person_class_id, debug=debug_similarity,
-                    frame_numbers=frame_numbers, frame_sizes=frame_sizes),
-            ))
+                "src_collector", src_collector))
+            if sidecar is not None:
+                # MetaCaptureOp is a BatchMetadataOperator; attach it to the
+                # tracker pad. GStreamer runs probes LIFO so MetaCaptureOp fires
+                # BEFORE src_collector — bbox metadata is enqueued first, then
+                # src_collector reads the (previous-frame) sidecar cache.
+                pipeline.attach("tracker", psm.Probe(
+                    "meta_capture", sidecar.meta_op))
 
     if gt_by_cam:
         pipeline.attach("tracker", psm.Probe(
@@ -383,6 +401,8 @@ def run(config: PipelineRunConfig):
         pipeline.add(get_sink_element(), "sink", {"sync": sink_sync, "qos": 0})
         pipeline.link(visual_tail, "sink")
 
+    if sidecar is not None:
+        sidecar.start()
     try:
         pipeline.start()
         print("[reid] Running. Gallery stats print every 60 frames.")
@@ -398,6 +418,8 @@ def run(config: PipelineRunConfig):
             print(f"[reid] Total unique global IDs assigned: {total_gids}")
     finally:
         pipeline.stop()
+        if sidecar is not None:
+            sidecar.stop()
         if exporter is not None:
             exporter.close()
             print(f"[reid] Predictions exported to: {export_predictions}")

@@ -55,6 +55,15 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                              "output-tensor-meta. Use with a reidType:0 perf "
                              "tracker for realtime cross-camera ReID. "
                              "Production: configs/models/nvinfer_reid_swin_sgie_all.yml")
+    parser.add_argument("--sidecar-reid", default=None, metavar="ONNX_PATH",
+                        dest="sidecar_reid_onnx",
+                        help="Sidecar ReID mode: path to the ReID ONNX model. "
+                             "Skips SGIE entirely; a background thread extracts "
+                             "crops from the NvBufSurface and runs inference off "
+                             "the GStreamer critical path, freeing ~6 FPS/cam vs "
+                             "the in-graph SGIE. Mutually exclusive with "
+                             "--reid-sgie-config. "
+                             "E.g. models/reid/swin_tiny_mmp_reid_all.onnx")
     parser.add_argument("--export-only", action="store_true",
                         default=False,
                         help="Lean ingest: export per-detection rows + embeddings but "

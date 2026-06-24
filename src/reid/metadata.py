@@ -19,15 +19,19 @@ except ImportError:
 class SourceIdCollectorProbe(psm.BatchMetadataOperator):
     """
     Pre-tiler: source_id is valid here — collect it for each tracked person.
-    Also extracts Re-ID embeddings from tracker ReID metadata.
+    Also extracts Re-ID embeddings from tracker ReID metadata OR from a sidecar.
 
     Fills shared dicts:
       embeddings: (source_id, object_id) → embedding vector (list[float]) or []
+
+    When `sidecar` is provided, embeddings are read from SidecarReID.get_embedding()
+    instead of SGIE tensor-output-meta (CropCaptureOperator populates the cache
+    on the same buffer, one probe ahead in the attachment chain).
     """
 
     def __init__(self, id_map: dict, embeddings: dict, person_class_id: int,
                  debug: bool = False, frame_numbers: dict | None = None,
-                 frame_sizes: dict | None = None):
+                 frame_sizes: dict | None = None, sidecar=None):
         super().__init__()
         self._id_map = id_map
         self._embeddings = embeddings
@@ -35,6 +39,7 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
         self._frame_sizes = frame_sizes      # source_id → (width, height)
         self._person_class_id = person_class_id
         self._debug = debug
+        self._sidecar = sidecar  # SidecarReID | None
         self._frame_count = 0
         self._persons_seen = 0
         self._embeddings_seen = 0
@@ -86,27 +91,32 @@ class SourceIdCollectorProbe(psm.BatchMetadataOperator):
                 self._id_map[oid] = src
                 batch_persons += 1
 
-                # Try to extract Re-ID embedding from tracker metadata.
-                # NvDeepSORT and NvDCF+ReAssoc can expose this when their ReID
-                # config has outputReidTensor: 1. If the selected tracker does
-                # not export embeddings, the Python global gallery falls back
-                # to GID:?/new IDs because it has no appearance evidence.
-                embedding, obj_reid_count, obj_tensor_count, reason = (
-                    self._extract_embedding(obj_meta))
-                batch_obj_reids += obj_reid_count
-                batch_obj_tensors += obj_tensor_count
-                if embedding:
-                    batch_embeddings += 1
-                elif self._debug and self._debug_failures_printed < 12:
-                    print(
-                        f"  [Re-ID tensor debug] Cam{src}#{oid} "
-                        f"embedding=empty reason={reason} "
-                        f"obj_reid_items={obj_reid_count} "
-                        f"obj_tensor_items={obj_tensor_count} "
-                        f"frame_tensor_items={frame_tensor_count} "
-                        f"torch_available={_TORCH_AVAILABLE}"
-                    )
-                    self._debug_failures_printed += 1
+                # Extract Re-ID embedding: either from the sidecar cache
+                # (populated by CropCaptureOperator one probe ahead) or from
+                # the SGIE tensor-output-meta attached by nvinfer SGIE.
+                if self._sidecar is not None:
+                    embedding = self._sidecar.get_embedding(src, oid)
+                    obj_reid_count = obj_tensor_count = 0
+                    reason = "sidecar"
+                    if embedding:
+                        batch_embeddings += 1
+                else:
+                    embedding, obj_reid_count, obj_tensor_count, reason = (
+                        self._extract_embedding(obj_meta))
+                    batch_obj_reids += obj_reid_count
+                    batch_obj_tensors += obj_tensor_count
+                    if embedding:
+                        batch_embeddings += 1
+                    elif self._debug and self._debug_failures_printed < 12:
+                        print(
+                            f"  [Re-ID tensor debug] Cam{src}#{oid} "
+                            f"embedding=empty reason={reason} "
+                            f"obj_reid_items={obj_reid_count} "
+                            f"obj_tensor_items={obj_tensor_count} "
+                            f"frame_tensor_items={frame_tensor_count} "
+                            f"torch_available={_TORCH_AVAILABLE}"
+                        )
+                        self._debug_failures_printed += 1
                 self._embeddings[(src, oid)] = embedding
 
         self._persons_seen += batch_persons

@@ -61,6 +61,10 @@ class PipelineRunConfig:
     no_sync: bool = False
     loop_video: bool = False
     reid_sgie_config: str | None = None
+    # Sidecar ReID: path to ONNX model. When set, SGIE is skipped; a background
+    # thread extracts crops from the NvBufSurface and runs inference off the
+    # critical path. Mutually exclusive with reid_sgie_config.
+    sidecar_reid_onnx: str | None = None
     nvdsanalytics_config: str | None = None
     heatmap_overlay: bool = False
     buffered_remap: str | None = None

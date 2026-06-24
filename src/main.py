@@ -73,6 +73,7 @@ def main(argv: list[str] | None = None) -> None:
         no_sync=args.no_sync,
         loop_video=args.loop_video,
         reid_sgie_config=args.reid_sgie_config,
+        sidecar_reid_onnx=getattr(args, "sidecar_reid_onnx", None),
         nvdsanalytics_config=args.nvdsanalytics_config,
         heatmap_overlay=args.heatmap_overlay,
         buffered_remap=args.buffered_remap,
