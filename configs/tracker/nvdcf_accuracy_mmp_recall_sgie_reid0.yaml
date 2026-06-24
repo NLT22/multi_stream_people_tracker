@@ -8,12 +8,12 @@
 # =============================================================================
 
 BaseConfig:
-  minDetectorConfidence: 0.12
+  minDetectorConfidence: 0.25
 
 TargetManagement:
   enableBboxUnClipping: 1
   preserveStreamUpdateOrder: 0
-  maxTargetsPerStream: 220
+  maxTargetsPerStream: 40
   minIouDiff4NewTarget: 0.50
   minTrackerConfidence: 0.35
   probationAge: 4

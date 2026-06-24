@@ -55,6 +55,7 @@ reid:
   global_merge_margin: 0.04
   global_merge_interval: 10
   global_merge_max_candidates: 60
+  geo_weight: 0.25
 
   tracklet_embedding: true
   tracklet_embedding_interval: 5

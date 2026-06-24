@@ -398,7 +398,7 @@ def run(config: PipelineRunConfig):
         pipeline.add("fakesink", "sink", {"sync": 0, "async": 0})
         pipeline.link(visual_tail, "sink")
     else:
-        pipeline.add(get_sink_element(), "sink", {"sync": sink_sync, "qos": 0})
+        pipeline.add(get_sink_element(), "sink", {"sync": sink_sync, "qos": 0, "async": 0})
         pipeline.link(visual_tail, "sink")
 
     if sidecar is not None:
