@@ -141,7 +141,7 @@ Dự án có bốn đóng góp kỹ thuật chính:
 
     \item \textbf{Quy trình làm sạch nhãn:} Hai công cụ làm sạch nhãn độc lập cho YOLO (loại bỏ 17,6\% nhãn phantom qua bộ kiểm tra COCO YOLO11x) và cho ReID (hợp nhất 196 nhãn scene-local về 56 identity sạch), giúp mô hình ReID tổng quát hóa tốt hơn đáng kể sang người chưa thấy.
 
-    \item \textbf{Buffered ID dựa trên anchor-guided clustering:} Triển khai thuật toán anchor-guided từ \cite{Huang2023} thành chế độ cửa sổ trượt 30 giây trong pipeline thời gian thực, đạt 97--98\% chất lượng của xử lý offline.
+    \item \textbf{Buffered ID dựa trên anchor-guided clustering:} Triển khai thuật toán anchor-guided từ \cite{Huang2023} thành chế độ cửa sổ trượt 20 giây trong pipeline thời gian thực, đạt 97--98\% chất lượng của xử lý offline.
 
     \item \textbf{Heatmap phân tích mật độ:} Ba loại bản đồ mật độ (Occupancy, Footfall, Dwell-time) chuẩn hóa theo Định luật Little \cite{Little1961}, tích hợp trực tiếp vào pipeline và đạt hệ số tương quan CC = 0,97--0,99 so với nhãn thực.
 \end{enumerate}
@@ -673,6 +673,32 @@ Dù được đo trên cấu hình trung gian, bảng này cho thấy xu hướn
 
 Tính trên toàn bộ tập kiểm thử với pipeline hoàn chỉnh, Buffered ID đạt 97--98\% chất lượng của thuật toán offline (xử lý toàn bộ video một lần) với độ trễ chỉ $\sim$20 giây.
 
+\subsubsection{Khảo sát kích thước cửa sổ}
+\label{sec:window_ablation}
+
+Để xác nhận kích thước cửa sổ tối ưu, một thí nghiệm ablation được thực hiện: pipeline chạy một lần với chunk 100 khung, sau đó thuật toán anchor-guided được áp dụng lại với 5 kích thước cửa sổ khác nhau (100--500 khung) trên cùng tập embedding. Kết quả Global IDF1 theo từng môi trường trình bày trong Bảng~\ref{tab:window_ablation}.
+
+\begin{table}[H]
+    \centering
+    \caption[Khảo sát kích thước cửa sổ Buffered ID]{\bfseries\fontsize{12pt}{0pt}\selectfont Global IDF1 theo kích thước cửa sổ Buffered ID (khung).}
+    \begin{tabular}{|l|c|c|c|c|c|}
+    \hline
+    \bfseries Môi trường & \bfseries 100f & \bfseries \underline{200f} & \bfseries 300f & \bfseries 400f & \bfseries 500f \\
+    \hline
+    Café      & 0,777 & \textbf{0,831} & 0,768 & 0,809 & 0,800 \\
+    Lobby     & 0,892 & \textbf{0,895} & 0,894 & 0,892 & 0,890 \\
+    Office    & 0,890 & \textbf{0,878} & 0,843 & 0,820 & 0,813 \\
+    Industry  & 0,837 & 0,765 & 0,802 & \textbf{0,820} & 0,788 \\
+    Retail    & 0,578 & \textbf{0,619} & 0,604 & 0,585 & 0,605 \\
+    \hline
+    \textbf{Trung bình} & 0,795 & \textbf{0,798} & 0,782 & 0,785 & 0,779 \\
+    \hline
+    \end{tabular}
+    \label{tab:window_ablation}
+\end{table}
+
+Cửa sổ 200 khung ($\sim$20 giây) cho kết quả tốt nhất về trung bình (0,798) và tốt nhất trên 4/5 môi trường. Môi trường Industry là ngoại lệ duy nhất, ưa cửa sổ lớn hơn (300--400 khung) do đồng phục làm mô hình ReID cần nhiều thời gian hơn để tích lũy embedding phân biệt. Tuy nhiên, mức cải thiện không đủ lớn để thay đổi cấu hình toàn cục. Kết quả này xác nhận cửa sổ 200 khung (~20 giây) là lựa chọn tối ưu cho bộ dữ liệu MMPTrack.
+
 \subsection{Độ chính xác heatmap}
 
 Độ chính xác của heatmap được đánh giá bằng hệ số tương quan Pearson (CC) giữa heatmap dự đoán của hệ thống và heatmap ground-truth (tính từ nhãn bounding box thực). Kết quả trong Bảng~\ref{tab:heatmap}.
@@ -762,7 +788,7 @@ Dự án đã xây dựng thành công hệ thống theo dõi người đa camer
     \item \textbf{Độ chính xác:} Global IDF1 trung bình 0,811 trên 5 môi trường kiểm thử với người unseen (vượt ngưỡng mục tiêu 0,8).
 \end{itemize}
 
-Hai đóng góp kỹ thuật quan trọng giúp đạt được các kết quả trên là: (1) quy trình làm sạch nhãn loại bỏ nhiễu đáng kể trong dữ liệu MMPTrack; (2) triển khai Buffered ID dựa trên anchor-guided clustering \cite{Huang2023} trong cửa sổ trượt 30 giây, giúp cải thiện Global IDF1 từ 0,289 lên 0,754 trong môi trường khó (industry đồng phục).
+Hai đóng góp kỹ thuật quan trọng giúp đạt được các kết quả trên là: (1) quy trình làm sạch nhãn loại bỏ nhiễu đáng kể trong dữ liệu MMPTrack; (2) triển khai Buffered ID dựa trên anchor-guided clustering \cite{Huang2023} trong cửa sổ trượt 20 giây, giúp cải thiện Global IDF1 từ 0,289 lên 0,754 trong môi trường khó (industry đồng phục).
 
 Bên cạnh theo dõi, hệ thống còn cung cấp bộ công cụ phân tích không gian (heatmap Occupancy, Footfall, Dwell-time theo Định luật Little \cite{Little1961}) với độ chính xác CC = 0,97--0,99, sẵn sàng tích hợp vào các ứng dụng giám sát an toàn, tối ưu không gian và phân tích lưu lượng người.
 
