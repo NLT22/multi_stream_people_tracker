@@ -17,13 +17,13 @@
 \contentsline {subsubsection}{\numberline {2.6.2}Độ đo xuyên camera: Global IDF1}{4}{subsubsection.2.6.2}%
 \contentsline {subsection}{\numberline {2.7}Bộ dữ liệu MMPTrack}{4}{subsection.2.7}%
 \contentsline {subsection}{\numberline {2.8}Phát hiện người: YOLO11n}{5}{subsection.2.8}%
-\contentsline {subsection}{\numberline {2.9}Theo dõi cục bộ: NvDCF}{5}{subsection.2.9}%
-\contentsline {subsection}{\numberline {2.10}Nhận dạng lại người: Swin Transformer ReID}{5}{subsection.2.10}%
+\contentsline {subsection}{\numberline {2.9}Theo dõi cục bộ: NvDCF}{6}{subsection.2.9}%
+\contentsline {subsection}{\numberline {2.10}Nhận dạng lại người: Swin Transformer ReID}{6}{subsection.2.10}%
 \contentsline {subsection}{\numberline {2.11}Nền tảng NVIDIA DeepStream}{6}{subsection.2.11}%
-\contentsline {subsection}{\numberline {2.12}Các nghiên cứu liên quan}{6}{subsection.2.12}%
-\contentsline {subsubsection}{\numberline {2.12.1}MMPTRACK Baseline}{6}{subsubsection.2.12.1}%
-\contentsline {subsubsection}{\numberline {2.12.2}Anchor-Guided Clustering}{6}{subsubsection.2.12.2}%
-\contentsline {subsubsection}{\numberline {2.12.3}MCBLT: Multi-Camera BEV Long-Term Tracking}{6}{subsubsection.2.12.3}%
+\contentsline {subsection}{\numberline {2.12}Các nghiên cứu liên quan}{7}{subsection.2.12}%
+\contentsline {subsubsection}{\numberline {2.12.1}MMPTRACK Baseline}{7}{subsubsection.2.12.1}%
+\contentsline {subsubsection}{\numberline {2.12.2}Anchor-Guided Clustering}{7}{subsubsection.2.12.2}%
+\contentsline {subsubsection}{\numberline {2.12.3}MCBLT: Multi-Camera BEV Long-Term Tracking}{7}{subsubsection.2.12.3}%
 \contentsline {subsubsection}{\numberline {2.12.4}TrackTacular: Early-Fusion BEV}{7}{subsubsection.2.12.4}%
 \contentsline {subsubsection}{\numberline {2.12.5}MCTR: End-to-End Transformer}{7}{subsubsection.2.12.5}%
 \contentsline {section}{\hbox to\@tempdima {\hfil }CHƯƠNG 3. PHƯƠNG PHÁP}{8}{subsubsection.2.12.5}%
@@ -42,7 +42,7 @@
 \contentsline {subsection}{\numberline {3.17}Phân tích mật độ người (Heatmap)}{13}{subsection.3.17}%
 \contentsline {subsubsection}{\numberline {3.17.1}Ba chỉ số phân tích}{13}{subsubsection.3.17.1}%
 \contentsline {subsubsection}{\numberline {3.17.2}Triển khai thực tế}{14}{subsubsection.3.17.2}%
-\contentsline {section}{\hbox to\@tempdima {\hfil }CHƯƠNG 4. THÍ NGHIỆM VÀ KẾT QUẢ}{17}{figure.caption.15}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }CHƯƠNG 4. THÍ NGHIỆM VÀ KẾT QUẢ}{17}{figure.caption.16}%
 \contentsline {subsection}{\numberline {4.18}Cấu hình thực nghiệm}{17}{subsection.4.18}%
 \contentsline {subsubsection}{\numberline {4.18.1}Phần cứng và phần mềm}{17}{subsubsection.4.18.1}%
 \contentsline {subsubsection}{\numberline {4.18.2}Bộ dữ liệu kiểm thử}{17}{subsubsection.4.18.2}%
@@ -50,17 +50,18 @@
 \contentsline {subsection}{\numberline {4.19}Kết quả định danh xuyên camera}{17}{subsection.4.19}%
 \contentsline {subsubsection}{\numberline {4.19.1}Global IDF1 theo môi trường}{17}{subsubsection.4.19.1}%
 \contentsline {subsubsection}{\numberline {4.19.2}Phân tích theo môi trường}{18}{subsubsection.4.19.2}%
-\contentsline {subsection}{\numberline {4.20}Thông lượng xử lý}{18}{subsection.4.20}%
-\contentsline {subsubsection}{\numberline {4.20.1}So sánh chế độ tracker}{18}{subsubsection.4.20.1}%
-\contentsline {subsubsection}{\numberline {4.20.2}Thông lượng pipeline production}{19}{subsubsection.4.20.2}%
-\contentsline {subsubsection}{\numberline {4.20.3}Sử dụng VRAM}{19}{subsubsection.4.20.3}%
-\contentsline {subsection}{\numberline {4.21}Hiệu quả của Buffered ID}{19}{subsection.4.21}%
-\contentsline {subsection}{\numberline {4.22}Độ chính xác heatmap}{20}{subsection.4.22}%
-\contentsline {subsection}{\numberline {4.23}Nghiên cứu tối ưu hóa thông lượng}{20}{subsection.4.23}%
-\contentsline {subsection}{\numberline {4.24}So sánh kiến trúc mô hình ReID}{21}{subsection.4.24}%
-\contentsline {section}{\hbox to\@tempdima {\hfil }KẾT LUẬN}{23}{section*.23}%
-\contentsline {section}{\hbox to\@tempdima {\hfil }Kết luận chung}{23}{section*.24}%
-\contentsline {section}{\hbox to\@tempdima {\hfil }Hạn chế}{23}{section*.25}%
-\contentsline {section}{\hbox to\@tempdima {\hfil }Hướng phát triển}{24}{section*.26}%
-\contentsline {section}{\hbox to\@tempdima {\hfil }TÀI LIỆU THAM KHẢO}{25}{section*.27}%
-\contentsline {section}{\hbox to\@tempdima {\hfil } PHỤ LỤC}{26}{section*.28}%
+\contentsline {subsection}{\numberline {4.20}Thông lượng xử lý}{21}{subsection.4.20}%
+\contentsline {subsubsection}{\numberline {4.20.1}So sánh chế độ tracker}{21}{subsubsection.4.20.1}%
+\contentsline {subsubsection}{\numberline {4.20.2}Thông lượng pipeline production}{21}{subsubsection.4.20.2}%
+\contentsline {subsubsection}{\numberline {4.20.3}Sử dụng VRAM}{21}{subsubsection.4.20.3}%
+\contentsline {subsection}{\numberline {4.21}Hiệu quả của Buffered ID}{21}{subsection.4.21}%
+\contentsline {subsubsection}{\numberline {4.21.1}Khảo sát kích thước cửa sổ}{22}{subsubsection.4.21.1}%
+\contentsline {subsection}{\numberline {4.22}Độ chính xác heatmap}{23}{subsection.4.22}%
+\contentsline {subsection}{\numberline {4.23}Nghiên cứu tối ưu hóa thông lượng}{23}{subsection.4.23}%
+\contentsline {subsection}{\numberline {4.24}So sánh kiến trúc mô hình ReID}{24}{subsection.4.24}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }KẾT LUẬN}{25}{section*.27}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }Kết luận chung}{25}{section*.28}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }Hạn chế}{25}{section*.29}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }Hướng phát triển}{26}{section*.30}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }TÀI LIỆU THAM KHẢO}{27}{section*.31}%
+\contentsline {section}{\hbox to\@tempdima {\hfil } PHỤ LỤC}{28}{section*.32}%
