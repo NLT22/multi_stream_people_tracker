@@ -1,7 +1,8 @@
 #Requires -Version 5.1
 param(
     [Parameter(Position=0)] [string]$Command = "",
-    [Parameter(Position=1)] [string]$Name = ""
+    [Parameter(Position=1)] [string]$Name = "",
+    [Parameter(Position=2)] [string]$NewName = ""
 )
 
 $ClaudeDir   = Join-Path $env:USERPROFILE ".claude"
@@ -72,6 +73,28 @@ function Use-Profile([string]$n) {
     Write-Host "Switched to profile '$n'. Restart Claude Code if it is currently running."
 }
 
+function Rename-Profile([string]$oldname, [string]$newname) {
+    Validate-Name $oldname
+    Validate-Name $newname
+    $src = Join-Path $AccountsDir "$oldname.json"
+    $dst = Join-Path $AccountsDir "$newname.json"
+    if (-not (Test-Path $src)) {
+        Write-Error "Profile '$oldname' not found. Run 'list' to see available profiles."
+        exit 1
+    }
+    if (Test-Path $dst) {
+        Write-Error "Profile '$newname' already exists. Choose a different name."
+        exit 1
+    }
+    Copy-Item $src $dst -Force
+    Remove-Item $src -Force
+    $activeFile = Join-Path $AccountsDir "_active"
+    if ((Test-Path $activeFile) -and ((Get-Content $activeFile -Raw).Trim() -eq $oldname)) {
+        Set-Content $activeFile $newname -Encoding utf8
+    }
+    Write-Host "Renamed profile '$oldname' to '$newname'."
+}
+
 function Login-Profile([string]$n) {
     Validate-Name $n
     Write-Host "Opening browser login for profile '$n'..."
@@ -94,14 +117,19 @@ switch ($Command.ToLower()) {
     "save"  { if (-not $Name) { Write-Error "Usage: .\switch-claude-account.ps1 save <name>"; exit 1 }; Save-Profile $Name }
     "list"  { List-Profiles }
     "use"   { if (-not $Name) { Write-Error "Usage: .\switch-claude-account.ps1 use <name>"; exit 1 }; Use-Profile $Name }
-    "login" { if (-not $Name) { Write-Error "Usage: .\switch-claude-account.ps1 login <name>"; exit 1 }; Login-Profile $Name }
+    "login"  { if (-not $Name) { Write-Error "Usage: .\switch-claude-account.ps1 login <name>"; exit 1 }; Login-Profile $Name }
+    "rename" {
+        if (-not $Name -or -not $NewName) { Write-Error "Usage: .\switch-claude-account.ps1 rename <oldname> <newname>"; exit 1 }
+        Rename-Profile $Name $NewName
+    }
     default {
-        Write-Host "Usage: .\switch-claude-account.ps1 {save|list|use|login} [name]"
+        Write-Host "Usage: .\switch-claude-account.ps1 {save|list|use|login|rename} [args]"
         Write-Host ""
-        Write-Host "  save <name>   Save current credentials as a named profile"
-        Write-Host "  list          List all saved profiles"
-        Write-Host "  use <name>    Switch to a saved profile"
-        Write-Host "  login <name>  Login via browser and save as a named profile"
+        Write-Host "  save <name>                Save current credentials as a named profile"
+        Write-Host "  list                       List all saved profiles"
+        Write-Host "  use <name>                 Switch to a saved profile"
+        Write-Host "  login <name>               Login via browser and save as a named profile"
+        Write-Host "  rename <oldname> <newname> Rename a saved profile"
         exit 1
     }
 }

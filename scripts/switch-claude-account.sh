@@ -85,6 +85,31 @@ use_profile() {
   echo "Switched to profile '$name'. Restart Claude Code if it is currently running."
 }
 
+rename_profile() {
+  local oldname="$1"
+  local newname="$2"
+  validate_name "$oldname"
+  validate_name "$newname"
+  local src="$ACCOUNTS_DIR/$oldname.json"
+  local dst="$ACCOUNTS_DIR/$newname.json"
+  if [[ ! -f "$src" ]]; then
+    echo "Error: Profile '$oldname' not found. Run 'list' to see available profiles." >&2
+    exit 1
+  fi
+  if [[ -f "$dst" ]]; then
+    echo "Error: Profile '$newname' already exists. Choose a different name." >&2
+    exit 1
+  fi
+  cp "$src" "$dst"
+  rm "$src"
+  local active=""
+  [[ -f "$ACCOUNTS_DIR/_active" ]] && active=$(cat "$ACCOUNTS_DIR/_active")
+  if [[ "$active" == "$oldname" ]]; then
+    echo "$newname" > "$ACCOUNTS_DIR/_active"
+  fi
+  echo "Renamed profile '$oldname' to '$newname'."
+}
+
 login_profile() {
   local name="$1"
   validate_name "$name"
@@ -121,13 +146,19 @@ case "$CMD" in
     [[ -z "$NAME" ]] && { echo "Usage: $0 login <name>" >&2; exit 1; }
     login_profile "$NAME"
     ;;
+  rename)
+    NEWNAME="${3:-}"
+    [[ -z "$NAME" || -z "$NEWNAME" ]] && { echo "Usage: $0 rename <oldname> <newname>" >&2; exit 1; }
+    rename_profile "$NAME" "$NEWNAME"
+    ;;
   *)
-    echo "Usage: $0 {save|list|use|login} [name]"
+    echo "Usage: $0 {save|list|use|login|rename} [args]"
     echo ""
-    echo "  save <name>   Save current credentials as a named profile"
-    echo "  list          List all saved profiles"
-    echo "  use <name>    Switch to a saved profile"
-    echo "  login <name>  Login via browser and save as a named profile"
+    echo "  save <name>              Save current credentials as a named profile"
+    echo "  list                     List all saved profiles"
+    echo "  use <name>               Switch to a saved profile"
+    echo "  login <name>             Login via browser and save as a named profile"
+    echo "  rename <oldname> <newname>  Rename a saved profile"
     exit 1
     ;;
 esac
