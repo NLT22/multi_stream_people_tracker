@@ -24,8 +24,8 @@ except Exception:
 
 validate_name() {
   local name="$1"
-  if [[ "$name" =~ [[:space:]/\\] ]]; then
-    echo "Error: Profile name must be a single word (no spaces or slashes)." >&2
+  if [[ "$name" =~ [[:space:]/\\] || "$name" == *"'"* ]]; then
+    echo "Error: Profile name must be a single word (no spaces, slashes, or quotes)." >&2
     exit 1
   fi
 }
@@ -88,6 +88,10 @@ use_profile() {
 login_profile() {
   local name="$1"
   validate_name "$name"
+  if ! command -v claude &>/dev/null; then
+    echo "Error: 'claude' not found on PATH. Is Claude Code installed?" >&2
+    exit 1
+  fi
   echo "Opening browser login for profile '$name'..."
   if ! claude auth login; then
     echo "Error: Login failed. Credentials unchanged." >&2
