@@ -75,7 +75,12 @@ function Use-Profile([string]$n) {
 function Login-Profile([string]$n) {
     Validate-Name $n
     Write-Host "Opening browser login for profile '$n'..."
-    & claude auth login
+    try {
+        & claude auth login
+    } catch [System.Management.Automation.CommandNotFoundException] {
+        Write-Error "Login failed: 'claude' not found on PATH. Is Claude Code installed?"
+        exit 1
+    }
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Login failed (exit code $LASTEXITCODE). Credentials unchanged."
         exit 1
