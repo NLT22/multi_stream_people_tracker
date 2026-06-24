@@ -85,6 +85,24 @@ use_profile() {
   echo "Switched to profile '$name'. Restart Claude Code if it is currently running."
 }
 
+whoami_profile() {
+  local activeFile="$ACCOUNTS_DIR/_active"
+  if [[ ! -f "$activeFile" ]]; then
+    echo "No active profile set. Use 'use <name>' or 'login <name>' to set one."
+    return
+  fi
+  local active
+  active=$(cat "$activeFile")
+  local profile="$ACCOUNTS_DIR/$active.json"
+  if [[ ! -f "$profile" ]]; then
+    echo "Active profile '$active' (profile file missing — credentials may have changed)."
+    return
+  fi
+  local sub
+  sub=$(get_subscription_type "$profile")
+  echo "Active profile: $active ($sub)"
+}
+
 rename_profile() {
   local oldname="$1"
   local newname="$2"
@@ -151,14 +169,18 @@ case "$CMD" in
     [[ -z "$NAME" || -z "$NEWNAME" ]] && { echo "Usage: $0 rename <oldname> <newname>" >&2; exit 1; }
     rename_profile "$NAME" "$NEWNAME"
     ;;
+  whoami)
+    whoami_profile
+    ;;
   *)
-    echo "Usage: $0 {save|list|use|login|rename} [args]"
+    echo "Usage: $0 {save|list|use|login|rename|whoami} [args]"
     echo ""
-    echo "  save <name>              Save current credentials as a named profile"
-    echo "  list                     List all saved profiles"
-    echo "  use <name>               Switch to a saved profile"
-    echo "  login <name>             Login via browser and save as a named profile"
-    echo "  rename <oldname> <newname>  Rename a saved profile"
+    echo "  save <name>                Save current credentials as a named profile"
+    echo "  list                       List all saved profiles"
+    echo "  use <name>                 Switch to a saved profile"
+    echo "  login <name>               Login via browser and save as a named profile"
+    echo "  rename <oldname> <newname> Rename a saved profile"
+    echo "  whoami                     Show the currently active profile"
     exit 1
     ;;
 esac

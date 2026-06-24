@@ -73,6 +73,22 @@ function Use-Profile([string]$n) {
     Write-Host "Switched to profile '$n'. Restart Claude Code if it is currently running."
 }
 
+function WhoAmI-Profile {
+    $activeFile = Join-Path $AccountsDir "_active"
+    if (-not (Test-Path $activeFile)) {
+        Write-Host "No active profile set. Use 'use <name>' or 'login <name>' to set one."
+        return
+    }
+    $active = (Get-Content $activeFile -Raw).Trim()
+    $profilePath = Join-Path $AccountsDir "$active.json"
+    if (-not (Test-Path $profilePath)) {
+        Write-Host "Active profile: $active (profile file missing - credentials may have changed)."
+        return
+    }
+    $sub = Get-SubscriptionType $profilePath
+    Write-Host "Active profile: $active ($sub)"
+}
+
 function Rename-Profile([string]$oldname, [string]$newname) {
     Validate-Name $oldname
     Validate-Name $newname
@@ -122,14 +138,16 @@ switch ($Command.ToLower()) {
         if (-not $Name -or -not $NewName) { Write-Error "Usage: .\switch-claude-account.ps1 rename <oldname> <newname>"; exit 1 }
         Rename-Profile $Name $NewName
     }
+    "whoami" { WhoAmI-Profile }
     default {
-        Write-Host "Usage: .\switch-claude-account.ps1 {save|list|use|login|rename} [args]"
+        Write-Host "Usage: .\switch-claude-account.ps1 {save|list|use|login|rename|whoami} [args]"
         Write-Host ""
         Write-Host "  save <name>                Save current credentials as a named profile"
         Write-Host "  list                       List all saved profiles"
         Write-Host "  use <name>                 Switch to a saved profile"
         Write-Host "  login <name>               Login via browser and save as a named profile"
         Write-Host "  rename <oldname> <newname> Rename a saved profile"
+        Write-Host "  whoami                     Show the currently active profile"
         exit 1
     }
 }
