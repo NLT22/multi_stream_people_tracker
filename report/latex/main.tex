@@ -1,0 +1,813 @@
+% This template is created by SV Bùi Vân Anh, và Thầy Nguyễn Tiến Hòa từ phòng Lab xử lý tín hiệu băng gốc hệ thống 5G. Chúng tôi rất vui nếu được nhắc đến trong lời cảm ơn.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass{article} % Tạo một bản báo cáo
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc} % Để sử dụng Tiếng Việt
+\usepackage[fontsize=13pt]{scrextend} % Set fontsize=13pt
+%\usepackage[paperheight=29.7cm,paperwidth=21cm,right=2cm,left=3cm,top=2cm,bottom=2.5cm]{geometry}% Chuẩn A4, căn lề phải, trái, trên, dưới.
+\usepackage[paperheight=29.7cm,paperwidth=21cm,right=2cm,left=3cm,top=2cm,bottom=2.5cm,twoside]{geometry}% Chuẩn A4, căn lề phải, trái, trên, dưới.
+\usepackage{mathptmx} % Time New Roman
+\usepackage{amsmath}
+\usepackage{graphicx} % Thư viện chèn ảnh
+\usepackage{float} % Set vị trí chèn ảnh
+\usepackage{tikz} % Thư viện tạo khung bìa
+\usetikzlibrary{calc} % Thư viện tikz
+\usepackage{indentfirst} % Thư viện thụt đầu dòng
+\usepackage{booktabs} % To thicken table lines
+\renewcommand{\baselinestretch}{1.2} % Giãn dòng 1.2
+\setlength{\parskip}{6pt} % Spacing after
+\setlength{\parindent}{1cm} % Set khoảng cách thụt đầu dòng mỗi đoạn
+\usepackage{titlesec} % Thư viện để set up các kiểu chữ
+\setcounter{secnumdepth}{4} % 4 Heading
+\titlespacing*{\section}{0pt}{0pt}{30pt} % Heading 1
+\titleformat*{\section}{\fontsize{16pt}{0pt}\selectfont \bfseries \centering}
+
+\titlespacing*{\subsection}{0pt}{10pt}{0pt} % Heading 2
+\titleformat*{\subsection}{\fontsize{14pt}{0pt}\selectfont \bfseries}
+
+\titlespacing*{\subsubsection}{0pt}{10pt}{0pt} % Heading 3
+\titleformat*{\subsubsection}{\fontsize{13pt}{0pt}\selectfont \bfseries \itshape}
+
+\titlespacing*{\paragraph}{0pt}{10pt}{0pt} % Heading 4
+\titleformat*{\paragraph}{\fontsize{13pt}{0pt}\selectfont \itshape}
+
+\renewcommand{\figurename}{\fontsize{12pt}{0pt}\selectfont \bfseries Hình}
+\renewcommand{\thefigure}{\thesection.\arabic{figure}}
+\usepackage[font=bf]{caption}
+\captionsetup[figure]{labelsep=space}
+
+\renewcommand{\tablename}{\fontsize{12pt}{0pt}\selectfont \bfseries Bảng}
+\renewcommand{\thetable}{\thesection.\arabic{table}}
+\captionsetup[table]{labelsep=space}
+
+\usepackage{tabularx}
+\newcolumntype{s}{>{\hsize=.3\hsize}X}
+\newcolumntype{y}{>{\hsize=.4\hsize}X}
+\newcolumntype{d}{>{\hsize=.1\hsize}X}
+\newcolumntype{a}{>{\hsize=1.1\hsize}X}
+\newcolumntype{g}{>{\hsize=5\hsize}X}
+\renewcommand{\tabularxcolumn}[1]{>{\small}m{#1}}
+
+\renewcommand{\theequation}{\thesection.\arabic{equation}} % Thay đổi đánh số phương trình mặc định
+\newtheorem{theorem}{Định lý}[section]
+\newtheorem{defn}[theorem]{Định nghĩa}
+\newtheorem{corollary}[theorem]{Hệ quả}
+\newtheorem{lemma}[theorem]{Bổ đề}
+
+\usepackage{lipsum} % Thư viện tạo chữ linh tinh.
+\renewcommand{\contentsname}{MỤC LỤC}
+\renewcommand{\listfigurename}{DANH MỤC HÌNH VẼ}
+\renewcommand{\listtablename}{DANH MỤC BẢNG BIỂU}
+\renewcommand{\refname}{TÀI LIỆU THAM KHẢO}
+
+\usepackage[unicode]{hyperref}
+\usepackage{colortbl}
+\definecolor{LightCyan}{rgb}{0.88,1,1}
+\usepackage{forloop}
+\newcounter{loopcntr}
+\newcommand{\rpt}[2][1]{\forloop{loopcntr}{0}{\value{loopcntr}<#1}{#2}}
+
+\begin{document}
+
+\graphicspath{{Images/}}
+
+\input{Bia} % Bìa dự án.
+
+\input{LoiNoiDau} % Lời nói đầu.
+
+ % Tạo mục lục tự động
+\addtocontents{toc}{\protect\thispagestyle{empty}}
+\tableofcontents
+\thispagestyle{empty}
+\cleardoublepage
+
+\input{Abbreviations} % Danh mục ký hiệu và chữ viết tắt
+
+%Tạo danh mục hình vẽ.
+{\let\oldnumberline\numberline
+\renewcommand{\numberline}{Hình~\oldnumberline}
+\listoffigures}
+\phantomsection\addcontentsline{toc}{section}{\numberline {} DANH MỤC HÌNH VẼ}
+\newpage
+
+ %Tạo danh mục bảng biểu.
+{\let\oldnumberline\numberline
+\renewcommand{\numberline}{Bảng~\oldnumberline}
+\listoftables}
+\phantomsection\addcontentsline{toc}{section}{\numberline {} DANH MỤC BẢNG BIỂU}
+\newpage
+
+\input{Abstract} % Tóm tắt dự án
+
+\pagenumbering{arabic} % Đánh số thứ tự 1,2,3...
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%               CHƯƠNG 1: GIỚI THIỆU
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{CHƯƠNG 1.  GIỚI THIỆU}
+\addcontentsline{toc}{section}{\numberline{}CHƯƠNG 1.  GIỚI THIỆU}
+\setcounter{section}{1}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+
+\subsection{Đặt vấn đề}
+
+Sự bùng nổ của các hệ thống camera quan sát trong không gian thương mại và công cộng --- từ cửa hàng bán lẻ, quán café, khu văn phòng đến khu công nghiệp và sảnh khách sạn --- tạo ra lượng dữ liệu hình ảnh khổng lồ nhưng phần lớn chỉ được dùng để xem lại sau sự cố, thay vì khai thác thời gian thực cho mục đích quản lý không gian.
+
+Một trong những bài toán có giá trị thực tiễn cao nhất là \textit{theo dõi người đa camera} (Multi-Camera Tracking --- MCT): duy trì định danh nhất quán cho từng cá nhân khi họ di chuyển qua nhiều trường nhìn của các camera khác nhau. Khả năng này là tiền đề để tính các chỉ số quản lý như: số lượng khách hàng duy nhất đi qua một khu vực (Footfall), tỷ lệ thời gian khu vực bị chiếm dụng (Occupancy), thời gian khách hàng dừng lại tại điểm trưng bày (Dwell-time), hoặc cảnh báo khi mật độ người vượt ngưỡng an toàn.
+
+Thách thức kỹ thuật chính của bài toán MCT nằm ở hai mặt đối lập nhau: (1) \textit{độ chính xác định danh xuyên camera} --- người cùng cá nhân phải được nhận ra qua sự thay đổi góc nhìn, ánh sáng, trang phục và thời gian vắng mặt; (2) \textit{tốc độ xử lý thời gian thực} --- hệ thống phải đủ nhanh để xử lý đồng thời nhiều camera mà không tích lũy độ trễ. Trong bối cảnh triển khai thực tế với ngân sách phần cứng hạn chế (GPU phổ thông), hai yêu cầu này thường xung đột nhau.
+
+Phần lớn các nghiên cứu học thuật giải quyết bài toán này bằng cách xử lý offline (không phải thời gian thực) hoặc sử dụng cụm máy chủ GPU cao cấp, khiến chúng khó triển khai trong môi trường thương mại thực tế. Dự án này nhắm đến khoảng trống đó: xây dựng một hệ thống MCT đáp ứng cả hai yêu cầu trên một GPU phổ thông.
+
+\subsection{Mục tiêu đề tài}
+
+Dự án đặt ra hai mục tiêu kỹ thuật cụ thể, đo lường được:
+
+\begin{enumerate}
+    \item \textbf{Tốc độ xử lý:} Hệ thống phải xử lý được ít nhất 20 camera video đồng thời ở tốc độ tối thiểu 10 khung hình/giây/camera (tổng cộng $\geq 200$ khung hình/giây) trên một GPU duy nhất.
+
+    \item \textbf{Độ chính xác định danh:} Hệ thống phải đạt Global IDF1 $\geq 0{,}8$ trên tập kiểm thử của bộ dữ liệu MMPTrack \cite{Han2022}, với người chưa xuất hiện trong quá trình huấn luyện (\textit{unseen subjects}).
+\end{enumerate}
+
+Bên cạnh đó, dự án cũng hướng tới mục tiêu thứ cấp là cung cấp bộ công cụ phân tích không gian bổ sung (heatmap Occupancy, Footfall, Dwell-time) phục vụ phân tích sử dụng không gian trong nhiều ngữ cảnh khác nhau: quản lý an toàn, tối ưu bố cục, giám sát lưu lượng người.
+
+\subsection{Đóng góp chính}
+
+Dự án có bốn đóng góp kỹ thuật chính:
+
+\begin{enumerate}
+    \item \textbf{Pipeline thời gian thực trên DeepStream:} Hệ thống hai tầng --- per-camera tracking và cross-camera identity fusion --- chạy trên NVIDIA DeepStream 9.0, đạt $\sim$10{,}6 FPS/camera ở 20 camera đồng thời (preset reid0).
+
+    \item \textbf{Quy trình làm sạch nhãn:} Hai công cụ làm sạch nhãn độc lập cho YOLO (loại bỏ 17,6\% nhãn phantom qua bộ kiểm tra COCO YOLO11x) và cho ReID (hợp nhất 196 nhãn scene-local về 56 identity sạch), giúp mô hình ReID tổng quát hóa tốt hơn đáng kể sang người chưa thấy.
+
+    \item \textbf{Buffered ID dựa trên anchor-guided clustering:} Triển khai thuật toán anchor-guided từ \cite{Huang2023} thành chế độ cửa sổ trượt 30 giây trong pipeline thời gian thực, đạt 97--98\% chất lượng của xử lý offline.
+
+    \item \textbf{Heatmap phân tích mật độ:} Ba loại bản đồ mật độ (Occupancy, Footfall, Dwell-time) chuẩn hóa theo Định luật Little \cite{Little1961}, tích hợp trực tiếp vào pipeline và đạt hệ số tương quan CC = 0,97--0,99 so với nhãn thực.
+\end{enumerate}
+
+\subsection{Cấu trúc báo cáo}
+
+Báo cáo được tổ chức thành bốn chương:
+
+\begin{itemize}
+    \item \textbf{Chương 2 --- Cơ sở lý thuyết:} Định nghĩa bài toán MTMC, các độ đo đánh giá, bộ dữ liệu MMPTrack, các thành phần mô hình (YOLO11n, NvDCF, Swin ReID, DeepStream), và tổng quan các công trình liên quan.
+
+    \item \textbf{Chương 3 --- Phương pháp:} Mô tả chi tiết kiến trúc hệ thống, cơ chế định danh xuyên camera, chế độ Buffered ID, quy trình làm sạch nhãn, và phân tích mật độ người.
+
+    \item \textbf{Chương 4 --- Thí nghiệm và kết quả:} Thiết lập thực nghiệm, kết quả theo dõi theo từng môi trường, phân tích throughput, độ chính xác heatmap, và so sánh với các phương pháp liên quan.
+
+    \item \textbf{Kết luận:} Tóm tắt kết quả, nhận xét hạn chế, và đề xuất hướng phát triển.
+\end{itemize}
+
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%               CHƯƠNG 2: CƠ SỞ LÝ THUYẾT
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{CHƯƠNG 2.  CƠ SỞ LÝ THUYẾT}
+\addcontentsline{toc}{section}{\numberline{}CHƯƠNG 2.  CƠ SỞ LÝ THUYẾT}
+\setcounter{section}{2}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+
+\subsection{Bài toán theo dõi người đa camera}
+
+\subsubsection{Định nghĩa bài toán}
+
+Bài toán \textit{Multi-Target Multi-Camera Tracking} (MTMC) yêu cầu hệ thống đồng thời xử lý $N$ luồng video từ $N$ camera, phát hiện tất cả người xuất hiện trong mỗi khung hình, gán cho mỗi người một định danh cục bộ ổn định trong từng camera (Single-Camera Tracking --- SCT), và sau đó liên kết các định danh cục bộ từ các camera khác nhau thành \textit{Global ID} duy nhất và ổn định cho từng cá nhân.
+
+Khác với bài toán SCT, MTMC phải giải quyết thêm các thách thức: (1) cùng một người có thể có ngoại hình rất khác nhau từ các góc camera khác nhau; (2) người có thể biến mất khỏi tất cả camera trong một khoảng thời gian dài; (3) hai người khác nhau có thể có ngoại hình tương tự (đặc biệt trong môi trường có đồng phục); (4) camera có thể có vùng chồng lắp hoặc không có vùng chồng lắp.
+
+\subsubsection{Phân loại phương pháp tiếp cận}
+
+Các phương pháp MTMC được phân thành hai nhóm chính:
+
+\textbf{Late-fusion (hai giai đoạn):} Giai đoạn 1 thực hiện SCT độc lập trên mỗi camera để tạo ra các tracklet cục bộ. Giai đoạn 2 liên kết các tracklet từ nhiều camera dựa trên đặc trưng ngoại hình (ReID), vị trí không gian, và ràng buộc thời gian. Đây là hướng tiếp cận phổ biến nhất và phù hợp với yêu cầu thời gian thực vì hai giai đoạn có thể chạy song song.
+
+\textbf{Early-fusion (một giai đoạn):} Các camera được xử lý đồng thời ngay từ đầu, thường thông qua không gian BEV (Bird's-Eye View) chung. Phương pháp này có thể loại bỏ ambiguity sớm hơn nhưng đòi hỏi hiệu chỉnh camera chính xác và chi phí tính toán cao hơn.
+
+Dự án này thuộc nhóm late-fusion, phù hợp với pipeline streaming của DeepStream.
+
+\subsection{Các độ đo đánh giá}
+
+\subsubsection{Độ đo đơn camera: MOTA, MOTP và IDF1}
+
+\textbf{MOTA} (Multiple Object Tracking Accuracy) đo lường tỷ lệ lỗi tổng hợp của tracker:
+\begin{equation}
+    \text{MOTA} = 1 - \frac{\text{FN} + \text{FP} + \text{IDSW}}{\text{GT}}
+\end{equation}
+trong đó FN là số lượng bỏ sót, FP là số phát hiện sai, IDSW là số lần chuyển đổi định danh, và GT là tổng số đối tượng thực.
+
+\textbf{MOTP} (Multiple Object Tracking Precision) đo độ chính xác vị trí của các bounding box:
+\begin{equation}
+    \text{MOTP} = \frac{\sum_{t,i} d_{t,i}}{\sum_t c_t}
+\end{equation}
+trong đó $d_{t,i}$ là khoảng cách IoU giữa phát hiện và nhãn thực tại khung $t$, $c_t$ là số lượng ghép cặp đúng.
+
+\textbf{IDF1} (Identity F1) là độ đo ưu tiên tính nhất quán định danh:
+\begin{equation}
+    \text{IDF1} = \frac{2 \cdot \text{IDTP}}{2 \cdot \text{IDTP} + \text{IDFP} + \text{IDFN}}
+\end{equation}
+trong đó IDTP là số bounding box được phát hiện đúng với đúng định danh, IDFP và IDFN là số bounding box sai định danh hoặc bỏ sót.
+
+\subsubsection{Độ đo xuyên camera: Global IDF1}
+
+Trong bài toán MTMC, \textbf{Global IDF1} được tính theo cùng công thức IDF1 nhưng áp dụng trên toàn bộ video từ tất cả các camera, với Global ID thay cho local track ID. Đây là độ đo chính của dự án vì nó trực tiếp phản ánh khả năng duy trì định danh nhất quán xuyên camera.
+
+\subsection{Bộ dữ liệu MMPTrack}
+
+MMPTrack \cite{Han2022} là bộ dữ liệu MTMC quy mô lớn được thu thập trong môi trường mô phỏng, bao gồm 5 môi trường: quán cafe (\textit{cafe}), sảnh lễ tân (\textit{lobby}), văn phòng (\textit{office}), khu công nghiệp (\textit{industry}) và cửa hàng bán lẻ (\textit{retail}). Đặc điểm bộ dữ liệu được trình bày trong Bảng~\ref{tab:mmp}.
+
+\begin{table}[H]
+    \centering
+    \caption[Đặc điểm bộ dữ liệu MMPTrack]{\bfseries\fontsize{12pt}{0pt}\selectfont Đặc điểm bộ dữ liệu MMPTrack \cite{Han2022}}
+    \begin{tabular}{|l|c|}
+    \hline
+    \bfseries Đặc điểm & \bfseries Giá trị \\
+    \hline
+    Số môi trường & 5 \\
+    Số camera & 23 \\
+    Số đối tượng người & 28 \\
+    Tổng số khung hình & $\sim$2{,}97 triệu \\
+    Tổng thời lượng & 576 phút \\
+    Tốc độ khung hình & 15 FPS \\
+    Độ phân giải & 640$\times$360 \\
+    \hline
+    \end{tabular}
+    \label{tab:mmp}
+\end{table}
+
+Bộ dữ liệu được chia thành tập train và tập validation. Tập validation sử dụng trong dự án này là \textit{session 64pm} của MMPTrack, gồm 24 cảnh kiểm thử với người chưa xuất hiện trong tập train.
+
+Một đặc điểm quan trọng của MMPTrack là nhãn \texttt{person\_id} được đánh theo từng cảnh (\textit{scene-local}), không theo từng cá nhân thực. Điều này có nghĩa là cùng một người có thể có các \texttt{person\_id} khác nhau ở các cảnh khác nhau, gây ra nhiễu cho quá trình huấn luyện mô hình ReID --- vấn đề này được giải quyết chi tiết trong Phần~\ref{sec:label_cleaning}.
+
+Phương pháp baseline được công bố trong bài báo gốc (DMCT-Ext-TD) đạt IDF1 = 74{,}1 trên tập validation \cite{Han2022}.
+
+\subsection{Phát hiện người: YOLO11n}
+
+YOLO (\textit{You Only Look Once}) là họ mô hình phát hiện đối tượng một lần duyệt (\textit{single-pass}) nổi tiếng về tốc độ. Dự án sử dụng \textbf{YOLO11n} --- phiên bản nano của thế hệ YOLO thứ 11 do Ultralytics phát triển --- làm bộ phát hiện chính. Phiên bản nano được chọn vì nó cân bằng tốt giữa tốc độ và độ chính xác khi chạy đồng thời nhiều camera.
+
+Mô hình được fine-tune trên tập dữ liệu MMPTrack (bao gồm cả phần mở rộng 10 phút) sau khi đã áp dụng quy trình làm sạch nhãn (xem Phần~\ref{sec:label_cleaning}). Sau khi fine-tune trên tập nhãn sạch, mô hình đạt mAP50 = 0{,}97 trên tập kiểm thử.
+
+\subsection{Theo dõi cục bộ: NvDCF}
+
+\textbf{NvDCF} (NVIDIA Discriminative Correlation Filter) là bộ theo dõi đa đối tượng tích hợp sẵn trong NVIDIA DeepStream SDK. Bộ theo dõi này dựa trên bộ lọc tương quan phân biệt (Discriminative Correlation Filter), cho phép theo dõi nhiều đối tượng đồng thời trên GPU \cite{NVIDIA2022}.
+
+NvDCF hỗ trợ hai chế độ: Legacy DCF (\texttt{visualTrackerType:1}) và VPI DCF (\texttt{visualTrackerType:2}). Qua thực nghiệm trong giai đoạn lựa chọn tracker (chi tiết ở Phần~\ref{sec:throughput}), Legacy DCF cho thông lượng $\sim$18 FPS/camera ở 20 camera (khi đo chưa bao gồm SGIE), trong khi VPI DCF chỉ đạt $\sim$5 FPS/camera do chi phí khởi tạo cao hơn. Dự án sử dụng Legacy DCF. Pipeline sản xuất đầy đủ đạt $\sim$10{,}6 FPS/camera (chi tiết ở Phần~\ref{sec:throughput}).
+
+NvDCF cũng hỗ trợ xuất tensor ReID per-detection, cho phép pipeline trích xuất đặc trưng ngoại hình từ bộ theo dõi nội tại. Tuy nhiên, dự án đã tách rời chức năng ReID ra một mạng SGIE độc lập để kiểm soát chất lượng đặc trưng tốt hơn.
+
+\subsection{Nhận dạng lại người: Swin Transformer ReID}
+
+Nhận dạng lại người (\textit{Person Re-Identification} --- ReID) là bài toán truy vấn: cho một ảnh cắt (\textit{crop}) của một người ở camera A, tìm bounding box tương ứng của cùng người đó trong camera B. Mạng ReID nhận vào ảnh crop và xuất ra một vector đặc trưng (\textit{embedding}) có độ tương đồng cosine cao với người giống và thấp với người khác.
+
+Dự án sử dụng kiến trúc Swin Transformer với backbone Swin-Tiny. Đầu vào ảnh được chuẩn hóa về kích thước 256$\times$128 pixel. Lớp đầu ra sử dụng chuẩn hóa BN (\textit{BNNeck}) để tạo embedding 256 chiều.
+
+Mô hình được fine-tune trên tập MMPTrack với 56 identity sạch (sau khi làm sạch nhãn). Sau khi làm sạch, khoảng cách val gap --- độ chênh lệch giữa accuracy train và val --- cải thiện từ 0{,}52 lên 0{,}87, cho thấy mô hình tổng quát hóa tốt hơn đáng kể.
+
+\subsection{Nền tảng NVIDIA DeepStream}
+
+\textbf{NVIDIA DeepStream SDK} là framework xây dựng trên GStreamer và CUDA, chuyên dụng cho các ứng dụng phân tích video AI. DeepStream cung cấp các plugin GStreamer tích hợp sẵn như: \texttt{nvurisrcbin} (đọc video từ file/RTSP), \texttt{nvstreammux} (ghép nhiều luồng video), \texttt{nvinfer} (suy luận TensorRT), \texttt{nvtracker} (NvDCF tracker), \texttt{nvmultistreamtiler} (ghép khung hình), và \texttt{nvosdbin} (vẽ overlay).
+
+DeepStream xử lý toàn bộ pipeline trên GPU, tránh bottleneck khi copy dữ liệu giữa CPU và GPU. Dự án sử dụng DeepStream phiên bản 9.0 trên Ubuntu 24.04.
+
+Plugin \textbf{gst-nvdsanalytics} của DeepStream cung cấp thêm ba tính năng phân tích không gian: đếm đối tượng trong vùng ROI, đếm đối tượng vượt qua một vạch, và cảnh báo khi số đối tượng trong ROI vượt ngưỡng. Ba tính năng này được dùng cho heatmap Occupancy và Footfall.
+
+\subsection{Các công trình liên quan}
+
+\subsubsection{MMPTRACK Baseline}
+
+Bài báo gốc giới thiệu bộ dữ liệu MMPTrack \cite{Han2022} cũng cung cấp baseline tracking là phương pháp DMCT-Ext-TD, đạt Global IDF1 = 74{,}1 trên tập validation. Phương pháp này sử dụng late-fusion với detector và tracker per-camera, kết hợp với graph-based re-ID.
+
+\subsubsection{Anchor-Guided Clustering}
+
+Huang et al. \cite{Huang2023} đề xuất hệ thống MTMC đạt IDF1 = 95{,}36\% trong cuộc thi AI City Challenge 2023 (AIC23 Track 1). Điểm then chốt của hệ thống là phương pháp \textit{anchor-guided clustering}: sau khi tạo tracklet từ SCT, hệ thống tự động xác định các tracklet ``anchor'' (có đặc trưng ổn định) và dùng chúng làm trung tâm cụm để gán Global ID cho các tracklet còn lại. Dự án này triển khai lại thuật toán anchor-guided ở chế độ cửa sổ trượt ~20 giây để đáp ứng yêu cầu thời gian thực.
+
+\subsubsection{MCBLT: Multi-Camera BEV Long-Term Tracking}
+
+Wang et al. \cite{Wang2025} (NVIDIA) đề xuất MCBLT --- một hệ thống kết hợp tổng hợp đặc trưng BEV từ nhiều camera với mạng GNN phân cấp để tạo Global ID. MCBLT đạt HOTA = 81{,}22 trên bộ dữ liệu AI City Challenge 2024 và IDF1 = 95{,}6 trên WildTrack. Hệ thống này thuộc nhóm late-fusion nhưng sử dụng BEV làm không gian chung, đòi hỏi hiệu chỉnh camera chính xác.
+
+\subsubsection{TrackTacular: Early-Fusion BEV}
+
+Teepe et al. \cite{Teepe2024} (TU Munich) đề xuất TrackTacular --- hệ thống early-fusion chiếu đặc trưng từ mỗi camera lên không gian BEV chung, sau đó theo dõi trực tiếp trong BEV. TrackTacular đạt IDF1 = 95{,}3 trên WildTrack. Tuy nhiên, khi đánh giá thực tế trong dự án này trên 20 camera, TrackTacular chỉ đạt $\sim$4{,}3 FPS --- không đáp ứng yêu cầu tối thiểu 10 FPS --- và do đó không được chọn.
+
+\subsubsection{MCTR: End-to-End Transformer}
+
+Niculescu-Mizil et al. \cite{Niculescu2026} (NEC Labs) đề xuất MCTR --- phương pháp end-to-end dựa trên kiến trúc DETR, xử lý đồng thời tất cả camera qua cơ chế cross-attention. MCTR đại diện cho hướng nghiên cứu mới đầy triển vọng nhưng hiện tại còn đang trong giai đoạn nghiên cứu học thuật và chưa phù hợp để triển khai thời gian thực trên phần cứng phổ thông.
+
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%               CHƯƠNG 3: PHƯƠNG PHÁP
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{CHƯƠNG 3.  PHƯƠNG PHÁP}
+\addcontentsline{toc}{section}{\numberline{}CHƯƠNG 3.  PHƯƠNG PHÁP}
+\setcounter{section}{3}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+
+\subsection{Kiến trúc tổng thể hệ thống}
+
+Hệ thống được xây dựng theo kiến trúc \textit{hai tầng} trên nền tảng NVIDIA DeepStream 9.0.
+
+\textbf{Tầng 1 --- Per-camera tracking:} Mỗi luồng video từ camera được xử lý để phát hiện người (YOLO11n), theo dõi cục bộ và gán local track ID (NvDCF), và trích xuất embedding ngoại hình per-detection (Swin-Tiny SGIE). Đây là giai đoạn tính toán nặng nhất nhưng hoàn toàn chạy trên GPU và được DeepStream tối ưu hóa.
+
+\textbf{Tầng 2 --- Cross-camera identity fusion:} Một GStreamer probe sau bộ ghép hình (\texttt{nvmultistreamtiler}) thu thập embedding từ tất cả camera trong mỗi batch, ghép cặp tracklet xuyên camera qua cosine similarity kết hợp ràng buộc hình học, và gán Global ID ổn định cho mỗi tracklet.
+
+Luồng xử lý GStreamer của hệ thống:
+
+\begin{center}
+\texttt{[nvurisrcbin $\times$ N]} $\to$ \texttt{[nvstreammux]} $\to$ \texttt{[nvinfer/YOLO]}\\
+$\to$ \texttt{[nvtracker/NvDCF]} $\to$ \texttt{[SourceIdCollectorProbe]}\\
+$\to$ \texttt{[nvinfer/Swin SGIE]} $\to$ \texttt{[nvmultistreamtiler]}\\
+$\to$ \texttt{[CrossCameraGalleryProbe]} $\to$ \texttt{[nvosdbin]} $\to$ \texttt{sink}
+\end{center}
+
+Một điểm kỹ thuật quan trọng: probe thu thập \texttt{source\_id} (\textbf{SourceIdCollectorProbe}) phải được gắn \textit{trước} \texttt{nvmultistreamtiler} vì sau khi ghép hình, thông tin \texttt{source\_id} không còn chính xác. Hình~\ref{fig:multicam_tracking} minh họa đầu ra điển hình của pipeline: bounding box màu riêng, nhãn Global ID nhất quán xuyên camera và vệt quỹ đạo di chuyển.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{buffered_camera}
+    \caption{Theo dõi đa camera --- office, 4 camera, Buffered ID.}
+    \label{fig:multicam_tracking}
+\end{figure}
+
+\subsection{Tầng 1: Phát hiện và theo dõi per-camera}
+
+\subsubsection{Phát hiện người}
+
+YOLO11n được fine-tune trên bộ dữ liệu MMPTrack (tập train, session 63am và 64am). Mô hình được xuất sang định dạng ONNX và biên dịch sang TensorRT engine FP16 bằng công cụ của DeepStream. Engine được tự động tạo lần đầu chạy và lưu lại cho các lần sau.
+
+Ngưỡng phát hiện (\texttt{nms-iou}) và ngưỡng tin tưởng được tinh chỉnh theo môi trường. Với môi trường retail, giá trị \texttt{nms-iou = 0,70} giúp tăng recall trong điều kiện che khuất cao.
+
+\subsubsection{Theo dõi cục bộ}
+
+NvDCF chạy ở chế độ Legacy DCF (\texttt{visualTrackerType:1}). Mỗi người được theo dõi độc lập trong từng camera với một local track ID. NvDCF được cấu hình để bật xuất tensor ReID nội tại, mặc dù dự án này sử dụng SGIE bên ngoài thay thế nhằm kiểm soát chất lượng embedding tốt hơn.
+
+\subsubsection{Trích xuất embedding}
+
+Swin-Tiny ReID được triển khai như một mạng SGIE (Secondary GPU Inference Engine) trong DeepStream, xử lý từng bounding box detected. SGIE chạy với tần suất (\texttt{interval}) có thể điều chỉnh --- tức là không nhất thiết phải chạy trên mỗi khung hình --- để giảm tải GPU. Mỗi lần chạy, SGIE cắt ảnh crop từ bounding box, chuẩn hóa về 256$\times$128, và xuất embedding 256 chiều gắn vào metadata của DeepStream.
+
+\subsection{Tầng 2: Định danh xuyên camera}
+
+\subsubsection{CrossCameraGalleryProbe}
+
+\textbf{CrossCameraGalleryProbe} là GStreamer probe tùy chỉnh gắn sau \texttt{nvmultistreamtiler}. Trong mỗi batch, probe thực hiện ba thao tác:
+
+\begin{enumerate}
+    \item \textbf{Thu thập:} Đọc embedding và bounding box của tất cả detection từ tất cả camera trong batch.
+    \item \textbf{Ghép cặp:} So khớp mỗi tracklet đang hoạt động với gallery Global ID hiện có. Điểm tương đồng kết hợp:
+    \begin{equation}\label{eq:score}
+        \text{score}(i, j) = (1 - w_g) \cdot \text{cosine}(e_i, e_j) + w_g \cdot \text{geo}(p_i, p_j)
+    \end{equation}
+    trong đó $e_i, e_j$ là embedding của tracklet $i$ và gallery entry $j$, $\text{geo}(\cdot)$ là điểm tương đồng hình học dựa trên vị trí chân trên mặt phẳng sàn, $w_g$ là trọng số hình học (được chọn là 0{,}25).
+    \item \textbf{Gán và cập nhật:} Gán Global ID cho tracklet theo thuật toán Hungarian, cập nhật gallery với embedding mới.
+\end{enumerate}
+
+Thuật toán ghép cặp sử dụng ngưỡng \texttt{threshold = 0{,}62} và khoảng cách tối thiểu \texttt{margin = 0{,}02} để tránh ghép cặp mơ hồ.
+
+\subsubsection{Ràng buộc hình học}
+
+Khi có dữ liệu hiệu chỉnh camera (ma trận homography từ MMPTrack), hệ thống chiếu điểm chân (\textit{foot point}) của mỗi bounding box lên mặt phẳng sàn BEV. Khoảng cách Euclid trong không gian sàn được dùng làm ràng buộc bổ sung: hai tracklet từ hai camera chỉ được ghép cặp nếu vị trí trên mặt sàn tương thích.
+
+Ràng buộc hình học chỉ được kích hoạt sau khi có đủ số lượng quan sát tối thiểu (\texttt{geo\_min\_overlaps = 8}) để tránh sai số trong giai đoạn đầu.
+
+\subsubsection{Live ID và Buffered ID}
+\label{sec:buffered}
+
+Hệ thống hỗ trợ hai chế độ định danh:
+
+\textbf{Live ID:} Gán Global ID tức thời trong mỗi frame. Ưu điểm: không có độ trễ. Nhược điểm: quyết định sớm có thể bị sai khi người mới vào camera chưa có đủ embedding.
+
+\textbf{Buffered ID (Anchor-Guided):} Tham khảo từ \cite{Huang2023}, chế độ này tích lũy embedding trong cửa sổ trượt 200 khung (~20 giây ở tốc độ ~10{,}6 FPS/cam, có thể cấu hình qua \texttt{--live-buffered-window}). Sau mỗi cửa sổ, thuật toán anchor-guided clustering xác định các tracklet anchor (embedding ổn định, xuất hiện nhiều camera) và dùng chúng làm trung tâm để gộp các tracklet có liên quan vào cùng Global ID. Chế độ này giới thiệu độ trễ ~20 giây nhưng đạt 97--98\% chất lượng của xử lý offline.
+
+Kết quả Buffered ID được phản hồi lại OSD live theo thời gian thực: module \texttt{live\_buffered} chạy song song, liên tục cập nhật bảng ánh xạ \texttt{(camera, track) $\to$ Global ID}; pipeline đọc bảng này để vẽ Buffered ID ngay trên video live thay cho Live ID. Track mới chưa kịp gom cụm tạm thời hiển thị Live ID rồi tự hội tụ sau một cửa sổ. Nhờ đó video demo không còn hiện tượng phình ID (ví dụ: office chỉ hiển thị 9 ID ổn định thay vì $\sim$98 ID phình do Live ID). Hình~\ref{fig:live_vs_buffered} so sánh trực quan hai chế độ trên cùng 4 camera, và Hình~\ref{fig:bev_tracking} minh họa chế độ BEV với vệt quỹ đạo từng người trên mặt phẳng sàn.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{live_id}
+        \small (a) Live ID --- phình định danh (GID:3, GID:6, GID:9\ldots)
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{buffered_camera2}
+        \small (b) Buffered ID --- 9 ID ổn định, không còn nhãn `?'
+    \end{minipage}
+    \caption{So sánh Live ID và Buffered ID --- office, 4 camera.}
+    \label{fig:live_vs_buffered}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\textwidth]{buffered_bev}
+    \caption{Góc nhìn BEV (Bird's-Eye View) --- tracking đa camera, môi trường office.}
+    \label{fig:bev_tracking}
+\end{figure}
+
+\subsection{Làm sạch nhãn huấn luyện}
+\label{sec:label_cleaning}
+
+\subsubsection{Làm sạch nhãn YOLO}
+
+Tập dữ liệu YOLO gốc của MMPTrack chứa một số nhãn không chính xác, gồm: người bị che khuất hoàn toàn sau kệ hàng nhưng vẫn được đánh nhãn (``phantom annotations''), người ở rất xa không phân biệt được, và bounding box chồng lắp quá nhiều. Đặc biệt, môi trường retail có tỷ lệ nhãn không chính xác cao nhất.
+
+Để làm sạch, một mạng COCO YOLO11x độc lập (lớn hơn và mạnh hơn YOLO11n, được pretrain trên COCO) được dùng làm ``bộ xác nhận''. Mỗi nhãn train được giữ lại chỉ khi bộ xác nhận cũng phát hiện được người ở vị trí tương ứng với IoU $>$ ngưỡng nhất định. Quá trình này loại bỏ 17{,}6\% nhãn trên toàn bộ tập (39--40\% trong môi trường retail).
+
+Sau khi làm sạch, detector học được bounding box ổn định hơn, giảm false positive và cải thiện chất lượng embedding đầu vào cho SGIE.
+
+\subsubsection{Làm sạch nhãn ReID}
+
+Nhãn \texttt{person\_id} trong MMPTrack được đánh theo từng cảnh (\textit{scene-local}): cùng một người ở các cảnh khác nhau có thể có ID khác nhau. Tập train có tới 196 nhãn scene-local khác nhau cho thực tế chỉ khoảng 50 người. Điều này làm mô hình ReID nhầm lẫn khi huấn luyện với triplet loss vì cùng một người lại bị coi là nhiều ``lớp'' khác nhau.
+
+Để giải quyết, một công cụ web tương tác (\texttt{reid\_label\_app.py}) được xây dựng để cho phép người dùng gộp các nhãn scene-local về nhãn global. Sau khi gộp thủ công với sự hỗ trợ của công cụ, 196 nhãn scene-local được hợp nhất thành \textbf{56 identity sạch}. Với nhãn sạch, val gap của mô hình ReID cải thiện từ 0{,}52 lên 0{,}87, và Global IDF1 trên môi trường unseen tăng đáng kể.
+
+\subsection{Phân tích mật độ người (Heatmap)}
+
+\subsubsection{Ba chỉ số phân tích}
+
+Hệ thống bổ sung bộ công cụ phân tích không gian dưới dạng ba loại bản đồ mật độ người. Occupancy, Footfall và Dwell-time là các chỉ số phân tích sử dụng không gian được áp dụng rộng rãi trong giám sát, quản lý cơ sở vật chất và an toàn \cite{Spearpoint2020}; Dwell-time được suy ra từ Occupancy và Footfall theo Định luật Little \cite{Little1961}:
+
+\begin{itemize}
+    \item \textbf{Occupancy:} Tổng thời gian người hiện diện trong mỗi ô lưới (tính theo khung hình). Đây là tích lũy đơn giản: mỗi khung hình có người trong ô, cộng 1 vào ô đó.
+
+    \item \textbf{Footfall:} Số người khác nhau (theo Global ID) từng đi qua mỗi ô lưới. Khi một Global ID mới lần đầu xuất hiện trong ô, Footfall của ô tăng lên 1.
+
+    \item \textbf{Dwell-time:} Thời gian dừng trung bình của người trong ô, tính theo công thức Little \cite{Little1961}:
+    \begin{equation}
+        \text{Dwell-time} = \frac{\text{Occupancy}}{\text{Footfall}}
+    \end{equation}
+    Công thức này là dạng rời rạc của Định luật Little $W = L/\lambda$ trong lý thuyết hàng đợi.
+\end{itemize}
+
+Ba bản đồ tạo thành bộ thông tin bổ sung cho nhau: Occupancy sáng ở nơi người \textit{ở lâu} (bàn làm việc, khu chờ), Footfall sáng ở nơi \textit{nhiều người khác nhau} đi qua (lối đi, cửa), Dwell-time sáng ở nơi \textit{mỗi người dừng lâu} (chỗ ngồi ít người nhưng ở lâu). Hình~\ref{fig:heatmap_cam} minh họa ba bản đồ phủ lên khung hình thực của camera 0 (môi trường office), và Hình~\ref{fig:heatmap_bev} trình bày cùng ba chỉ số trên mặt phẳng sàn BEV gộp tất cả camera.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}[t]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{hm23_cam0_occupancy}
+        \small (a) Occupancy
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{hm23_cam0_footfall}
+        \small (b) Footfall
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{hm23_cam0_dwelltime}
+        \small (c) Dwell-time
+    \end{minipage}
+    \caption{Heatmap góc camera --- office, cam 0.}
+    \label{fig:heatmap_cam}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}[t]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{hm23_bev_occupancy}
+        \small (a) Occupancy
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{hm23_bev_footfall}
+        \small (b) Footfall
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{hm23_bev_dwelltime}
+        \small (c) Dwell-time
+    \end{minipage}
+    \caption{Heatmap BEV mặt sàn --- office, tổng hợp tất cả camera.}
+    \label{fig:heatmap_bev}
+\end{figure}
+
+\subsubsection{Triển khai thực tế}
+
+Ba chỉ số trên được tính và cập nhật theo thời gian thực trong \textbf{CrossCameraGalleryProbe} (probe tùy chỉnh). Mỗi khung hình, điểm chân của mỗi detection được ánh xạ vào ô lưới tương ứng và cập nhật bộ đếm.
+
+Plugin \texttt{gst-nvdsanalytics} của DeepStream được dùng bổ sung để cung cấp ba chức năng phân tích vùng, chạy trực tiếp trên GPU ngay sau bước tracker:
+
+\begin{enumerate}
+    \item \textbf{ROI occupancy --- đếm người trong vùng:} Định nghĩa một vùng sàn (ROI) theo bố cục thực tế của môi trường; plugin đếm số người đang đứng bên trong vùng đó theo thời gian thực. Dùng cho: đo mức sử dụng khu vực.
+    \item \textbf{Overcrowding --- cảnh báo quá tải:} Đặt ngưỡng số người cho vùng (chỉnh riêng theo từng môi trường); khi vượt ngưỡng, plugin bật cờ OVERCROWDED. Dùng cho: cảnh báo an toàn.
+    \item \textbf{Line-crossing --- đếm băng vạch:} Định nghĩa một vạch ảo có hướng; plugin đếm số người băng qua vạch. Dùng cho: đếm người ra/vào, đo luồng di chuyển (tương ứng metric Footfall).
+\end{enumerate}
+
+Mỗi môi trường có một file cấu hình riêng (\texttt{configs/analytics/nvdsanalytics\_<môi-trường>.txt}) với ROI, vạch đếm và ngưỡng quá tải được chỉnh theo bố cục thực tế (Bảng~\ref{tab:analytics_config}). Hình~\ref{fig:analytics} minh họa các overlay phân tích trên 4 camera: vùng ROI, cảnh báo OVERCROWDED và vạch đếm người ra/vào.
+
+\begin{table}[H]
+\centering
+\caption[Cấu hình gst-nvdsanalytics theo môi trường]{\bfseries\fontsize{12pt}{0pt}\selectfont Cấu hình phân tích vùng theo môi trường}
+\begin{tabular}{|l|l|c|c|}
+\hline
+\bfseries Môi trường & \bfseries Bố cục & \bfseries Ngưỡng quá tải & \bfseries Số người (Buffered) \\
+\hline
+Office          & Bàn làm việc             & Mặc định & 9 \\
+Café Shop       & Bàn tròn trung tâm, người ngồi & 6 & $\sim$7 \\
+Lobby           & Sàn mở, người đi lại     & 6 & 7 \\
+Industry Safety & Nhà xưởng, mật độ cao     & 8 & 9 \\
+Retail          & Lối đi giữa kệ hàng       & 5 & 10 \\
+\hline
+\end{tabular}
+\label{tab:analytics_config}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{analytics}
+    \caption{Phân tích vùng với \texttt{gst-nvdsanalytics} --- ROI, overcrowding, line-crossing.}
+    \label{fig:analytics}
+\end{figure}
+
+Ngoài ra, hệ thống cung cấp chế độ \textbf{BEV floor view}: chiếu toàn bộ foot point từ tất cả camera lên bản đồ sàn thực (dùng homography calibration của MMPTrack), cho phép quan sát phân bố người từ góc nhìn từ trên xuống.
+
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%               CHƯƠNG 4: THÍ NGHIỆM VÀ KẾT QUẢ
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{CHƯƠNG 4.  THÍ NGHIỆM VÀ KẾT QUẢ}
+\addcontentsline{toc}{section}{\numberline{}CHƯƠNG 4.  THÍ NGHIỆM VÀ KẾT QUẢ}
+\setcounter{section}{4}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+
+\subsection{Cấu hình thực nghiệm}
+
+\subsubsection{Phần cứng và phần mềm}
+
+Tất cả thực nghiệm được thực hiện trên cấu hình:
+
+\begin{table}[H]
+    \centering
+    \caption[Cấu hình phần cứng thực nghiệm]{\bfseries\fontsize{12pt}{0pt}\selectfont Cấu hình phần cứng thực nghiệm}
+    \begin{tabular}{|l|l|}
+    \hline
+    \bfseries Thành phần & \bfseries Thông số \\
+    \hline
+    GPU & NVIDIA RTX 5060 Ti (16 GB VRAM) \\
+    Hệ điều hành & Ubuntu 24.04 \\
+    DeepStream & NVIDIA DeepStream SDK 9.0 \\
+    Python & 3.12 \\
+    TensorRT & 10.14 \\
+    CUDA & 13.1 \\
+    \hline
+    \end{tabular}
+    \label{tab:hardware}
+\end{table}
+
+\subsubsection{Bộ dữ liệu kiểm thử}
+
+Kiểm thử được thực hiện trên tập validation \textit{session 64pm} của MMPTrack gồm 24 cảnh (scenes) thuộc 5 môi trường. Mỗi cảnh bao gồm 3--5 camera. Tất cả người trong tập validation là \textit{unseen subjects} --- không xuất hiện trong tập train. Đây là chế độ kiểm thử nghiêm ngặt nhất và phản ánh thực tế triển khai.
+
+Dự án dùng giao thức \textit{honest single-pass full-GT}: toàn bộ video được xử lý một lần duy nhất (không lặp), và điểm số được tính trên toàn bộ nhãn thực tế mà không cắt bớt.
+
+\subsubsection{Cấu hình pipeline}
+
+Pipeline được chạy với preset mặc định (\texttt{pipeline\_mmp\_nvdcf\_online\_sgie\_reid0.yaml}): NvDCF Legacy DCF với ReID nội tại tắt, Swin-Tiny SGIE là nguồn embedding duy nhất. Các thông số ReID chính: \texttt{threshold = 0{,}62}, \texttt{margin = 0{,}02}, \texttt{geo\_weight = 0{,}25}, \texttt{geo\_min\_overlaps = 8}.
+
+\subsection{Kết quả định danh xuyên camera}
+
+\subsubsection{Global IDF1 theo môi trường}
+
+Bảng~\ref{tab:results} trình bày kết quả Global IDF1 của hệ thống trên 5 môi trường kiểm thử. Kết quả so sánh hai chế độ: Buffered ID (chế độ sản xuất) và phương pháp baseline DMCT-Ext-TD \cite{Han2022}.
+
+\begin{table}[H]
+    \centering
+    \caption[Kết quả Global IDF1 theo môi trường]{\bfseries\fontsize{12pt}{0pt}\selectfont Kết quả Global IDF1 theo môi trường}
+    \begin{tabular}{|l|c|c|}
+    \hline
+    \bfseries Môi trường & \bfseries Hệ thống đề xuất & \bfseries Baseline \cite{Han2022} \\
+    \hline
+    Lobby   & 0,895 & --- \\
+    Office  & 0,861 & --- \\
+    Café    & 0,833 & --- \\
+    Industry & 0,805 & --- \\
+    Retail  & 0,660 & --- \\
+    \hline
+    \bfseries Trung bình & \bfseries 0,811 & \bfseries 0,741 \\
+    \hline
+    \end{tabular}
+    \label{tab:results}
+\end{table}
+
+Hệ thống vượt cả hai mục tiêu đề ra: Global IDF1 trung bình 0,811 (vượt ngưỡng 0,8) và xử lý được 20 camera đồng thời ở tốc độ $\sim$10{,}6 FPS/camera (preset reid0, vượt ngưỡng 10 FPS). Điểm số trên baseline công bố trong \cite{Han2022} (0,741) tăng lên 0,811 --- tương đương cải thiện 9,4 điểm phần trăm.
+
+Lưu ý: bảng baseline trong \cite{Han2022} không có phân tích per-scene chi tiết theo 5 môi trường; dấu ``---'' phản ánh việc không có dữ liệu so sánh trực tiếp per-environment.
+
+\subsubsection{Phân tích theo môi trường}
+
+\textbf{Lobby (0,895) và Office (0,861):} Hai môi trường này đạt kết quả cao nhất. Người di chuyển theo lối đi rõ ràng, camera được đặt ở góc tốt, và trang phục người dùng đa dạng giúp phân biệt.
+
+\textbf{Café (0,833):} Kết quả tốt. Môi trường có ánh sáng tốt, mật độ người vừa phải, và camera bao phủ tốt các lối vào/ra.
+
+\textbf{Industry (0,805):} Kết quả đạt ngưỡng mục tiêu. Thách thức chính là đồng phục lao động làm mô hình ReID khó phân biệt. Chế độ Buffered ID cải thiện đáng kể so với Live ID --- kết quả chi tiết trình bày ở Phần~\ref{sec:buffered_eval}.
+
+\textbf{Retail (0,660):} Môi trường yếu nhất. Nguyên nhân chính: (1) kệ hàng cao gây che khuất, làm detector bỏ sót nhiều detection; (2) nhãn YOLO gốc có 39--40\% phantom annotations sau khi dọn sạch --- cho thấy có nhiều người thực sự bị che khuất hoàn toàn. Trần che khuất này là giới hạn vật lý của camera CCTV thông thường, không thể khắc phục hoàn toàn bằng cải thiện thuật toán.
+
+\subsection{Thông lượng xử lý}
+\label{sec:throughput}
+
+\subsubsection{So sánh chế độ tracker}
+
+Bảng~\ref{tab:throughput} so sánh thông lượng giữa hai chế độ NvDCF:
+
+\begin{table}[H]
+    \centering
+    \caption[Thông lượng theo chế độ NvDCF]{\bfseries\fontsize{12pt}{0pt}\selectfont Thông lượng theo chế độ NvDCF ở 20 camera.}
+    \begin{tabular}{|l|c|c|}
+    \hline
+    \bfseries Chế độ & \bfseries FPS/camera & \bfseries Kết luận \\
+    \hline
+    NvDCF Legacy DCF (\texttt{type:1}) & $\sim$18 & Đạt yêu cầu \\
+    NvDCF VPI DCF (\texttt{type:2})    & $\sim$5  & Không đạt \\
+    \hline
+    \end{tabular}
+    \label{tab:throughput}
+\end{table}
+
+VPI DCF bị loại bỏ do chi phí khởi tạo per-detection quá cao khi số camera tăng. Legacy DCF cho thông lượng gấp $\sim$3,6 lần VPI DCF trong giai đoạn đo này.
+
+\textit{Lưu ý về con số 18 FPS:} Kết quả $\sim$18 FPS trong Bảng~\ref{tab:throughput} đo với \texttt{reidType:2} (NvDCF tự cắt crop và chạy Swin bên trong C++) kết hợp \texttt{reidExtractionInterval:5} (chỉ trích embedding mỗi 5 khung). Sau đó hệ thống chuyển sang \texttt{reidType:0} + SGIE ngoài để kiểm soát hoàn toàn quy trình tiền xử lý (cắt crop đúng 256$\times$128, chuẩn hóa ImageNet), cải thiện IDF1 từ $\sim$0{,}80 lên 0{,}811 với chi phí $\sim$1 FPS/cam.
+
+\subsubsection{Thông lượng pipeline sản xuất}
+
+Pipeline đầy đủ (YOLO + NvDCF + Swin SGIE + CrossCameraGalleryProbe) với preset mặc định (\texttt{reid0}) đạt \textbf{$\sim$10{,}6 FPS/camera} ở 20 camera đồng thời (9{,}4 GB VRAM). Preset chất lượng cao (\texttt{sgie}) đạt $\sim$9{,}5 FPS/camera (12{,}7 GB VRAM). Cả hai đều vượt mục tiêu 10 FPS (preset reid0) hoặc xấp xỉ đạt (preset sgie).
+
+Bottleneck chính được xác định là \textbf{CrossCameraGalleryProbe} (probe tùy chỉnh Python) do giới hạn GIL (Global Interpreter Lock) của Python khi chạy trong GStreamer callback. Vấn đề này được giảm thiểu bằng cách tối ưu hóa vòng lặp matching và cắt giảm số lượng Python object allocation trong hot path.
+
+\subsubsection{Sử dụng VRAM}
+
+Pipeline sản xuất sử dụng $\sim$9{,}4 GB VRAM trên RTX 5060 Ti 16 GB, để lại 6{,}6 GB dự phòng. Thử nghiệm quantization INT8 không mang lại cải thiện FPS có ý nghĩa (dưới 0{,}5 FPS/cam) trong khi chỉ tiết kiệm $\sim$0{,}37 GB VRAM, nên không được áp dụng trong pipeline sản xuất.
+
+\subsection{Hiệu quả của Buffered ID}
+\label{sec:buffered_eval}
+
+Bảng~\ref{tab:buffered} so sánh Live ID và Buffered ID trên hai môi trường khó nhất trong một thí nghiệm kiểm soát thực hiện trong giai đoạn phát triển (cấu hình trung gian, trước khi hoàn thiện pipeline). Kết quả cuối cùng của pipeline hoàn chỉnh được trình bày trong Bảng~\ref{tab:results}.
+
+\begin{table}[H]
+    \centering
+    \caption[So sánh Live ID và Buffered ID]{\bfseries\fontsize{12pt}{0pt}\selectfont So sánh Global IDF1: Live ID vs.\ Buffered ID.}
+    \begin{tabular}{|l|c|c|}
+    \hline
+    \bfseries Môi trường & \bfseries Live ID & \bfseries Buffered ID \\
+    \hline
+    Industry & 0,289 & 0,754 \\
+    Retail   & 0,220 & 0,449 \\
+    \hline
+    \end{tabular}
+    \label{tab:buffered}
+\end{table}
+
+Dù được đo trên cấu hình trung gian, bảng này cho thấy xu hướng nhất quán: Buffered ID cải thiện Global IDF1 hơn 2,6 lần trong môi trường industry (0,289 → 0,754) và hơn 2 lần trong môi trường retail (0,220 → 0,449). Kết quả này xác nhận rằng thuật toán anchor-guided \cite{Huang2023} đặc biệt hiệu quả trong môi trường đồng phục, nơi quyết định tức thời của Live ID thường sai nhưng có thể được hiệu chỉnh sau khi tích lũy đủ dữ liệu trong cửa sổ.
+
+Tính trên toàn bộ tập kiểm thử với pipeline hoàn chỉnh, Buffered ID đạt 97--98\% chất lượng của thuật toán offline (xử lý toàn bộ video một lần) với độ trễ chỉ $\sim$20 giây.
+
+\subsection{Độ chính xác heatmap}
+
+Độ chính xác của heatmap được đánh giá bằng hệ số tương quan Pearson (CC) giữa heatmap dự đoán của hệ thống và heatmap ground-truth (tính từ nhãn bounding box thực). Kết quả trong Bảng~\ref{tab:heatmap}.
+
+\begin{table}[H]
+    \centering
+    \caption[Độ chính xác heatmap theo môi trường]{\bfseries\fontsize{12pt}{0pt}\selectfont Hệ số tương quan heatmap Occupancy (CC)}
+    \begin{tabular}{|l|c|}
+    \hline
+    \bfseries Môi trường & \bfseries CC (Occupancy) \\
+    \hline
+    Café    & 0,99 \\
+    Lobby   & 0,98 \\
+    Office  & 0,97 \\
+    Industry & 0,98 \\
+    Retail  & 0,97 \\
+    \hline
+    \end{tabular}
+    \label{tab:heatmap}
+\end{table}
+
+Tất cả môi trường đạt CC từ 0,97 đến 0,99. Đáng chú ý, heatmap chính xác cao ngay cả trong môi trường retail nơi Global IDF1 thấp (0,660) --- điều này cho thấy heatmap Occupancy không yêu cầu định danh chính xác (chỉ cần phát hiện người đúng vị trí), trong khi heatmap Footfall và Dwell-time phụ thuộc nhiều hơn vào chất lượng Global ID.
+
+\subsection{Nghiên cứu tối ưu hóa thông lượng}
+
+\subsubsection{Lượng tử hóa INT8}
+
+Để tìm cách tăng FPS mà không giảm IDF1, hệ thống được thử nghiệm với lượng tử hóa INT8 cho cả detector YOLO11n và mạng Swin ReID. Bảng~\ref{tab:speedup} tổng hợp kết quả:
+
+\begin{table}[H]
+    \centering
+    \caption[Nghiên cứu tăng tốc FPS]{\bfseries\fontsize{12pt}{0pt}\selectfont Kết quả nghiên cứu tăng tốc (20 camera, single-pass)}
+    \begin{tabular}{|l|c|c|l|}
+    \hline
+    \bfseries Thử nghiệm & \bfseries FPS/cam & \bfseries IDF1 & \bfseries Nhận xét \\
+    \hline
+    Gốc (FP16)                     & $\sim$10{,}7 & 0{,}802 & Mốc tham chiếu \\
+    Detector INT8                  & $\sim$11     & 0{,}800 & Giữ IDF1, không tăng FPS \\
+    Swin ReID INT8                 & $\sim$11     & 0{,}800 & Tiết kiệm $\sim$0{,}37 GB VRAM \\
+    SGIE interval tăng             & $\sim$11     & giữ     & Không tăng FPS \\
+    Detector interval 2 (bỏ khung) & $\sim$18     & 0{,}65  & Tăng FPS nhưng phá IDF1 \\
+    \hline
+    \end{tabular}
+    \label{tab:speedup}
+\end{table}
+
+Kết luận: nút thắt là xử lý per-người trên GPU ở kích thước cố định (detector resize về 640$\times$640; ReID resize về 256$\times$128). Khối lượng này không co lại khi lượng tử hóa --- INT8 chỉ tiết kiệm VRAM ($\sim$0{,}37 GB), không tăng FPS. Chỉ khi bỏ bớt khung detect (detector interval) mới tăng FPS, nhưng cách đó phá IDF1 do mất phát hiện và đứt định danh.
+
+\subsubsection{Thử nghiệm Sidecar ReID}
+
+Một kiến trúc thay thế được cài đặt: đưa phần suy luận Swin ra khỏi đồ thị GStreamer vào một tiến trình nền (\textit{sidecar}), tách khỏi đường tới hạn. Kiến trúc gồm \texttt{MetaCaptureOp} $\to$ \texttt{VideoReaderPool} $\to$ \texttt{ReIDWorker} (ONNX CUDAExecutionProvider). Kết quả: sidecar không cải thiện FPS (thậm chí chậm hơn nhẹ do chi phí giải mã video bằng CPU thêm vào). SGIE không phải nút thắt --- phần detect + track + tiler đã chiếm gần toàn bộ thời gian ($\sim$10{,}6 FPS với preset reid0 không có SGIE cũng gần tương đương). Kiến trúc sidecar vẫn hữu ích để thử nhanh một mô hình ReID mới mà không cần biên dịch lại engine TensorRT.
+
+\subsection{So sánh kiến trúc mô hình ReID}
+
+Để xác nhận lựa chọn Swin-Tiny là kiến trúc ReID tốt nhất cho hệ thống, OSNet-x1.0 (khởi đầu từ pretrain Market-1501 qua torchreid) được huấn luyện trên cùng tập MMP và so sánh:
+
+\begin{table}[H]
+    \centering
+    \caption[So sánh Swin-Tiny và OSNet trên tập MMP]{\bfseries\fontsize{12pt}{0pt}\selectfont So sánh kiến trúc ReID trên tập val MMPTrack (cross-camera, per-scene)}
+    \begin{tabular}{|l|l|c|c|}
+    \hline
+    \bfseries Mô hình & \bfseries Chuỗi huấn luyện & \bfseries Top-1 & \bfseries mAP \\
+    \hline
+    \textbf{Swin-Tiny (deployed)} & ImageNet $\to$ MTA $\to$ MMP & \textbf{0{,}853} & \textbf{0{,}784} \\
+    OSNet-x1.0 (all)             & Market-1501 $\to$ MMP (70 ids) & 0{,}668 & 0{,}515 \\
+    OSNet-x1.0 (no-retail)       & Market-1501 $\to$ MMP (56 ids) & 0{,}610 & 0{,}483 \\
+    \hline
+    \end{tabular}
+    \label{tab:reid_compare}
+\end{table}
+
+Swin-Tiny vượt OSNet $\sim$28 điểm phần trăm Top-1. Khoảng cách này phù hợp với xu hướng trong tài liệu ReID: kiến trúc Transformer (Swin) có khả năng mô hình hóa phụ thuộc tầm xa toàn ảnh tốt hơn so với kiến trúc CNN (OSNet), giúp trích xuất đặc trưng phân biệt hơn đặc biệt khi dữ liệu huấn luyện hạn chế như tập MMPTrack. OSNet-noretail tệ hơn OSNet-all ở môi trường retail (0{,}39 vs 0{,}54 Top-1), xác nhận rằng dữ liệu retail phải được giữ trong tập huấn luyện dù tỷ lệ nhãn phantom cao.
+
+Khoảng cách Top-1 có ý nghĩa trực tiếp đến chất lượng pipeline: thuật toán Buffered ID (Anchor-Guided, Phần~\ref{sec:buffered}) phụ thuộc vào độ chính xác của các ``tracklet anchor'' --- tracklet có embedding ổn định đủ để đại diện cho một người xuyên camera. Embedding OSNet yếu hơn dẫn đến anchor kém phân biệt hơn, làm tăng khả năng gộp nhầm hai người khác nhau vào cùng Global ID trong bước clustering.
+
+\textbf{Kết luận:} Giữ nguyên \textbf{Swin-Tiny} làm mô hình deployed trên tập MMPTrack.
+
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%               KẾT LUẬN
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{KẾT LUẬN}
+\phantomsection\addcontentsline{toc}{section}{\numberline {}KẾT LUẬN}
+
+\subsection*{Kết luận chung}
+\phantomsection\addcontentsline{toc}{section}{\numberline {}Kết luận chung}
+
+Dự án đã xây dựng thành công hệ thống theo dõi người đa camera theo thời gian thực, đáp ứng cả hai mục tiêu đặt ra:
+
+\begin{itemize}
+    \item \textbf{Thông lượng:} $\sim$10{,}6 FPS/camera tại 20 camera đồng thời, preset reid0 (đạt mục tiêu 10 FPS/cam).
+    \item \textbf{Độ chính xác:} Global IDF1 trung bình 0,811 trên 5 môi trường kiểm thử với người unseen (vượt ngưỡng mục tiêu 0,8).
+\end{itemize}
+
+Hai đóng góp kỹ thuật quan trọng giúp đạt được các kết quả trên là: (1) quy trình làm sạch nhãn loại bỏ nhiễu đáng kể trong dữ liệu MMPTrack; (2) triển khai Buffered ID dựa trên anchor-guided clustering \cite{Huang2023} trong cửa sổ trượt 30 giây, giúp cải thiện Global IDF1 từ 0,289 lên 0,754 trong môi trường khó (industry đồng phục).
+
+Bên cạnh theo dõi, hệ thống còn cung cấp bộ công cụ phân tích không gian (heatmap Occupancy, Footfall, Dwell-time theo Định luật Little \cite{Little1961}) với độ chính xác CC = 0,97--0,99, sẵn sàng tích hợp vào các ứng dụng giám sát an toàn, tối ưu không gian và phân tích lưu lượng người.
+
+\subsection*{Hạn chế}
+\phantomsection\addcontentsline{toc}{section}{\numberline {}Hạn chế}
+
+Hệ thống còn một số hạn chế cần ghi nhận:
+
+\begin{itemize}
+    \item \textbf{Môi trường retail:} Global IDF1 chỉ đạt 0,660, thấp hơn đáng kể so với các môi trường khác. Nguyên nhân chính là che khuất do kệ hàng --- giới hạn vật lý của camera CCTV thông thường không thể giải quyết hoàn toàn bằng thuật toán.
+
+    \item \textbf{Đồng phục:} Trong môi trường industry và retail, người mặc đồng phục giống nhau gây khó khăn cho mô hình ReID, dẫn đến nhầm lẫn định danh.
+
+    \item \textbf{Độ trễ Buffered ID:} Chế độ Buffered ID giới thiệu độ trễ $\sim$20 giây. Trong ứng dụng yêu cầu định danh tức thời (như mở cửa theo người), cần sử dụng Live ID với chất lượng thấp hơn.
+
+    \item \textbf{Phụ thuộc hiệu chỉnh camera:} Ràng buộc hình học yêu cầu ma trận homography calibration cho từng camera. Nếu camera bị di chuyển, cần hiệu chỉnh lại.
+\end{itemize}
+
+\subsection*{Hướng phát triển}
+\phantomsection\addcontentsline{toc}{section}{\numberline {}Hướng phát triển}
+
+Các hướng phát triển tiếp theo:
+
+\begin{itemize}
+    \item \textbf{Cải thiện ReID cho đồng phục:} Khám phá đặc trưng dáng đi (gait features) hoặc đặc trưng từ ảnh nhiệt hồng ngoại để phân biệt người trong môi trường đồng phục.
+
+    \item \textbf{Mở rộng sang camera RTSP:} Kiểm thử pipeline với luồng RTSP từ camera thực tế (hiện tại chỉ kiểm thử với file video).
+
+    \item \textbf{Tích hợp mô hình BEV:} Nghiên cứu khả năng tích hợp MCBLT \cite{Wang2025} hoặc phương pháp BEV tương tự vào pipeline, hoặc sử dụng như post-processing layer để cải thiện định danh trong các cảnh khó.
+
+    \item \textbf{Giảm độ trễ Buffered ID:} Nghiên cứu thuật toán online clustering có khả năng ra quyết định sớm hơn trong cửa sổ, giảm độ trễ xuống dưới 10 giây mà không làm giảm đáng kể chất lượng.
+
+    \item \textbf{Kiểm thử ở 1080p và tối ưu Sidecar ReID:} Đánh giá thông lượng thực tế ở độ phân giải 1920$\times$1080 (camera production thực tế). Hoàn thiện kiến trúc sidecar ReID (worker TensorRT + hàng đợi giới hạn) để loại Swin ra khỏi đường tới hạn, tiềm năng tăng FPS về $\sim$17--18 FPS/cam trong điều kiện production.
+\end{itemize}
+
+\newpage
+\phantomsection\addcontentsline{toc}{section}{\numberline {}TÀI LIỆU THAM KHẢO}
+\bibliographystyle{IEEEtran}
+\bibliography{MyRef}
+\newpage
+\input{PhuLuc} % Phụ lục nếu có
+\end{document}

@@ -1,0 +1,68 @@
+\thispagestyle {empty}
+\contentsline {section}{\hbox to\@tempdima {\hfil }DANH MỤC CHỮ VIẾT TẮT}{i}{section*.5}%
+\contentsline {section}{\hbox to\@tempdima {\hfil } DANH MỤC HÌNH VẼ}{ii}{section*.7}%
+\contentsline {section}{\hbox to\@tempdima {\hfil } DANH MỤC BẢNG BIỂU}{iii}{section*.8}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }TÓM TẮT}{iv}{section*.9}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }CHƯƠNG 1. GIỚI THIỆU}{1}{section*.9}%
+\contentsline {subsection}{\numberline {1.1}Đặt vấn đề}{1}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Mục tiêu đề tài}{1}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Đóng góp chính}{2}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}Cấu trúc báo cáo}{2}{subsection.1.4}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }CHƯƠNG 2. CƠ SỞ LÝ THUYẾT}{3}{subsection.1.4}%
+\contentsline {subsection}{\numberline {2.5}Bài toán theo dõi người đa camera}{3}{subsection.2.5}%
+\contentsline {subsubsection}{\numberline {2.5.1}Định nghĩa bài toán}{3}{subsubsection.2.5.1}%
+\contentsline {subsubsection}{\numberline {2.5.2}Phân loại phương pháp tiếp cận}{3}{subsubsection.2.5.2}%
+\contentsline {subsection}{\numberline {2.6}Các độ đo đánh giá}{3}{subsection.2.6}%
+\contentsline {subsubsection}{\numberline {2.6.1}Độ đo đơn camera: MOTA, MOTP và IDF1}{3}{subsubsection.2.6.1}%
+\contentsline {subsubsection}{\numberline {2.6.2}Độ đo xuyên camera: Global IDF1}{4}{subsubsection.2.6.2}%
+\contentsline {subsection}{\numberline {2.7}Bộ dữ liệu MMPTrack}{4}{subsection.2.7}%
+\contentsline {subsection}{\numberline {2.8}Phát hiện người: YOLO11n}{5}{subsection.2.8}%
+\contentsline {subsection}{\numberline {2.9}Theo dõi cục bộ: NvDCF}{5}{subsection.2.9}%
+\contentsline {subsection}{\numberline {2.10}Nhận dạng lại người: Swin Transformer ReID}{5}{subsection.2.10}%
+\contentsline {subsection}{\numberline {2.11}Nền tảng NVIDIA DeepStream}{6}{subsection.2.11}%
+\contentsline {subsection}{\numberline {2.12}Các công trình liên quan}{6}{subsection.2.12}%
+\contentsline {subsubsection}{\numberline {2.12.1}MMPTRACK Baseline}{6}{subsubsection.2.12.1}%
+\contentsline {subsubsection}{\numberline {2.12.2}Anchor-Guided Clustering}{6}{subsubsection.2.12.2}%
+\contentsline {subsubsection}{\numberline {2.12.3}MCBLT: Multi-Camera BEV Long-Term Tracking}{6}{subsubsection.2.12.3}%
+\contentsline {subsubsection}{\numberline {2.12.4}TrackTacular: Early-Fusion BEV}{7}{subsubsection.2.12.4}%
+\contentsline {subsubsection}{\numberline {2.12.5}MCTR: End-to-End Transformer}{7}{subsubsection.2.12.5}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }CHƯƠNG 3. PHƯƠNG PHÁP}{8}{subsubsection.2.12.5}%
+\contentsline {subsection}{\numberline {3.13}Kiến trúc tổng thể hệ thống}{8}{subsection.3.13}%
+\contentsline {subsection}{\numberline {3.14}Tầng 1: Phát hiện và theo dõi per-camera}{9}{subsection.3.14}%
+\contentsline {subsubsection}{\numberline {3.14.1}Phát hiện người}{9}{subsubsection.3.14.1}%
+\contentsline {subsubsection}{\numberline {3.14.2}Theo dõi cục bộ}{9}{subsubsection.3.14.2}%
+\contentsline {subsubsection}{\numberline {3.14.3}Trích xuất embedding}{9}{subsubsection.3.14.3}%
+\contentsline {subsection}{\numberline {3.15}Tầng 2: Định danh xuyên camera}{10}{subsection.3.15}%
+\contentsline {subsubsection}{\numberline {3.15.1}CrossCameraGalleryProbe}{10}{subsubsection.3.15.1}%
+\contentsline {subsubsection}{\numberline {3.15.2}Ràng buộc hình học}{10}{subsubsection.3.15.2}%
+\contentsline {subsubsection}{\numberline {3.15.3}Live ID và Buffered ID}{10}{subsubsection.3.15.3}%
+\contentsline {subsection}{\numberline {3.16}Làm sạch nhãn huấn luyện}{12}{subsection.3.16}%
+\contentsline {subsubsection}{\numberline {3.16.1}Làm sạch nhãn YOLO}{12}{subsubsection.3.16.1}%
+\contentsline {subsubsection}{\numberline {3.16.2}Làm sạch nhãn ReID}{13}{subsubsection.3.16.2}%
+\contentsline {subsection}{\numberline {3.17}Phân tích mật độ người (Heatmap)}{13}{subsection.3.17}%
+\contentsline {subsubsection}{\numberline {3.17.1}Ba chỉ số phân tích}{13}{subsubsection.3.17.1}%
+\contentsline {subsubsection}{\numberline {3.17.2}Triển khai thực tế}{14}{subsubsection.3.17.2}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }CHƯƠNG 4. THÍ NGHIỆM VÀ KẾT QUẢ}{17}{figure.caption.17}%
+\contentsline {subsection}{\numberline {4.18}Cấu hình thực nghiệm}{17}{subsection.4.18}%
+\contentsline {subsubsection}{\numberline {4.18.1}Phần cứng và phần mềm}{17}{subsubsection.4.18.1}%
+\contentsline {subsubsection}{\numberline {4.18.2}Bộ dữ liệu kiểm thử}{17}{subsubsection.4.18.2}%
+\contentsline {subsubsection}{\numberline {4.18.3}Cấu hình pipeline}{17}{subsubsection.4.18.3}%
+\contentsline {subsection}{\numberline {4.19}Kết quả định danh xuyên camera}{17}{subsection.4.19}%
+\contentsline {subsubsection}{\numberline {4.19.1}Global IDF1 theo môi trường}{17}{subsubsection.4.19.1}%
+\contentsline {subsubsection}{\numberline {4.19.2}Phân tích theo môi trường}{18}{subsubsection.4.19.2}%
+\contentsline {subsection}{\numberline {4.20}Thông lượng xử lý}{18}{subsection.4.20}%
+\contentsline {subsubsection}{\numberline {4.20.1}So sánh chế độ tracker}{18}{subsubsection.4.20.1}%
+\contentsline {subsubsection}{\numberline {4.20.2}Thông lượng pipeline sản xuất}{19}{subsubsection.4.20.2}%
+\contentsline {subsubsection}{\numberline {4.20.3}Sử dụng VRAM}{19}{subsubsection.4.20.3}%
+\contentsline {subsection}{\numberline {4.21}Hiệu quả của Buffered ID}{19}{subsection.4.21}%
+\contentsline {subsection}{\numberline {4.22}Độ chính xác heatmap}{20}{subsection.4.22}%
+\contentsline {subsection}{\numberline {4.23}Nghiên cứu tối ưu hóa thông lượng}{20}{subsection.4.23}%
+\contentsline {subsubsection}{\numberline {4.23.1}Lượng tử hóa INT8}{20}{subsubsection.4.23.1}%
+\contentsline {subsubsection}{\numberline {4.23.2}Thử nghiệm Sidecar ReID}{21}{subsubsection.4.23.2}%
+\contentsline {subsection}{\numberline {4.24}So sánh kiến trúc mô hình ReID}{21}{subsection.4.24}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }KẾT LUẬN}{23}{section*.25}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }Kết luận chung}{23}{section*.26}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }Hạn chế}{23}{section*.27}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }Hướng phát triển}{24}{section*.28}%
+\contentsline {section}{\hbox to\@tempdima {\hfil }TÀI LIỆU THAM KHẢO}{25}{section*.29}%
+\contentsline {section}{\hbox to\@tempdima {\hfil } PHỤ LỤC}{26}{section*.30}%

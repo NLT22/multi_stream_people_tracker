@@ -1,0 +1,6 @@
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Theo dõi đa camera --- office, 4 camera, Buffered ID.}}{9}{figure.caption.11}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces So sánh Live ID và Buffered ID --- office, 4 camera.}}{11}{figure.caption.12}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Góc nhìn BEV (Bird's-Eye View) --- tracking đa camera, môi trường office.}}{12}{figure.caption.13}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces Heatmap góc camera --- office, cam 0.}}{14}{figure.caption.14}%
+\contentsline {figure}{\numberline {3.5}{\ignorespaces Heatmap BEV mặt sàn --- office, tổng hợp tất cả camera.}}{14}{figure.caption.15}%
+\contentsline {figure}{\numberline {3.6}{\ignorespaces Phân tích vùng với \texttt {gst-nvdsanalytics} --- ROI, overcrowding, line-crossing.}}{15}{figure.caption.17}%

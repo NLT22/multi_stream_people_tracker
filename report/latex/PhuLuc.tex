@@ -1,0 +1,36 @@
+\section*{PHỤ LỤC}
+\phantomsection\addcontentsline{toc}{section}{\numberline{} PHỤ LỤC}
+
+\subsection*{A. Tài nguyên dự án}
+
+\begin{itemize}
+    \item \textbf{Mã nguồn (GitHub):}
+    \url{https://github.com/NLT22/multi\_stream\_people\_tracker}
+
+    \item \textbf{Video demo và hình ảnh (Google Drive):}
+    \url{https://drive.google.com/drive/folders/1yO3T-kCAQ-KZG0K4Tydum4X66aGpdzhx?usp=sharing}
+\end{itemize}
+
+\subsection*{B. Cấu trúc thư mục demo}
+
+Thư mục demo được tổ chức theo từng môi trường. Mỗi môi trường có một bộ đầy đủ gồm 3 video và thư mục heatmap:
+
+\begin{center}
+\texttt{output/demo/<môi-trường>/}
+\end{center}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\bfseries File & \bfseries Nội dung \\
+\hline
+\texttt{<env>\_live\_buffered\_osd.mp4} & 4 camera đồng thời, hiển thị Buffered ID ổn định + quỹ đạo di chuyển \\
+\texttt{<env>\_tracking\_bev.mp4}       & Góc nhìn từ trên xuống (BEV): mỗi người một chấm màu + vệt đường đi \\
+\texttt{<env>\_analytics.mp4}           & ROI đếm người + cảnh báo quá tải + vạch đếm vào/ra (cấu hình riêng từng môi trường) \\
+\texttt{heatmap/}                       & 15 ảnh PNG: \texttt{cam\_\{0--3\}\_\{occupancy,footfall,dwelltime\}.png} và \texttt{bev\_\{occupancy,footfall,dwelltime\}.png} \\
+\hline
+\end{tabular}
+\end{table}
+
+Năm môi trường: \texttt{office}, \texttt{cafe\_shop}, \texttt{lobby}, \texttt{industry\_safety}, \texttt{retail}. Tất cả video sử dụng chế độ \textbf{Buffered ID (anchor-guided)} để hiển thị định danh ổn định.

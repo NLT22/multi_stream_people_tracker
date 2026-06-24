@@ -1,0 +1,16 @@
+\section*{TÓM TẮT}
+\phantomsection\addcontentsline{toc}{section}{\numberline {}TÓM TẮT}
+
+Dự án trình bày quá trình xây dựng hệ thống theo dõi người theo thời gian thực trên mạng nhiều camera (Multi-Camera Tracking --- MCT), kết hợp bộ công cụ phân tích mật độ không gian phục vụ giám sát an toàn, phân tích lưu lượng người và tối ưu bố trí không gian. Hệ thống được kiểm thử trên bộ dữ liệu MMPTrack \cite{Han2022} gồm 5 môi trường, 23 camera và 28 đối tượng người khác nhau.
+
+Hai mục tiêu kỹ thuật được đặt ra: (1) xử lý đồng thời 20 camera ở tốc độ tối thiểu 10 khung hình/giây/camera; (2) đạt độ chính xác định danh xuyên camera (Global IDF1) tối thiểu 0,8 trên tập kiểm thử với người chưa xuất hiện trong quá trình huấn luyện.
+
+Hệ thống được triển khai trên nền tảng NVIDIA DeepStream 9.0 theo kiến trúc hai tầng. Tầng per-camera phát hiện người bằng YOLO11n fine-tune (mAP50 = 0,97), theo dõi cục bộ bằng bộ theo dõi NvDCF chế độ Legacy DCF, và trích xuất đặc trưng ngoại hình bằng mạng Swin Transformer ReID. Tầng cross-camera hợp nhất định danh cục bộ từ nhiều camera thành Global ID ổn định thông qua bộ phận \textit{CrossCameraGalleryProbe}, hỗ trợ ràng buộc hình học và hai chế độ định danh: Live ID (gán tức thời, độ trễ bằng 0) và Buffered ID (gom cụm theo cửa sổ trượt 30 giây dựa trên thuật toán anchor-guided \cite{Huang2023}).
+
+Chất lượng dữ liệu huấn luyện được nâng cao qua hai bước làm sạch nhãn: loại bỏ 17,6\% nhãn phantom trong tập phát hiện nhờ bộ kiểm tra độc lập COCO YOLO11x, và hợp nhất 196 nhãn scene-local về 56 identity sạch cho mô hình ReID, giúp khoảng cách val gap tăng từ 0,52 lên 0,87.
+
+Hệ thống bổ sung ba loại bản đồ mật độ người: \textit{Occupancy} (tổng thời gian hiện diện), \textit{Footfall} (số người khác nhau đi qua), và \textit{Dwell-time} = Occupancy / Footfall theo Định luật Little \cite{Little1961}. Heatmap đạt hệ số tương quan (CC) từ 0,97 đến 0,99 so với nhãn thực trên tất cả các môi trường.
+
+Kết quả thực nghiệm trên GPU RTX 5060 Ti (16GB): hệ thống đạt \textbf{$\sim$10{,}6 FPS/cam ở 20 camera đồng thời} (preset reid0) và \textbf{Global IDF1 trung bình 0,811} trên 5 môi trường kiểm thử (Lobby 0,895; Office 0,861; Café 0,833; Industry 0,805; Retail 0,660), vượt cả hai mục tiêu đề ra.
+
+\cleardoublepage
