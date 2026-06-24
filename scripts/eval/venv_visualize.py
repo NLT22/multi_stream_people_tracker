@@ -408,14 +408,18 @@ def main():
         df = preds[c]
         bg = _extract_bg(_video_for(args.video_dir, j), W, H)
         bgs[c] = bg
-        modes = {
-            "foot": accumulate(df, W, H, "foot"),
-            "dwell": accumulate(df, W, H, "dwell"),
-            "visit": accumulate(df, W, H, "visit"),
-        }
+        # Standard people-analytics metrics (named definitions, not ad-hoc):
+        #   occupancy = time-integrated spatial presence (person's footprint per cell) -> broad
+        #   footfall  = number of DISTINCT people through each cell
+        #   dwelltime = occupancy / footfall = avg time per person (Little's Law, W=L/lambda)
+        occupancy = accumulate(df, W, H, "dwell")   # whole-bbox area = spatial occupancy (broad)
+        occ_pt = accumulate(df, W, H, "foot")       # foot-point occupancy (for the ratio)
+        footfall = accumulate(df, W, H, "visit")    # distinct people / cell
+        dwelltime = occ_pt / np.maximum(footfall, footfall.max() * 1e-3 + 1e-9)
+        modes = {"occupancy": occupancy, "footfall": footfall, "dwelltime": dwelltime}
         for name, g in modes.items():
             _save(_overlay(bg, g), args.out_dir / f"cam_{c}_{name}.png")
-        print(f"[viz] cam {c}: foot/dwell/visit over background ({len(df)} dets)")
+        print(f"[viz] cam {c}: occupancy/footfall/dwelltime over background ({len(df)} dets)")
 
     # ---- camera-view tracking video with buffered IDs (no calibration needed) ----
     if args.cam_tracking:
@@ -535,7 +539,47 @@ def main():
             heat = Image.fromarray(_overlay(np.asarray(_bev_base(b)), g, alpha_max=0.9))
             _caption(heat, f"{label}  -  top-down occupancy")
             heat.save(args.out_dir / "bev_heatmap.png")
-            print(f"[viz] BEV: trajectory + heatmap ({len(world)} tracks, "
+
+            # ---- 2c. BEV foot / dwell / visit (3 floor-plane density types) ----
+            #   foot  = every detection (time-weighted occupancy, sharp)
+            #   dwell = detections weighted by how STATIONARY the person is (lingering)
+            #   visit = unique (track x floor-cell) — coverage / transit, time-independent
+            def _save_bev(grid, name, title, sigma):
+                gg = gaussian_filter(grid, sigma)
+                im = Image.fromarray(_overlay(np.asarray(_bev_base(b)), gg, alpha_max=0.9))
+                _caption(im, f"{label}  -  top-down {title}")
+                im.save(args.out_dir / name)
+
+            gf = np.zeros((BH, BW), float)   # occupancy (every detection)
+            gv = np.zeros((BH, BW), float)   # visit = unique track x floor-cell
+            cell_m = 0.5
+            for key, recs in world.items():
+                rs = sorted(recs)
+                X = np.array([r[1] for r in rs]); Y = np.array([r[2] for r in rs])
+                inb = (X >= xlo) & (X <= xhi) & (Y >= ylo) & (Y <= yhi)
+                if not inb.any():
+                    continue
+                px, py = _w2px(X, Y, b)
+                pxi = px.astype(int).clip(0, BW - 1); pyi = py.astype(int).clip(0, BH - 1)
+                np.add.at(gf, (pyi, pxi), inb.astype(float))
+                seen = set()
+                for x, y, pxx, pyy, ok in zip(X, Y, pxi, pyi, inb):
+                    if not ok:
+                        continue
+                    c = (round(x / cell_m), round(y / cell_m))
+                    if c not in seen:
+                        seen.add(c); gv[pyy, pxx] += 1.0
+            mpp = (xhi - xlo) / max(BW, 1)                          # metres per pixel
+            broad = float(np.clip(0.35 / max(mpp, 1e-6), 10, 45))  # ~0.35 m body footprint
+            #   occupancy = spatial presence (broad, footprint-smoothed)
+            #   footfall  = distinct people per floor-cell
+            #   dwelltime = occupancy / footfall (Little's Law, W=L/lambda)
+            dwelltime = gf / np.maximum(gv, 1.0)
+            _save_bev(gf, "bev_occupancy.png", "Occupancy (area density)", broad)
+            _save_bev(gv, "bev_footfall.png", "Footfall (distinct people)", 6.0)
+            _save_bev(dwelltime, "bev_dwelltime.png", "Dwell-time (occupancy/footfall)", 4.0)
+
+            print(f"[viz] BEV: trajectory + occupancy/footfall/dwelltime ({len(world)} tracks, "
                   f"{len(allX)} points, extent X[{xlo:.1f},{xhi:.1f}] Y[{ylo:.1f},{yhi:.1f}] m)")
             # ---- 2c. animated top-down tracking (AI-City style) ----
             if _bev_tracking_video(per_frame, b, args.out_dir / "bev_tracking.mp4",

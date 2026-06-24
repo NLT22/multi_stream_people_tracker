@@ -42,6 +42,8 @@ def run(config: PipelineRunConfig):
     no_display = config.no_display
     batch_size = config.batch_size
     gpu_id = config.gpu_id
+    mux_width = config.mux_width
+    mux_height = config.mux_height
     tracker_width = config.tracker_width
     tracker_height = config.tracker_height
     tracker_sub_batches = config.tracker_sub_batches
@@ -166,7 +168,7 @@ def run(config: PipelineRunConfig):
 
     mux_props = {
         "batch-size": batch, "batched-push-timeout": 40000,
-        "width": 1920, "height": 1080, "gpu-id": gpu_id,
+        "width": mux_width, "height": mux_height, "gpu-id": gpu_id,
     }
     if is_live:
         mux_props["live-source"] = 1
@@ -273,7 +275,8 @@ def run(config: PipelineRunConfig):
             frame_sizes=frame_sizes if not pretiler else None,
             geometry=geometry,
             config=reid_config,
-            passthrough_export=config.export_only)
+            passthrough_export=config.export_only,
+            buffered_remap_path=config.buffered_remap)
         if config.export_only:
             print("[reid] export-only mode: online matching/drawing OFF; "
                   "Global IDs via offline live_buffered")

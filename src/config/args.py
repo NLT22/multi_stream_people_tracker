@@ -66,6 +66,12 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                         help="Draw a live occupancy-heatmap overlay on the tiled "
                              "video (post-tiler); shows in the live view and in "
                              "--save-video. Needs the tiled (non --no-tiler) path.")
+    parser.add_argument("--buffered-remap", default=None,
+                        help="Path to live_buffered's --gids-csv (cam,ltid->gid). When "
+                             "set, OSD labels use the authoritative buffered/anchor-guided "
+                             "Global IDs (with ~window latency) instead of the volatile "
+                             "online IDs. Run src.mtmc.live_buffered concurrently writing "
+                             "this file.")
     parser.add_argument("--nvdsanalytics-config",
                         default=defaults["nvdsanalytics_config"],
                         help="Optional gst-nvdsanalytics config (ROI occupancy, "
@@ -84,6 +90,14 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
                         default=defaults["tracker_height"],
                         help="nvtracker input height. Match detector input for "
                              "best performance.")
+    parser.add_argument("--mux-width", type=int,
+                        default=defaults.get("mux_width", 1920),
+                        help="nvstreammux surface width. Inputs are scaled to this "
+                             "before PGIE/tracker/SGIE; match source res (e.g. 640) "
+                             "to avoid upscaling small inputs.")
+    parser.add_argument("--mux-height", type=int,
+                        default=defaults.get("mux_height", 1080),
+                        help="nvstreammux surface height (e.g. 360 for 640x360 inputs).")
     parser.add_argument("--tracker-sub-batches",
                         default=defaults["tracker_sub_batches"],
                         help="Optional nvtracker sub-batches string, e.g. "
