@@ -13,7 +13,7 @@ BaseConfig:
 TargetManagement:
   enableBboxUnClipping: 1
   preserveStreamUpdateOrder: 0
-  maxTargetsPerStream: 40
+  maxTargetsPerStream: 10
   minIouDiff4NewTarget: 0.50
   minTrackerConfidence: 0.35
   probationAge: 4
