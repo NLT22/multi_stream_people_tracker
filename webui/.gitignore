@@ -7,3 +7,7 @@ public/frames
 public/heatmaps
 public/feeds
 public/live
+
+# TS incremental build cache
+tsconfig.tsbuildinfo
+*.tsbuildinfo
