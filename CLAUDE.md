@@ -147,16 +147,29 @@ Restore archived scripts only when intentionally starting a new training cycle.
 ## Regression Anchors
 
 Use **honest single-pass full-GT** as the canonical measure (every frame processed once, no loop,
-no GT trimming) — score with `scripts/eval/score_longrun_idf1.py` AFTER `live_buffered --once` finishes.
+no GT trimming) — score with `scripts/eval/score_full_mmp_val.py` AFTER `live_buffered --once` finishes.
+
+**Full val (all 24 scenes, buffered ID, reid0)** — 2026-06-25, `score_full_mmp_val.py`:
+
+| Environment | Scenes | Mean IDF1 |
+|-------------|--------|-----------|
+| Lobby       | 4      | **0.893** |
+| Office      | 3      | **0.878** |
+| Industry    | 5      | **0.829** |
+| Café        | 4      | **0.823** |
+| Retail      | 8      | 0.616     |
+| **Overall** | **24** | **0.774** |
+
+**Single-scene (_0 only, 5 scenes)** — older reference numbers:
 
 | Eval | Preset | Mean Global IDF1 |
 |-------|--------|-------------|
-| honest single-pass full-GT (canonical) | `..._reid0.yaml` (default) | **0.8109** (~10.6 FPS/cam) |
-| honest single-pass full-GT (canonical) | `..._sgie.yaml` (quality) | **0.8132** (~9.5 FPS/cam) |
+| honest single-pass full-GT (5 scenes, _0 only) | `..._reid0.yaml` (default) | 0.8109 (~10.6 FPS/cam) |
+| honest single-pass full-GT (5 scenes, _0 only) | `..._sgie.yaml` (quality) | 0.8132 (~9.5 FPS/cam) |
 | 600s looped, processed-segment (optimistic) | `..._sgie.yaml` | 0.8344 |
 | 600s looped, full untrimmed GT (over-penalized) | `..._sgie.yaml` | 0.758 |
 
-Per-scene (single-pass, reid0): cafe 0.833, lobby 0.895, office 0.861, industry 0.805, **retail 0.660** (lone weak env).
+The 0.811 single-scene mean is not wrong — it just evaluated only 1 scene per env. The full-val 0.774 is the honest number across all 24 val scenes. Retail pulls it down most (8 scenes, 0.427–0.675 range).
 
 **VRAM depends almost entirely on `maxTargetsPerStream`, not the preset/model** (measured
 2026-06-25, 20-cam, nvidia-smi steady-state). NvDCF pre-allocates per-target state (DCF

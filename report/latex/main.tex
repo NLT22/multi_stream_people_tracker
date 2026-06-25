@@ -615,40 +615,44 @@ Pipeline được chạy với preset mặc định (\texttt{pipeline\_mmp\_nvdc
 
 \subsubsection{Global IDF1 theo môi trường}
 
-Bảng~\ref{tab:results} trình bày kết quả Global IDF1 của hệ thống trên 5 môi trường kiểm thử. Kết quả so sánh hai chế độ: Buffered ID (chế độ production) và phương pháp baseline DMCT-Ext-TD \cite{Han2022}.
+Bảng~\ref{tab:results} trình bày kết quả Global IDF1 của hệ thống trên toàn bộ tập validation MMPTrack --- 24 cảnh thuộc 5 môi trường --- so sánh với phương pháp baseline DMCT-Ext-TD \cite{Han2022}. Đây là lần đầu tiên hệ thống được đánh giá trên đầy đủ 24 cảnh thay vì chỉ 1 cảnh đại diện mỗi môi trường.
 
 \begin{table}[H]
     \centering
-    \caption[Kết quả Global IDF1 theo môi trường]{\bfseries\fontsize{12pt}{0pt}\selectfont Kết quả Global IDF1 theo môi trường}
-    \begin{tabular}{|l|c|c|}
+    \caption[Kết quả Global IDF1 theo môi trường --- toàn tập validation]{\bfseries\fontsize{12pt}{0pt}\selectfont Kết quả Global IDF1 theo môi trường (toàn tập validation: 24 cảnh)}
+    \begin{tabular}{|l|c|c|c|}
     \hline
-    \bfseries Môi trường & \bfseries Hệ thống đề xuất & \bfseries Baseline \cite{Han2022} \\
+    \bfseries Môi trường & \bfseries Số cảnh & \bfseries Toàn tập val & \bfseries Baseline \cite{Han2022} \\
     \hline
-    Lobby   & 0,895 & --- \\
-    Office  & 0,861 & --- \\
-    Café    & 0,833 & --- \\
-    Industry & 0,805 & --- \\
-    Retail  & 0,660 & --- \\
+    Lobby    & 4 & 0,893 & --- \\
+    Office   & 3 & 0,878 & --- \\
+    Industry & 5 & 0,829 & --- \\
+    Café     & 4 & 0,823 & --- \\
+    Retail   & 8 & 0,616 & --- \\
     \hline
-    \bfseries Trung bình & \bfseries 0,811 & \bfseries 0,741 \\
+    \bfseries Trung bình & \bfseries 24 & \bfseries 0,774 & \bfseries 0,741 \\
     \hline
     \end{tabular}
     \label{tab:results}
 \end{table}
 
-Hệ thống vượt cả hai mục tiêu đề ra: Global IDF1 trung bình 0,811 (vượt ngưỡng 0,8) và xử lý được 20 camera đồng thời ở tốc độ $\sim$10{,}6 FPS/camera (preset reid0, vượt ngưỡng 10 FPS). Điểm số trên baseline công bố trong \cite{Han2022} (0,741) tăng lên 0,811 --- tương đương cải thiện 9,4 điểm phần trăm.
+Trên toàn tập 24 cảnh, hệ thống đạt Global IDF1 trung bình \textbf{0,774} --- vượt baseline \cite{Han2022} 3,3 điểm phần trăm. Bốn trong năm môi trường (lobby, office, industry, café) đều vượt ngưỡng mục tiêu 0,8. Retail là môi trường duy nhất không đạt ngưỡng này, với IDF1 trung bình 0,616 trên 8 cảnh.
 
-Lưu ý: bảng baseline trong \cite{Han2022} không có phân tích per-scene chi tiết theo 5 môi trường; dấu ``---'' phản ánh việc không có dữ liệu so sánh trực tiếp per-environment.
+Đáng chú ý, kết quả toàn tập (0,774) thấp hơn kết quả đã báo cáo trước đây (0,811 trên 5 cảnh đại diện --- mỗi môi trường 1 cảnh). Chênh lệch này phản ánh sự khó nhau giữa các cảnh trong cùng một môi trường: retail\_0 (0,630) là cảnh dễ hơn so với trung bình 8 cảnh retail (0,616), và tương tự với các môi trường khác. Đây là đánh giá trung thực hơn vì tập validation gốc có 24 cảnh, không phải 5.
+
+Lưu ý: bảng baseline trong \cite{Han2022} không có phân tích per-environment; dấu ``---'' phản ánh việc không có dữ liệu so sánh trực tiếp.
 
 \subsubsection{Phân tích theo môi trường}
 
-\textbf{Lobby (0,895) và Office (0,861):} Hai môi trường này đạt kết quả cao nhất. Người di chuyển theo lối đi rõ ràng, camera được đặt ở góc tốt, và trang phục người dùng đa dạng giúp phân biệt.
+\textbf{Lobby (0,893, 4 cảnh):} Môi trường đạt kết quả cao nhất. Người di chuyển theo lối đi rõ ràng, camera được đặt ở góc tốt, và trang phục người dùng đa dạng giúp phân biệt. Kết quả ổn định qua cả 4 cảnh (0,872--0,906).
 
-\textbf{Café (0,833):} Kết quả tốt. Môi trường có ánh sáng tốt, mật độ người vừa phải, và camera bao phủ tốt các lối vào/ra.
+\textbf{Office (0,878, 3 cảnh):} Kết quả cao và đồng đều. Môi trường văn phòng có điều kiện ánh sáng tốt, mật độ người thấp, và người dùng có trang phục văn phòng đủ đa dạng để phân biệt.
 
-\textbf{Industry (0,805):} Kết quả đạt ngưỡng mục tiêu. Thách thức chính là đồng phục lao động làm mô hình ReID khó phân biệt. Chế độ Buffered ID cải thiện đáng kể so với Live ID --- kết quả chi tiết trình bày ở Phần~\ref{sec:buffered_eval}.
+\textbf{Industry (0,829, 5 cảnh):} Kết quả đạt ngưỡng mục tiêu, vượt kỳ vọng ban đầu. Thách thức chính là đồng phục lao động làm mô hình ReID khó phân biệt, nhưng Buffered ID với cửa sổ 20 giây giúp tích lũy đủ bằng chứng để gán đúng định danh. Biến thiên giữa các cảnh lớn hơn (0,711--0,877), cho thấy một số cảnh industry có điều kiện khó hơn.
 
-\textbf{Retail (0,660):} Môi trường yếu nhất. Nguyên nhân chính: (1) kệ hàng cao gây che khuất, làm detector bỏ sót nhiều detection; (2) nhãn YOLO gốc có 39--40\% phantom annotations sau khi dọn sạch --- cho thấy có nhiều người thực sự bị che khuất hoàn toàn. Trần che khuất này là giới hạn vật lý của camera CCTV thông thường, không thể khắc phục hoàn toàn bằng cải thiện thuật toán.
+\textbf{Café (0,823, 4 cảnh):} Kết quả tốt nhưng có biến thiên đáng kể giữa các cảnh (0,743--0,902). Hai cảnh cuối (café\_2, café\_3) có IDF1 thấp hơn, nhiều khả năng do góc camera hoặc mật độ người khác với café\_0.
+
+\textbf{Retail (0,616, 8 cảnh):} Môi trường yếu nhất với biến thiên cao (0,427--0,675). Nguyên nhân chính: (1) kệ hàng cao gây che khuất, làm detector bỏ sót nhiều detection; (2) nhãn YOLO gốc có 39--40\% phantom annotations sau khi dọn sạch --- cho thấy có nhiều người thực sự bị che khuất hoàn toàn; (3) với 6 camera/cảnh (nhiều hơn các môi trường khác), không gian bán lẻ phức tạp và camera đặt gần góc khuất nhiều hơn. Retail\_1 (0,427) là cảnh khó nhất trong toàn tập val. Trần che khuất này là giới hạn vật lý của camera CCTV thông thường, không thể khắc phục hoàn toàn bằng cải thiện thuật toán.
 
 Hình~\ref{fig:pipeline_all_osd} trình bày đầu ra pipeline trên cả 5 môi trường --- mỗi ô là khung hình tổng hợp 4 camera với bounding box màu riêng và nhãn Buffered ID. Hình~\ref{fig:pipeline_all_bev} hiển thị cùng 5 môi trường ở góc nhìn BEV, cho thấy vệt quỹ đạo di chuyển của từng người trên mặt phẳng sàn.
 
