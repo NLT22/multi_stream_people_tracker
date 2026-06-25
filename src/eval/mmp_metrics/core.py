@@ -17,6 +17,12 @@ try:
 except ImportError:
     sys.exit("[eval] motmetrics not found.  pip install motmetrics")
 
+try:
+    import trackeval  # noqa: F401
+    _TRACKEVAL_AVAILABLE = True
+except ImportError:
+    _TRACKEVAL_AVAILABLE = False
+
 from src.dataset.mmp_tracking import MMPTrackingShortDataset
 
 # GT resolution
@@ -262,6 +268,102 @@ def _eval_global_idf1(
 
     return dict(idf1=idf1, idtp=idtp, idfp=idfp, idfn=idfn,
                 num_gt_ids=len(all_pids), num_pred_ids=len(all_gids))
+
+
+# ---------------------------------------------------------------------------
+# HOTA via trackeval
+# ---------------------------------------------------------------------------
+
+def _eval_hota_camera(gt_df: pd.DataFrame, pred_df: pd.DataFrame,
+                      pred_id_col: str = "global_id") -> dict | None:
+    """Per-camera HOTA (and its DetA/AssA sub-metrics) via trackeval.
+    Returns means over the alpha thresholds, or None if trackeval is missing."""
+    if not _TRACKEVAL_AVAILABLE:
+        return None
+    from trackeval.metrics import HOTA as HOTAMetric
+
+    all_frames = sorted(set(gt_df["frame"].unique()) | set(pred_df["frame"].unique()))
+    gt_id_map: dict = {}
+    pred_id_map: dict = {}
+
+    def _remap(val, id_map):
+        if val not in id_map:
+            id_map[val] = len(id_map)
+        return id_map[val]
+
+    data: dict = {"gt_ids": [], "tracker_ids": [], "similarity_scores": [],
+                  "num_gt_dets": 0, "num_tracker_dets": 0}
+    for frame in all_frames:
+        g = gt_df[gt_df["frame"] == frame]
+        p = pred_df[pred_df["frame"] == frame]
+        gt_ids_int = [_remap(x, gt_id_map) for x in g["person_id"].tolist()]
+        pred_ids_int = [_remap(x, pred_id_map) for x in p[pred_id_col].tolist()]
+        gt_boxes = g[["left", "top", "width", "height"]].values.astype(float)
+        pred_boxes = p[["left", "top", "width", "height"]].values.astype(float)
+        data["gt_ids"].append(np.array(gt_ids_int, dtype=int))
+        data["tracker_ids"].append(np.array(pred_ids_int, dtype=int))
+        data["similarity_scores"].append(_iou_matrix(gt_boxes, pred_boxes))
+        data["num_gt_dets"] += len(gt_ids_int)
+        data["num_tracker_dets"] += len(pred_ids_int)
+    data["num_gt_ids"] = len(gt_id_map)
+    data["num_tracker_ids"] = len(pred_id_map)
+
+    try:
+        result = HOTAMetric().eval_sequence(data)
+        return {k: float(np.mean(v)) for k, v in result.items()
+                if isinstance(v, np.ndarray)}
+    except Exception as exc:
+        print(f"  [eval] HOTA failed: {exc}")
+        return None
+
+
+def compute_per_camera_metrics(all_gt: dict, all_pred: dict,
+                               iou_threshold: float = 0.5,
+                               pred_id_col: str = "global_id",
+                               with_hota: bool = True) -> list[dict]:
+    """Per-camera MOTA/MOTP/IDF1/IDS/Frag (+ optional HOTA/DetA/AssA).
+
+    all_gt / all_pred: {cam_id: dataframe}. Pred frames use `pred_id_col` as the
+    tracker id; default 'global_id' so metrics reflect the system's end-to-end
+    identity output (same id space as Global IDF1)."""
+    mh = mm.metrics.create()
+    mot_names = ["num_frames", "mota", "motp", "idf1", "num_switches",
+                 "num_fragmentations", "num_misses", "num_false_positives",
+                 "precision", "recall"]
+    rows: list[dict] = []
+    for cam_id in sorted(all_gt):
+        gt_df = all_gt[cam_id]
+        pred_df = all_pred.get(cam_id)
+        if pred_df is None:
+            continue
+        # motmetrics accumulator uses pred_id_col as the hypothesis id
+        acc = mm.MOTAccumulator(auto_id=True)
+        frames = sorted(set(gt_df["frame"].unique()) | set(pred_df["frame"].unique()))
+        for frame in frames:
+            g = gt_df[gt_df["frame"] == frame]
+            p = pred_df[pred_df["frame"] == frame]
+            gt_ids = g["person_id"].tolist()
+            pred_ids = p[pred_id_col].tolist()
+            gt_boxes = g[["left", "top", "width", "height"]].values.astype(float)
+            pred_boxes = p[["left", "top", "width", "height"]].values.astype(float)
+            if len(gt_ids) and len(pred_ids):
+                dists = 1.0 - _iou_matrix(gt_boxes, pred_boxes)
+                dists[dists > 1 - iou_threshold] = np.nan
+            else:
+                dists = np.empty((len(gt_ids), len(pred_ids)))
+            acc.update(gt_ids, pred_ids, dists)
+        summ = mh.compute(acc, metrics=mot_names, name=f"cam_{cam_id}")
+        row = {"camera": int(cam_id)}
+        for m in mot_names:
+            row[m] = float(summ[m].iloc[0])
+        if with_hota:
+            h = _eval_hota_camera(gt_df, pred_df, pred_id_col=pred_id_col)
+            if h is not None:
+                for k in ("HOTA", "DetA", "AssA", "DetRe", "DetPr", "AssRe", "AssPr"):
+                    if k in h:
+                        row[k.lower()] = h[k]
+        rows.append(row)
+    return rows
 
 
 # ---------------------------------------------------------------------------

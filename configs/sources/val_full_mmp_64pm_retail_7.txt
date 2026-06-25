@@ -1,0 +1,6 @@
+dataset/MMPTracking_10minute/val/64pm_retail_7/cam1.mp4
+dataset/MMPTracking_10minute/val/64pm_retail_7/cam2.mp4
+dataset/MMPTracking_10minute/val/64pm_retail_7/cam3.mp4
+dataset/MMPTracking_10minute/val/64pm_retail_7/cam4.mp4
+dataset/MMPTracking_10minute/val/64pm_retail_7/cam5.mp4
+dataset/MMPTracking_10minute/val/64pm_retail_7/cam6.mp4

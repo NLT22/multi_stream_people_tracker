@@ -3,7 +3,10 @@
 `run(PipelineRunConfig)` builds the GStreamer/pyservicemaker graph
 (sources → mux → nvinfer → nvtracker → probes → tiler → osd → sink) and runs it."""
 
+import signal
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pyservicemaker as psm
@@ -425,6 +428,17 @@ def run(config: PipelineRunConfig):
 
     if sidecar is not None:
         sidecar.start()
+
+    # pipeline.wait() blocks the GLib main loop entirely in C, so the GIL is
+    # never returned to Python and SIGINT never fires. Fix: run wait() in a
+    # daemon thread; spin the main thread on time.sleep() which Python DOES
+    # interrupt on SIGINT → KeyboardInterrupt → pipeline.stop().
+    _done = threading.Event()
+
+    def _wait_thread():
+        pipeline.wait()
+        _done.set()
+
     try:
         pipeline.start()
         print("[reid] Running. Gallery stats print every 60 frames.")
@@ -432,14 +446,20 @@ def run(config: PipelineRunConfig):
         if save_video:
             print(f"[reid] Recording annotated video to: {written_path}")
         print("[reid] Press Ctrl+C to stop.")
-        pipeline.wait()
+        threading.Thread(target=_wait_thread, daemon=True).start()
+        while not _done.is_set():
+            time.sleep(0.25)
     except KeyboardInterrupt:
-        print("\n[reid] Stopped.")
-        if gallery_probe is not None:
-            total_gids = gallery_probe._next_gid - 1
-            print(f"[reid] Total unique global IDs assigned: {total_gids}")
+        print("\n[reid] Stopping...")
+        pipeline.stop()
+        _done.wait(timeout=5.0)
     finally:
         pipeline.stop()
+        # Some gallery-probe variants don't expose _next_gid; guard so a normal
+        # EOS exit never crashes before the exporter is flushed/closed.
+        next_gid = getattr(gallery_probe, "_next_gid", None)
+        if next_gid is not None:
+            print(f"[reid] Total unique global IDs assigned: {next_gid - 1}")
         if sidecar is not None:
             sidecar.stop()
         if exporter is not None:

@@ -1,0 +1,4 @@
+dataset/MMPTracking_10minute/val/64pm_cafe_shop_0/cam1.mp4
+dataset/MMPTracking_10minute/val/64pm_cafe_shop_0/cam2.mp4
+dataset/MMPTracking_10minute/val/64pm_cafe_shop_0/cam3.mp4
+dataset/MMPTracking_10minute/val/64pm_cafe_shop_0/cam4.mp4
