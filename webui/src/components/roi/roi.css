@@ -1,0 +1,82 @@
+.roi { display: grid; grid-template-columns: 1fr 360px; gap: 16px; height: 100%; min-height: 0; }
+@media (max-width: 1100px) { .roi { grid-template-columns: 1fr; } }
+
+.roi__stagecol { display: flex; flex-direction: column; gap: 11px; min-height: 0; }
+.roi__toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.roi__camsel {
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 7px 10px; font-size: 12px; max-width: 320px;
+}
+.roi__div { width: 1px; height: 22px; background: var(--line); }
+.roi__modes { display: flex; gap: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 3px; }
+.roi__mode { padding: 6px 11px; border-radius: var(--r-sm); font-size: 11.5px; color: var(--dim); font-weight: 600; }
+.roi__mode.is-active { background: var(--card-hi); color: var(--signal); }
+.roi__finish { padding: 7px 12px; border-radius: var(--r); background: var(--signal); color: #06090d; font-weight: 700; font-size: 11.5px; }
+.roi__finish:disabled { opacity: 0.4; cursor: not-allowed; }
+.roi__hint { font-size: 10.5px; color: var(--dim); }
+
+.roi__kinds { display: flex; gap: 6px; flex-wrap: wrap; }
+.roi__kind {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  font-size: 11.5px; color: var(--dim);
+}
+.roi__kind i { width: 9px; height: 9px; border-radius: 2px; background: var(--kc); }
+.roi__kind:hover { color: var(--ink); }
+.roi__kind.is-active { color: var(--ink-strong); border-color: var(--kc); box-shadow: 0 0 0 1px var(--kc) inset; }
+
+.roi__stage {
+  flex: 1; min-height: 0; background: #05080c; border: 1px solid var(--line);
+  border-radius: var(--r); overflow: hidden; display: flex;
+}
+.roicanvas { width: 100%; height: 100%; display: block; touch-action: none; background: #05080c; }
+.roicanvas--draw { cursor: crosshair; }
+.roicanvas--select { cursor: default; }
+.roicanvas__lbl { font: 700 26px 'JetBrains Mono', monospace; paint-order: stroke; stroke: #05080c; stroke-width: 5px; }
+.roicanvas__handle:hover { fill: #1c2735; }
+.roicanvas__draft { pointer-events: none; }
+
+.roi__side { display: flex; flex-direction: column; gap: 13px; overflow-y: auto; min-height: 0; }
+
+.roi__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.roi__empty { font-size: 11.5px; color: var(--dim); padding: 4px 2px; }
+.roi__item { display: flex; align-items: center; gap: 10px; padding: 8px 7px; border-radius: var(--r-sm); cursor: pointer; }
+.roi__item:hover { background: var(--card); }
+.roi__item.is-sel { background: var(--card-hi); box-shadow: inset 2px 0 0 var(--signal); }
+.roi__item i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.roi__itembody { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.roi__itemname { font-size: 12.5px; color: var(--ink); }
+.roi__itemsub { font-size: 10px; color: var(--dim); }
+.roi__eye { color: var(--signal); font-size: 14px; padding: 2px 4px; }
+.roi__eye.is-off { color: var(--dim-2); }
+
+.roi__field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.roi__field input, .roi__field select {
+  background: var(--void); color: var(--ink); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 7px 9px; font-size: 12px;
+}
+.roi__field input:focus, .roi__field select:focus { outline: none; border-color: var(--signal); }
+.roi__chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.roi__chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 999px;
+  font-size: 11px; color: var(--dim); border: 1px solid var(--line); background: var(--void);
+}
+.roi__chip .hud { font-size: 12px; }
+.roi__chip.is-on { color: #06090d; background: var(--ac); border-color: var(--ac); font-weight: 600; }
+
+.roi__actions { margin-top: 4px; }
+.roi__del { width: 100%; padding: 8px; border-radius: var(--r); border: 1px solid var(--alert);
+  color: var(--alert); font-size: 12px; font-weight: 600; }
+.roi__del:hover { background: var(--alert); color: #06090d; }
+
+.roi__cfgbtns { display: flex; gap: 4px; }
+.roi__cfgbtns button { font-size: 10px; padding: 4px 9px; border-radius: var(--r-sm); border: 1px solid var(--line); color: var(--dim); font-family: var(--font-mono); }
+.roi__cfgbtns button:hover { color: var(--signal); border-color: var(--signal-deep); }
+.roi__config {
+  margin: 0; font-size: 10.5px; line-height: 1.55; color: var(--ink);
+  background: var(--void); border-radius: var(--r-sm); padding: 11px; max-height: 260px;
+  overflow: auto; white-space: pre; border: 1px solid var(--line-soft);
+}
+.roi__gozone { padding: 10px; border-radius: var(--r); background: var(--card);
+  border: 1px solid var(--line); color: var(--ink); font-size: 12px; }
+.roi__gozone:hover { border-color: var(--signal-deep); color: var(--signal); }

@@ -394,9 +394,14 @@ class CrossCameraGalleryProbe(
             if self._buffered_remap_path:
                 bgid = self._buffered_track_gid.get((src, obj_meta.object_id))
                 draw_gid = bgid if bgid is not None else self._display_gid(row.gid)
+                # A track not yet clustered into a stable Buffered ID shows a
+                # "resolving" marker instead of the volatile online id — the
+                # online id inflates fast under fragmentation and reads as an
+                # "ID explosion". Only authoritative Buffered IDs get a number.
+                label = f"GID:{bgid} " if bgid is not None else "ID:··· "
             else:
                 draw_gid = self._display_gid(row.gid)
-            label = f"GID:{draw_gid if draw_gid is not None else '?'} "
+                label = f"GID:{draw_gid if draw_gid is not None else '?'} "
             set_object_label(obj_meta, label)
             style_object_by_id(obj_meta, draw_gid)
 

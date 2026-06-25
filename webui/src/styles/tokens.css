@@ -1,0 +1,54 @@
+/* ============================================================
+   SENTINEL — operations control room design tokens
+   A deliberate identity: deep-slate void, single teal signal,
+   amber/red telemetry, indigo for analytics. HUD-grade type.
+   ============================================================ */
+:root {
+  /* surfaces */
+  --void: #0a0e14;
+  --panel: #10161f;
+  --card: #161e2a;
+  --card-hi: #1c2735;
+  --line: #232f3e;
+  --line-soft: #1a2330;
+
+  /* ink */
+  --ink: #c9d5e1;
+  --ink-strong: #eef4fa;
+  --dim: #687889;
+  --dim-2: #4a5867;
+
+  /* signal palette */
+  --signal: #2de2c8;       /* teal — live / active / primary */
+  --signal-deep: #14a896;
+  --warn: #f6a821;         /* amber — degraded / warning */
+  --alert: #ff4d5e;        /* red — offline / restricted / alarm */
+  --scan: #7c83ff;         /* indigo — analytics / heatmap */
+
+  /* status (explicit so badges read instantly) */
+  --st-online: #2de2c8;
+  --st-warn: #f6a821;
+  --st-offline: #ff4d5e;
+
+  /* thermal ramp for heatmaps */
+  --heat-0: #15173a;
+  --heat-1: #3b2f87;
+  --heat-2: #b5408a;
+  --heat-3: #f5793b;
+  --heat-4: #ffe24d;
+
+  /* type */
+  --font-hud: 'Chakra Petch', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* geometry */
+  --r-sm: 3px;
+  --r: 5px;
+  --r-lg: 8px;
+  --rail-w: 248px;
+  --topbar-h: 54px;
+
+  --shadow: 0 8px 28px -12px rgba(0, 0, 0, 0.7);
+  --glow-signal: 0 0 0 1px rgba(45, 226, 200, 0.35), 0 0 18px -4px rgba(45, 226, 200, 0.45);
+}

@@ -17,7 +17,8 @@ source venv/bin/activate
 
 # Run the production pipeline on the current source list
 # Default = reid0 perf preset: same honest IDF1 as the quality preset (~0.81) but
-# faster (~10.6 FPS/cam) and leaner (~9.4 GB). See Config Presets / Regression Anchors.
+# faster (~10.6 FPS/cam) and leaner (~3.5 GB at maxTargetsPerStream=40).
+# See Config Presets / Regression Anchors (VRAM is driven by maxTargetsPerStream).
 python -m src.main \
     --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml \
     --sources configs/sources/val_20cam_mixed.txt \
@@ -130,6 +131,9 @@ Config file paths inside nvinfer YAML configs are **relative to the config file'
 
 ### VRAM Pressure
 
+- **`maxTargetsPerStream` is the dominant VRAM lever** — NvDCF pre-allocates per-target
+  state (DCF filters + ReID buffers) for `maxTargetsPerStream × streams`, so 220 vs 40 is
+  the difference between ~9–13 GB and ~3.5–4 GB at 20 cams. MMP never needs >40.
 - Prefer `pipeline_mmp_nvdcf_online_sgie_reid0.yaml` for lower VRAM.
 - Use `--no-display --no-sync` for evaluation/soak runs.
 - If more headroom is needed, test SGIE `interval` changes before changing the detector.
@@ -147,11 +151,26 @@ no GT trimming) — score with `scripts/eval/score_longrun_idf1.py` AFTER `live_
 
 | Eval | Preset | Mean Global IDF1 |
 |-------|--------|-------------|
-| honest single-pass full-GT (canonical) | `..._reid0.yaml` (default) | **0.8109** (~10.6 FPS/cam, 9.4 GB) |
-| honest single-pass full-GT (canonical) | `..._sgie.yaml` (quality) | **0.8132** (~9.5 FPS/cam, 12.7 GB) |
+| honest single-pass full-GT (canonical) | `..._reid0.yaml` (default) | **0.8109** (~10.6 FPS/cam) |
+| honest single-pass full-GT (canonical) | `..._sgie.yaml` (quality) | **0.8132** (~9.5 FPS/cam) |
 | 600s looped, processed-segment (optimistic) | `..._sgie.yaml` | 0.8344 |
 | 600s looped, full untrimmed GT (over-penalized) | `..._sgie.yaml` | 0.758 |
 
 Per-scene (single-pass, reid0): cafe 0.833, lobby 0.895, office 0.861, industry 0.805, **retail 0.660** (lone weak env).
+
+**VRAM depends almost entirely on `maxTargetsPerStream`, not the preset/model** (measured
+2026-06-25, 20-cam, nvidia-smi steady-state). NvDCF pre-allocates per-target state (DCF
+correlation filters; plus ReID buffers when `reidType:2`) for the full `maxTargetsPerStream ×
+streams` capacity, regardless of the actual ~5–15 people/cam:
+
+| Preset | `reidType` | `maxTargetsPerStream` | VRAM (20-cam) |
+|--------|-----------|----------------------|---------------|
+| reid0 (current default) | 0 | 40 | **~3.5 GB** |
+| reid0 (pre-4.4-audit) | 0 | 220 | **~9.4 GB** ← the older figure; not wrong, just `maxTargets=220` |
+| quality | 2 | 40 | **~4.2 GB** (the ReID model itself adds only ~0.7 GB) |
+| quality (as shipped) | 2 | 220 | **~12.8 GB** |
+
+So the old "9.4 GB" was reid0 at `maxTargetsPerStream=220`; the 4.4 audit cut it to 40 → ~3.5 GB.
+Lowering `maxTargetsPerStream` is the single biggest VRAM lever (MMP never needs 220).
 
 Current nearline best config: `threshold=0.62`, `margin=0.02`, `geo_weight=0.25`, `geo_min_overlaps=8`, `window_frames=125`.

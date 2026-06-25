@@ -46,6 +46,7 @@ def main(argv: list[str] | None = None) -> None:
         save_video=args.save_video,
         record_bitrate=args.record_bitrate,
         no_display=args.no_display,
+        stream_hls=getattr(args, "stream_hls", None),
         batch_size=args.batch_size,
         gpu_id=args.gpu_id,
         tracker_width=args.tracker_width,

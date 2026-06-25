@@ -234,6 +234,11 @@ def build_arg_parser(defaults: dict) -> argparse.ArgumentParser:
     parser.add_argument("--record-bitrate", type=int,
                         default=defaults["record_bitrate"],
                         help="H.264 recording bitrate in bits/sec")
+    parser.add_argument("--stream-hls", nargs="?", const="webui/public/live",
+                        default=None,
+                        help="Stream the annotated OSD canvas as live HLS into this "
+                             "directory (writes stream.m3u8 + rolling .ts). Default dir "
+                             "when no value given: webui/public/live")
     parser.add_argument("--no-display", action="store_true",
                         default=defaults["no_display"],
                         help="Only valid with --save-video: record without opening a window")

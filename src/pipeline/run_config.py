@@ -29,6 +29,8 @@ class PipelineRunConfig:
     save_video: str | None
     record_bitrate: int
     no_display: bool
+    # Live HLS output dir (writes stream.m3u8 + rolling .ts for a browser player).
+    stream_hls: str | None = None
 
     # ── Optional (defaults mirror the old run() signature) ──────────────────
     batch_size: int | None = None

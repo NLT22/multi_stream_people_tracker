@@ -13,7 +13,7 @@ from src.pipeline.model_utils import (
     infer_person_class_id,
 )
 from src.pipeline.engine_prep import prepare_nvinfer_config
-from src.pipeline.recording import add_recording_branch, compute_grid
+from src.pipeline.recording import add_recording_branch, add_hls_branch, compute_grid
 from src.pipeline.run_config import PipelineRunConfig
 from src.eval.export import PredictionExporter
 from src.eval.gt_overlay import GtOverlayProbe
@@ -38,6 +38,7 @@ def run(config: PipelineRunConfig):
     use_hungarian_assignment = config.use_hungarian_assignment
     enforce_unique_per_stream = config.enforce_unique_per_stream
     save_video = config.save_video
+    stream_hls = config.stream_hls
     record_bitrate = config.record_bitrate
     no_display = config.no_display
     batch_size = config.batch_size
@@ -179,6 +180,11 @@ def run(config: PipelineRunConfig):
         src_props = {"uri": uri, "gpu-id": gpu_id}
         if is_live:
             src_props["live-source"] = 1
+            if uri.startswith("rtsp://"):
+                # Force RTP-over-TCP: UDP often silently drops all packets behind
+                # NAT/firewall/Docker bridges and stalls the stream at 0 fps.
+                src_props["select-rtp-protocol"] = 4   # GST_RTSP_LOWER_TRANS_TCP
+                src_props["latency"] = 200
         if loop_video and not is_live:
             src_props["file-loop"] = 1
         pipeline.add("nvurisrcbin", name, src_props)
@@ -377,7 +383,23 @@ def run(config: PipelineRunConfig):
     # Use for RTSP, high-fps sources (MTA=41fps), or slow GPUs.
     sink_sync = 0 if (is_live or no_sync) else 1
 
-    if save_video and not no_display:
+    if stream_hls:
+        # Live HLS branch: tee the OSD canvas so the stream coexists with a
+        # display window (when not headless) or runs standalone (headless).
+        if no_display:
+            hls_path = add_hls_branch(
+                pipeline, visual_tail, stream_hls, record_bitrate,
+                canvas_w=total_w, canvas_h=total_h, gpu_id=gpu_id)
+        else:
+            pipeline.add("tee", "output_tee")
+            pipeline.add("queue", "display_queue", {"leaky": 2, "max-size-buffers": 5})
+            pipeline.add(get_sink_element(), "sink", {"sync": sink_sync, "qos": 0, "async": 0})
+            pipeline.link(visual_tail, "output_tee", "display_queue", "sink")
+            hls_path = add_hls_branch(
+                pipeline, "output_tee", stream_hls, record_bitrate,
+                canvas_w=total_w, canvas_h=total_h, gpu_id=gpu_id)
+        print(f"[reid] streaming live HLS -> {hls_path}")
+    elif save_video and not no_display:
         pipeline.add("tee", "output_tee")
         # leaky display queue: if the encoder branch stalls, the live view keeps
         # moving instead of the whole tee dead-locking.

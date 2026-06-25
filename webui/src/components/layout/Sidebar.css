@@ -1,0 +1,67 @@
+.rail {
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  min-height: 0; overflow: hidden;
+  position: relative; z-index: 2;
+}
+.rail__brand {
+  display: flex; align-items: center; gap: 11px;
+  padding: 14px 16px; border-bottom: 1px solid var(--line); flex: none;
+}
+.rail__mark {
+  font-size: 22px; color: var(--signal);
+  text-shadow: 0 0 14px var(--signal-deep);
+}
+.rail__name { font-size: 16px; font-weight: 700; letter-spacing: 0.16em; }
+.rail__sub { margin-top: 1px; }
+
+.rail__nav { padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; flex: none; }
+.rail__navitem {
+  display: flex; align-items: center; gap: 11px;
+  padding: 8px 11px; border-radius: var(--r); font-size: 12.5px; font-weight: 500;
+  color: var(--dim); text-align: left; border-left: 2px solid transparent;
+}
+.rail__navitem:hover { background: var(--card); color: var(--ink); }
+.rail__navitem.is-active {
+  background: linear-gradient(90deg, rgba(45,226,200,0.12), transparent);
+  color: var(--ink-strong); border-left-color: var(--signal);
+}
+.rail__glyph { font-size: 15px; width: 18px; text-align: center; }
+.rail__navitem.is-active .rail__glyph { color: var(--signal); }
+
+.rail__zones { flex: 1; overflow-y: auto; padding: 6px 8px 12px; border-top: 1px solid var(--line); }
+.rail__zhd { padding: 10px 8px 8px; }
+
+.ztree { margin-bottom: 2px; }
+.ztree__row { display: flex; align-items: center; gap: 4px; }
+.ztree__toggle {
+  width: 16px; color: var(--dim-2); font-size: 10px; flex: none; padding: 4px 0;
+}
+.ztree__toggle:hover { color: var(--ink); }
+.ztree__name {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px; border-radius: var(--r-sm); font-size: 12.5px; color: var(--ink);
+  text-align: left; font-weight: 500;
+}
+.ztree__name:hover { background: var(--card); }
+.ztree__name.is-active { color: var(--signal); }
+.ztree__swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.ztree__count { font-size: 10px; color: var(--dim); padding-right: 4px; }
+
+.ztree__cams { list-style: none; margin: 1px 0 4px; padding: 0 0 0 18px; }
+.ztree__cam {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 5px 6px; border-radius: var(--r-sm); color: var(--dim);
+  font-size: 11.5px; text-align: left;
+}
+.ztree__cam:hover { background: var(--card); color: var(--ink); }
+.ztree__cam.is-active { background: var(--card-hi); color: var(--ink-strong); }
+.ztree__camname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ztree__fps { font-size: 10px; color: var(--dim-2); }
+
+.rail__foot {
+  flex: none; padding: 10px 14px; border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 10px; color: var(--dim);
+}

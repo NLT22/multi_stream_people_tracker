@@ -1,0 +1,27 @@
+.c-panel { display: flex; flex-direction: column; min-height: 0; }
+.c-panel__hd {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px; border-bottom: 1px solid var(--line); flex: none;
+}
+.c-panel__body { padding: 12px; flex: 1; min-height: 0; }
+
+/* status dot */
+.c-dot { display: inline-flex; align-items: center; gap: 6px; }
+.c-dot i { width: 7px; height: 7px; border-radius: 50%; display: block; }
+.c-dot em { font-size: 10px; font-style: normal; letter-spacing: 0.1em; }
+.c-dot--online i { background: var(--st-online); box-shadow: 0 0 8px var(--st-online); animation: pulse 2.4s infinite; }
+.c-dot--online em { color: var(--st-online); }
+.c-dot--warning i { background: var(--st-warn); box-shadow: 0 0 8px var(--st-warn); animation: pulse 1.4s infinite; }
+.c-dot--warning em { color: var(--st-warn); }
+.c-dot--offline i { background: var(--st-offline); }
+.c-dot--offline em { color: var(--st-offline); }
+
+/* stat */
+.c-stat__v { font-size: 26px; font-weight: 700; line-height: 1; color: var(--ink-strong); }
+.c-stat__u { font-size: 11px; color: var(--dim); margin-left: 3px; font-weight: 500; }
+.c-stat__l { margin-top: 5px; }
+
+.c-spark { display: block; }
+
+.c-bar { height: 4px; background: var(--line-soft); border-radius: 3px; overflow: hidden; }
+.c-bar span { display: block; height: 100%; border-radius: 3px; transition: width 0.4s ease; }

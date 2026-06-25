@@ -1,0 +1,33 @@
+.zoneview { display: flex; flex-direction: column; gap: 16px; }
+.zoneview__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.zoneview__title { display: flex; align-items: center; gap: 12px; }
+.zoneview__swatch { width: 30px; height: 30px; border-radius: var(--r-sm); flex: none; box-shadow: 0 0 16px -2px currentColor; }
+.zoneview__zswitch { display: flex; gap: 4px; flex-wrap: wrap; }
+.zoneview__ztab {
+  display: flex; align-items: center; gap: 7px; padding: 6px 11px; font-size: 11.5px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); color: var(--dim);
+}
+.zoneview__ztab i { width: 8px; height: 8px; border-radius: 2px; }
+.zoneview__ztab:hover { color: var(--ink); }
+.zoneview__ztab.is-active { color: var(--ink-strong); border-color: var(--signal-deep); }
+
+.zoneview__body { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+@media (max-width: 1040px) { .zoneview__body { grid-template-columns: 1fr; } }
+.zoneview__cams { display: grid; grid-template-columns: repeat(2, 1fr); gap: 13px; }
+@media (max-width: 620px) { .zoneview__cams { grid-template-columns: 1fr; } }
+
+.zoneview__side { display: flex; flex-direction: column; gap: 14px; }
+.zoneview__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.zoneview__blurb { margin: 0; font-size: 12px; color: var(--dim); line-height: 1.5; }
+.zoneview__actions { display: flex; flex-direction: column; gap: 7px; }
+.zoneview__actions button {
+  text-align: left; padding: 9px 11px; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); font-size: 12px; color: var(--ink);
+}
+.zoneview__actions button:hover { border-color: var(--signal-deep); color: var(--signal); }
+.zoneview__empty { margin: 0; font-size: 12px; color: var(--dim); }
+
+.zoneview__events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.zev { display: flex; align-items: center; gap: 9px; padding: 7px 4px; border-bottom: 1px solid var(--line-soft); }
+.zev__msg { flex: 1; font-size: 11.5px; color: var(--ink); }
+.zev__ago { font-size: 10px; color: var(--dim); }

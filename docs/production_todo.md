@@ -52,12 +52,19 @@ no GT trimming; score with `scripts/eval/score_longrun_idf1.py` after `live_buff
 ```text
 performance preset (DEFAULT — reid0):
   mean IDF1: 0.8109  (cafe 0.833 lobby 0.895 office 0.861 industry 0.805 retail 0.660)
-  ~10.6 FPS/cam, ~9.4 GB
+  ~10.6 FPS/cam, ~3.5 GB (maxTargetsPerStream=40)
 
 quality preset (reidType:2):
   mean IDF1: 0.8132  (cafe 0.834 lobby 0.895 office 0.877 industry 0.806 retail 0.655)
-  ~9.5 FPS/cam, ~12.7 GB
+  ~9.5 FPS/cam, ~12.7 GB (maxTargetsPerStream=220; ~4.2 GB if dropped to 40)
 ```
+
+VRAM note (measured 2026-06-25, nvidia-smi steady-state, 20-cam): VRAM is driven by
+`maxTargetsPerStream`, not the model. NvDCF pre-allocates per-target state (DCF filters +
+ReID buffers when reidType:2) for `maxTargetsPerStream × streams`. So the earlier "~9.4 GB"
+reid0 figure (e.g. the 3.2 soak's 9.45 GB) is NOT wrong — it was reid0 at the old
+`maxTargetsPerStream=220`. The 4.4 audit cut it to 40, giving ~3.5 GB. Reid0@40=3.5,
+quality@40=4.2, quality@220=12.8 — the ReID model itself adds only ~0.7 GB.
 
 The two presets tie on IDF1 (global IDs come from the SGIE embeddings; NvDCF internal ReID only
 aids local continuity, which buffered clustering is robust to) — reid0 is the default (more headroom).
@@ -487,7 +494,8 @@ det_emb_chunk_*.npz files keep appearing
 - [ ] Run overnight RTSP/file-loop soak.
 - [x] Watch (validated over 25 min via `summarize_long_run.py`):
   - FPS stability    — avg 10.93 (min 10.40, max 11.60), no degradation
-  - VRAM/RSS creep   — VRAM avg 9.45 GB stable; RSS creep +117 MB/24min (watch overnight)
+  - VRAM/RSS creep   — VRAM avg 9.45 GB stable [at maxTargetsPerStream=220; ~3.5 GB after the
+    4.4 audit cut it to 40 — see VRAM note above]; RSS creep +117 MB/24min (watch overnight)
   - GID count plateau — active 8 / total 10 (creep +2), no leak
   - output chunk cadence — steady (81 chunks)
   - pipeline log errors  — 0

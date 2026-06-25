@@ -1,0 +1,9 @@
+node_modules
+dist
+.vite
+
+# generated/copied assets — rebuild with `npm run assets`
+public/frames
+public/heatmaps
+public/feeds
+public/live
