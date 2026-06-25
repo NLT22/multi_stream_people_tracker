@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.6.24)  24 JUN 2026 18:11
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.6.24)  25 JUN 2026 18:03
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -773,7 +773,7 @@ LaTeX Font Info:    ... okay on input line 70.
 * paper: custom
 * layout: <same size as paper>
 * layoutoffset:(h,v)=(0.0pt,0.0pt)
-* modes: twoside 
+* modes: 
 * h-part:(L,W,R)=(85.35826pt, 455.24411pt, 56.9055pt)
 * v-part:(T,H,B)=(56.9055pt, 717.00937pt, 71.13188pt)
 * \paperwidth=597.50787pt
@@ -781,7 +781,7 @@ LaTeX Font Info:    ... okay on input line 70.
 * \textwidth=455.24411pt
 * \textheight=717.00937pt
 * \oddsidemargin=13.08827pt
-* \evensidemargin=-15.36449pt
+* \evensidemargin=13.08827pt
 * \topmargin=-52.36449pt
 * \headheight=12.0pt
 * \headsep=25.0pt
@@ -795,8 +795,8 @@ LaTeX Font Info:    ... okay on input line 70.
 * \voffset=0.0pt
 * \mag=1000
 * \@twocolumnfalse
-* \@twosidetrue
-* \@mparswitchtrue
+* \@twosidefalse
+* \@mparswitchfalse
 * \@reversemarginfalse
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
@@ -862,26 +862,31 @@ LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7.80008> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 34.
  [1
 
-{C:/Users/nguye/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/vntex/t5.enc} <./Images/VSF_logo.jpg>]) (LoiNoiDau.tex [2
+{C:/Users/nguye/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/vntex/t5.enc} <./Images/VSF_logo.jpg>]) (LoiNoiDau.tex
+pdfTeX warning (ext4): destination with the same identifier (name{page.1}) has been already used, duplicate ignored
+<to be read again> 
+                   \relax 
+l.13 \clearpage
+                [1
 
-]) (main.toc [3
+]) (main.toc [2
 
-] [4])
+] [3]
+LaTeX Font Info:    Trying to load font information for T5+cmtt on input line 57.
+ (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/vntex\t5cmtt.fd
+File: t5cmtt.fd 1999/05/25 v2.5h Standard LaTeX font definitions
+))
 \tf@toc=\write5
 \openout5 = `main.toc'.
 
- [5] (Abbreviations.tex
+ [4] (Abbreviations.tex
 Overfull \hbox (29.69043pt too wide) in paragraph at lines 7--39
  [][] 
  []
 
 [1
 
-]) (main.lof
-LaTeX Font Info:    Trying to load font information for T5+cmtt on input line 7.
- (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/vntex\t5cmtt.fd
-File: t5cmtt.fd 1999/05/25 v2.5h Standard LaTeX font definitions
-))
+]) (main.lof)
 \tf@lof=\write6
 \openout6 = `main.lof'.
 
@@ -912,27 +917,27 @@ pdfTeX warning (ext4): destination with the same identifier (name{page.3}) has b
                    \relax 
 l.203 \begin{equation}
                        [3]
-<Images/orig_cafe_shop_cam1.jpg, id=456, 642.4pt x 361.35pt>
+<Images/orig_cafe_shop_cam1.jpg, id=457, 642.4pt x 361.35pt>
 File: Images/orig_cafe_shop_cam1.jpg Graphic file (type jpg)
 <use Images/orig_cafe_shop_cam1.jpg>
 Package pdftex.def Info: Images/orig_cafe_shop_cam1.jpg  used on input line 245.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/orig_lobby_cam1.jpg, id=457, 642.4pt x 361.35pt>
+<Images/orig_lobby_cam1.jpg, id=458, 642.4pt x 361.35pt>
 File: Images/orig_lobby_cam1.jpg Graphic file (type jpg)
 <use Images/orig_lobby_cam1.jpg>
 Package pdftex.def Info: Images/orig_lobby_cam1.jpg  used on input line 251.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/orig_office_cam1.jpg, id=458, 642.4pt x 361.35pt>
+<Images/orig_office_cam1.jpg, id=459, 642.4pt x 361.35pt>
 File: Images/orig_office_cam1.jpg Graphic file (type jpg)
 <use Images/orig_office_cam1.jpg>
 Package pdftex.def Info: Images/orig_office_cam1.jpg  used on input line 257.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/orig_industry_safety_cam1.jpg, id=459, 642.4pt x 361.35pt>
+<Images/orig_industry_safety_cam1.jpg, id=460, 642.4pt x 361.35pt>
 File: Images/orig_industry_safety_cam1.jpg Graphic file (type jpg)
 <use Images/orig_industry_safety_cam1.jpg>
 Package pdftex.def Info: Images/orig_industry_safety_cam1.jpg  used on input line 263.
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/orig_retail_cam1.jpg, id=460, 642.4pt x 361.35pt>
+<Images/orig_retail_cam1.jpg, id=461, 642.4pt x 361.35pt>
 File: Images/orig_retail_cam1.jpg Graphic file (type jpg)
 <use Images/orig_retail_cam1.jpg>
 Package pdftex.def Info: Images/orig_retail_cam1.jpg  used on input line 269.
@@ -942,17 +947,12 @@ pdfTeX warning (ext4): destination with the same identifier (name{page.4}) has b
 <to be read again> 
                    \relax 
 l.275 
-       [4]
-pdfTeX warning (ext4): destination with the same identifier (name{page.5}) has been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.291 
-       [5 <./Images/orig_cafe_shop_cam1.jpg> <./Images/orig_lobby_cam1.jpg> <./Images/orig_office_cam1.jpg> <./Images/orig_industry_safety_cam1.jpg> <./Images/orig_retail_cam1.jpg>] [6] [7]
+       [4] [5 <./Images/orig_cafe_shop_cam1.jpg> <./Images/orig_lobby_cam1.jpg> <./Images/orig_office_cam1.jpg> <./Images/orig_industry_safety_cam1.jpg> <./Images/orig_retail_cam1.jpg>] [6] [7]
 Overfull \hbox (14.02707pt too wide) in paragraph at lines 362--363
 []\T5/ptm/m/n/13 Mët ^^_iºm kÿ thuªt quan trång: probe thu thªp \T5/cmtt/m/n/13 source_id \T5/ptm/m/n/13 (\T5/ptm/b/n/13 SourceIdCollectorProbe\T5/ptm/m/n/13 )
  []
 
-<Images/buffered_camera.png, id=495, 1284.8pt x 722.7pt>
+<Images/buffered_camera.png, id=497, 1284.8pt x 722.7pt>
 File: Images/buffered_camera.png Graphic file (type png)
 <use Images/buffered_camera.png>
 Package pdftex.def Info: Images/buffered_camera.png  used on input line 366.
@@ -963,17 +963,17 @@ Overfull \hbox (44.09755pt too wide) in paragraph at lines 391--392
  []
 
 [9 <./Images/buffered_camera.png (PNG copy)>] [10]
-<Images/live_id.png, id=516, 1927.2pt x 1084.05pt>
+<Images/live_id.png, id=518, 1927.2pt x 1084.05pt>
 File: Images/live_id.png Graphic file (type png)
 <use Images/live_id.png>
 Package pdftex.def Info: Images/live_id.png  used on input line 426.
 (pdftex.def)             Requested size: 223.07211pt x 125.46538pt.
-<Images/buffered_camera2.png, id=517, 1284.8pt x 722.7pt>
+<Images/buffered_camera2.png, id=519, 1284.8pt x 722.7pt>
 File: Images/buffered_camera2.png Graphic file (type png)
 <use Images/buffered_camera2.png>
 Package pdftex.def Info: Images/buffered_camera2.png  used on input line 432.
 (pdftex.def)             Requested size: 223.07211pt x 125.47089pt.
-<Images/buffered_bev.png, id=518, 762.85pt x 1230.5975pt>
+<Images/buffered_bev.png, id=520, 762.85pt x 1230.5975pt>
 File: Images/buffered_bev.png Graphic file (type png)
 <use Images/buffered_bev.png>
 Package pdftex.def Info: Images/buffered_bev.png  used on input line 441.
@@ -984,32 +984,32 @@ Overfull \hbox (1.77882pt too wide) in paragraph at lines 453--454
  []
 
 [12 <./Images/buffered_bev.png (PNG copy)>] [13]
-<Images/hm23_cam0_occupancy.png, id=539, 642.4pt x 361.35pt>
+<Images/hm23_cam0_occupancy.png, id=541, 642.4pt x 361.35pt>
 File: Images/hm23_cam0_occupancy.png Graphic file (type png)
 <use Images/hm23_cam0_occupancy.png>
 Package pdftex.def Info: Images/hm23_cam0_occupancy.png  used on input line 487.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/hm23_cam0_footfall.png, id=540, 642.4pt x 361.35pt>
+<Images/hm23_cam0_footfall.png, id=542, 642.4pt x 361.35pt>
 File: Images/hm23_cam0_footfall.png Graphic file (type png)
 <use Images/hm23_cam0_footfall.png>
 Package pdftex.def Info: Images/hm23_cam0_footfall.png  used on input line 493.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/hm23_cam0_dwelltime.png, id=541, 642.4pt x 361.35pt>
+<Images/hm23_cam0_dwelltime.png, id=543, 642.4pt x 361.35pt>
 File: Images/hm23_cam0_dwelltime.png Graphic file (type png)
 <use Images/hm23_cam0_dwelltime.png>
 Package pdftex.def Info: Images/hm23_cam0_dwelltime.png  used on input line 499.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/hm23_bev_occupancy.png, id=542, 762.85pt x 1178.4025pt>
+<Images/hm23_bev_occupancy.png, id=544, 762.85pt x 1178.4025pt>
 File: Images/hm23_bev_occupancy.png Graphic file (type png)
 <use Images/hm23_bev_occupancy.png>
 Package pdftex.def Info: Images/hm23_bev_occupancy.png  used on input line 510.
 (pdftex.def)             Requested size: 145.68144pt x 225.0316pt.
-<Images/hm23_bev_footfall.png, id=543, 762.85pt x 1178.4025pt>
+<Images/hm23_bev_footfall.png, id=545, 762.85pt x 1178.4025pt>
 File: Images/hm23_bev_footfall.png Graphic file (type png)
 <use Images/hm23_bev_footfall.png>
 Package pdftex.def Info: Images/hm23_bev_footfall.png  used on input line 516.
 (pdftex.def)             Requested size: 145.68144pt x 225.0316pt.
-<Images/hm23_bev_dwelltime.png, id=544, 762.85pt x 1178.4025pt>
+<Images/hm23_bev_dwelltime.png, id=546, 762.85pt x 1178.4025pt>
 File: Images/hm23_bev_dwelltime.png Graphic file (type png)
 <use Images/hm23_bev_dwelltime.png>
 Package pdftex.def Info: Images/hm23_bev_dwelltime.png  used on input line 522.
@@ -1024,7 +1024,7 @@ Overfull \hbox (30.77565pt too wide) in paragraph at lines 546--558
  [][] 
  []
 
-<Images/analytics.png, id=552, 1927.2pt x 1084.05pt>
+<Images/analytics.png, id=554, 1927.2pt x 1084.05pt>
 File: Images/analytics.png Graphic file (type png)
 <use Images/analytics.png>
 Package pdftex.def Info: Images/analytics.png  used on input line 562.
@@ -1036,81 +1036,86 @@ Overfull \hbox (60.90025pt too wide) in paragraph at lines 612--613
 []\T5/ptm/m/n/13 Pipeline ^^_÷ñc ch¤y vîi pre-set m°c ^^_ành (\T5/cmtt/m/n/13 pipeline_mmp_nvdcf_online_sgie_reid0.yaml\T5/ptm/m/n/13 ):
  []
 
-[17]
-<Images/pipeline_cafe_shop_osd.jpg, id=576, 1284.8pt x 722.7pt>
+[17] [18]
+<Images/pipeline_cafe_shop_osd.jpg, id=581, 1284.8pt x 722.7pt>
 File: Images/pipeline_cafe_shop_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_cafe_shop_osd.jpg>
-Package pdftex.def Info: Images/pipeline_cafe_shop_osd.jpg  used on input line 659.
+Package pdftex.def Info: Images/pipeline_cafe_shop_osd.jpg  used on input line 660.
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/pipeline_lobby_osd.jpg, id=577, 1284.8pt x 722.7pt>
+<Images/pipeline_lobby_osd.jpg, id=582, 1284.8pt x 722.7pt>
 File: Images/pipeline_lobby_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_lobby_osd.jpg>
-Package pdftex.def Info: Images/pipeline_lobby_osd.jpg  used on input line 665.
+Package pdftex.def Info: Images/pipeline_lobby_osd.jpg  used on input line 666.
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/pipeline_office_osd.jpg, id=578, 1284.8pt x 722.7pt>
+<Images/pipeline_office_osd.jpg, id=583, 1284.8pt x 722.7pt>
 File: Images/pipeline_office_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_office_osd.jpg>
-Package pdftex.def Info: Images/pipeline_office_osd.jpg  used on input line 671.
+Package pdftex.def Info: Images/pipeline_office_osd.jpg  used on input line 672.
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/pipeline_industry_safety_osd.jpg, id=579, 1284.8pt x 722.7pt>
+<Images/pipeline_industry_safety_osd.jpg, id=584, 1284.8pt x 722.7pt>
 File: Images/pipeline_industry_safety_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_industry_safety_osd.jpg>
-Package pdftex.def Info: Images/pipeline_industry_safety_osd.jpg  used on input line 677.
+Package pdftex.def Info: Images/pipeline_industry_safety_osd.jpg  used on input line 678.
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/pipeline_retail_osd.jpg, id=580, 1284.8pt x 722.7pt>
+<Images/pipeline_retail_osd.jpg, id=585, 1284.8pt x 722.7pt>
 File: Images/pipeline_retail_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_retail_osd.jpg>
-Package pdftex.def Info: Images/pipeline_retail_osd.jpg  used on input line 683.
+Package pdftex.def Info: Images/pipeline_retail_osd.jpg  used on input line 684.
 (pdftex.def)             Requested size: 273.14923pt x 153.64615pt.
- [18]
-<Images/pipeline_cafe_shop_bev.jpg, id=585, 762.85pt x 706.64pt>
+<Images/pipeline_cafe_shop_bev.jpg, id=586, 762.85pt x 706.64pt>
 File: Images/pipeline_cafe_shop_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_cafe_shop_bev.jpg>
-Package pdftex.def Info: Images/pipeline_cafe_shop_bev.jpg  used on input line 694.
+Package pdftex.def Info: Images/pipeline_cafe_shop_bev.jpg  used on input line 695.
 (pdftex.def)             Requested size: 145.68144pt x 134.94229pt.
-<Images/pipeline_lobby_bev.jpg, id=586, 762.85pt x 1505.625pt>
+<Images/pipeline_lobby_bev.jpg, id=587, 762.85pt x 1505.625pt>
 File: Images/pipeline_lobby_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_lobby_bev.jpg>
-Package pdftex.def Info: Images/pipeline_lobby_bev.jpg  used on input line 700.
+Package pdftex.def Info: Images/pipeline_lobby_bev.jpg  used on input line 701.
 (pdftex.def)             Requested size: 145.68144pt x 287.51909pt.
-<Images/pipeline_office_bev.jpg, id=587, 762.85pt x 1230.5975pt>
+<Images/pipeline_office_bev.jpg, id=588, 762.85pt x 1230.5975pt>
 File: Images/pipeline_office_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_office_bev.jpg>
-Package pdftex.def Info: Images/pipeline_office_bev.jpg  used on input line 706.
+Package pdftex.def Info: Images/pipeline_office_bev.jpg  used on input line 707.
 (pdftex.def)             Requested size: 145.68144pt x 234.99893pt.
-<Images/pipeline_industry_safety_bev.jpg, id=588, 762.85pt x 1017.8025pt>
+<Images/pipeline_industry_safety_bev.jpg, id=589, 762.85pt x 1017.8025pt>
 File: Images/pipeline_industry_safety_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_industry_safety_bev.jpg>
-Package pdftex.def Info: Images/pipeline_industry_safety_bev.jpg  used on input line 712.
+Package pdftex.def Info: Images/pipeline_industry_safety_bev.jpg  used on input line 713.
 (pdftex.def)             Requested size: 218.51521pt x 291.53659pt.
-<Images/pipeline_retail_bev.jpg, id=589, 762.85pt x 841.1425pt>
+<Images/pipeline_retail_bev.jpg, id=590, 762.85pt x 841.1425pt>
 File: Images/pipeline_retail_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_retail_bev.jpg>
-Package pdftex.def Info: Images/pipeline_retail_bev.jpg  used on input line 718.
+Package pdftex.def Info: Images/pipeline_retail_bev.jpg  used on input line 719.
 (pdftex.def)             Requested size: 218.51521pt x 240.93457pt.
  [19 <./Images/pipeline_cafe_shop_osd.jpg> <./Images/pipeline_lobby_osd.jpg> <./Images/pipeline_office_osd.jpg> <./Images/pipeline_industry_safety_osd.jpg> <./Images/pipeline_retail_osd.jpg>] [20 <./Images/pipeline_cafe_shop_bev.jpg> <./Images/pipeline_lobby_bev.jpg> <./Images/pipeline_office_bev.jpg> <./Images/pipeline_industry_safety_bev.jpg> <./Images/pipeline_retail_bev.jpg>]
-Overfull \hbox (0.58669pt too wide) in paragraph at lines 748--749
-\T5/ptm/m/n/13 (NvDCF tü c­t crop v  ch¤y Swin b¶n trong C++) k¸t hñp \T5/cmtt/m/n/13 reidExtractionInterval:5
- []
-
-[21]
+LaTeX Font Info:    Font shape `T5/cmtt/bx/n' in size <12> not available
+(Font)              Font shape `T5/cmtt/m/n' tried instead on input line 766.
+ [21]
+LaTeX Font Info:    Font shape `T5/cmtt/bx/it' in size <13> not available
+(Font)              Font shape `T5/cmtt/m/it' tried instead on input line 784.
+ [22]
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 779.
+            Default family used instead on input line 828.
 
 
 LaTeX Font Warning: Font shape `TS1/cmr/m/n' in size <13> not available
-(Font)              size <12> substituted on input line 779.
+(Font)              size <12> substituted on input line 828.
 
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 779.
-[22] [23]
-Overfull \hbox (1.79257pt too wide) in paragraph at lines 876--877
+            Default family used instead on input line 828.
+[23] [24]
+Overfull \hbox (1.79257pt too wide) in paragraph at lines 904--905
 []\T5/ptm/m/n/13 Kho£ng c¡ch Top-1 câ þ ngh¾a trüc ti¸p ^^_¸n ch§t l÷ñng pipeline: thuªt to¡n Buffered
  []
 
-[24] [25] [26] (main.bbl
+[25] [26]
+Overfull \hbox (58.48665pt too wide) in paragraph at lines 922--923
+[]\T5/ptm/b/n/13 Thæng l÷ñng: $\OMS/ztmcm/m/n/13 ^^X$\T5/ptm/m/n/13 15 FPS/camera t¤i 20 cam-era ^^_çng thíi, pre-set reid0 (\T5/cmtt/m/n/13 maxTargetsPerStream
+ []
+
+[27] [28] (main.bbl
 Underfull \hbox (badness 10000) in paragraph at lines 43--47
 []\T5/ptm/m/n/13 NVIDIA Cor-po-ra-tion, ``State-of-the-art real-time multi-object track-ers
  []
@@ -1125,7 +1130,7 @@ Underfull \hbox (badness 10000) in paragraph at lines 43--47
 \T5/ptm/m/n/13 state-[]of-[]the-[]art-[]real-[]time-[]multi-[]object-[]trackers-[]with-[]nvidia-[]deepstream-[]sdk-[]6-[]2/$[],
  []
 
-) [27] (PhuLuc.tex
+) [29] (PhuLuc.tex
 Overfull \hbox (78.29091pt too wide) in paragraph at lines 31--32
 []|\T5/ptm/m/n/13 15 £nh PNG: \T5/cmtt/m/n/13 cam_{0--3}_{occupancy,footfall,dwelltime}.png
  []
@@ -1135,7 +1140,7 @@ Overfull \hbox (35.05788pt too wide) in paragraph at lines 24--34
  [][] 
  []
 
-) [28] (main.aux)
+) [30] (main.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2025-12-24>
@@ -1146,20 +1151,20 @@ LaTeX Font Warning: Size substitutions with differences
 (Font)              up to 1.0pt have occurred.
 
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 6EED7E9B73C36AB796E67C096A6A0B23;12921.
+(rerunfilecheck)             Checksum: E98DEE7988522162A51CB5759C04A6A4;13203.
  ) 
 Here is how much of TeX's memory you used:
- 25045 strings out of 467871
- 471391 string characters out of 5418376
- 964489 words of memory out of 5000000
- 53317 multiletter control sequences out of 15000+600000
- 686120 words of font info for 95 fonts, out of 8000000 for 9000
+ 25056 strings out of 467871
+ 471557 string characters out of 5418376
+ 964791 words of memory out of 5000000
+ 53324 multiletter control sequences out of 15000+600000
+ 686756 words of font info for 97 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 108i,12n,107p,886b,543s stack positions out of 10000i,1000n,20000p,200000b,200000s
- <C:\Users\nguye\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\tcrm1200.pk><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/symbol/usyr.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/symbol/usyr.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmb8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmbi8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmr8a.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmr8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmri8a.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmri8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/vnr/vntt12.pfb>
-Output written on main.pdf (37 pages, 12873828 bytes).
+ 108i,12n,107p,1206b,543s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ <C:\Users\nguye\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\tcrm1200.pk><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/symbol/usyr.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/symbol/usyr.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmb8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmbi8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmr8a.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmr8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/urw/times/utmri8a.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmri8v.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/vnr/vnitt10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/vnr/vntt12.pfb>
+Output written on main.pdf (39 pages, 12889091 bytes).
 PDF statistics:
- 742 PDF objects out of 1000 (max. 8388607)
- 143 named destinations out of 1000 (max. 500000)
+ 758 PDF objects out of 1000 (max. 8388607)
+ 146 named destinations out of 1000 (max. 500000)
  676 words of extra memory for PDF output out of 10000 (max. 10000000)
 

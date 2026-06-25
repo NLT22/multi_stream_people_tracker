@@ -346,6 +346,10 @@ INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\tfm\vntex\urwvn\utmr8v.
 INPUT .\main.toc
 INPUT .\main.toc
 INPUT main.toc
+INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex\latex\vntex\t5cmtt.fd
+INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex\latex\vntex\t5cmtt.fd
+INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex\latex\vntex\t5cmtt.fd
+INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\tfm\vntex\vnr\vntt12.tfm
 OUTPUT main.toc
 INPUT .\Abbreviations.tex
 INPUT .\Abbreviations.tex
@@ -355,10 +359,6 @@ INPUT Abbreviations.tex
 INPUT .\main.lof
 INPUT .\main.lof
 INPUT main.lof
-INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex\latex\vntex\t5cmtt.fd
-INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex\latex\vntex\t5cmtt.fd
-INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex\latex\vntex\t5cmtt.fd
-INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\tfm\vntex\vnr\vntt12.tfm
 OUTPUT main.lof
 INPUT .\main.lot
 INPUT .\main.lot
@@ -558,6 +558,8 @@ INPUT .\Images\pipeline_retail_bev.jpg
 INPUT .\Images\pipeline_retail_bev.jpg
 INPUT .\Images\pipeline_retail_bev.jpg
 INPUT .\Images\pipeline_retail_bev.jpg
+INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\tfm\vntex\vnr\vntt12.tfm
+INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\tfm\vntex\vnr\vnitt10.tfm
 INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\tfm\jknappen\ec\tcrm1200.tfm
 INPUT .\main.bbl
 INPUT .\main.bbl
@@ -594,5 +596,7 @@ INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\type1\urw\times\utmri8a
 INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\type1\urw\times\utmri8a.pfb
 INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\type1\vntex\urwvn\utmri8v.pfb
 INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\type1\vntex\urwvn\utmri8v.pfb
+INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\type1\vntex\vnr\vnitt10.pfb
+INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\type1\vntex\vnr\vnitt10.pfb
 INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\type1\vntex\vnr\vntt12.pfb
 INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\fonts\type1\vntex\vnr\vntt12.pfb

@@ -1,10 +1,11 @@
 \contentsline {table}{\numberline {2.1}{\ignorespaces Đặc điểm bộ dữ liệu MMPTrack}}{4}{table.caption.8}%
 \contentsline {table}{\numberline {3.1}{\ignorespaces Cấu hình gst-nvdsanalytics theo môi trường}}{15}{table.caption.15}%
 \contentsline {table}{\numberline {4.1}{\ignorespaces Cấu hình phần cứng thực nghiệm}}{17}{table.caption.17}%
-\contentsline {table}{\numberline {4.2}{\ignorespaces Kết quả Global IDF1 theo môi trường}}{18}{table.caption.18}%
-\contentsline {table}{\numberline {4.3}{\ignorespaces Thông lượng theo chế độ NvDCF}}{21}{table.caption.21}%
-\contentsline {table}{\numberline {4.4}{\ignorespaces So sánh Live ID và Buffered ID}}{22}{table.caption.22}%
-\contentsline {table}{\numberline {4.5}{\ignorespaces Khảo sát kích thước cửa sổ Buffered ID}}{22}{table.caption.23}%
-\contentsline {table}{\numberline {4.6}{\ignorespaces Độ chính xác heatmap theo môi trường}}{23}{table.caption.24}%
-\contentsline {table}{\numberline {4.7}{\ignorespaces Nghiên cứu tăng tốc FPS}}{23}{table.caption.25}%
-\contentsline {table}{\numberline {4.8}{\ignorespaces So sánh Swin-Tiny và OSNet trên tập MMP}}{24}{table.caption.26}%
+\contentsline {table}{\numberline {4.2}{\ignorespaces Kết quả Global IDF1 theo môi trường --- toàn tập validation}}{18}{table.caption.18}%
+\contentsline {table}{\numberline {4.3}{\ignorespaces Kết quả khi loại trừ môi trường Retail}}{21}{table.caption.21}%
+\contentsline {table}{\numberline {4.4}{\ignorespaces Phân rã VRAM theo preset và maxTargetsPerStream}}{22}{table.caption.22}%
+\contentsline {table}{\numberline {4.5}{\ignorespaces Khảo sát maxTargetsPerStream}}{22}{table.caption.23}%
+\contentsline {table}{\numberline {4.6}{\ignorespaces So sánh Live ID và Buffered ID}}{23}{table.caption.24}%
+\contentsline {table}{\numberline {4.7}{\ignorespaces Khảo sát kích thước cửa sổ Buffered ID --- toàn tập 24 scene}}{24}{table.caption.25}%
+\contentsline {table}{\numberline {4.8}{\ignorespaces Nghiên cứu tăng tốc FPS}}{25}{table.caption.26}%
+\contentsline {table}{\numberline {4.9}{\ignorespaces So sánh Swin-Tiny và OSNet trên tập MMP}}{25}{table.caption.27}%

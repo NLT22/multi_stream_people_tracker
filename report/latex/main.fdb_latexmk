@@ -1,15 +1,15 @@
 # Fdb version 4
-["bibtex main"] 1782299513.57135 "main.aux" "main.bbl" "main" 1782299516.44983 0
+["bibtex main"] 1782385068.39165 "main.aux" "main.bbl" "main" 1782385409.30594 0
   "./MyRef.bib" 1782277883 2775 1c0c90f7d7259431e23989d3d0382471 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/bibtex/bst/ieeetran/IEEEtran.bst" 1440622569 57748 7c8250ecf02814ce6ddc0cdbb63df1dd ""
-  "main.aux" 1782299515 16763 91de6d96a8b36bfee7c2eb5eb70c1451 "pdflatex"
+  "main.aux" 1782385408 17460 57433040ed5a98ec0443138b7c819aeb "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1782299513.81436 "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" "main.pdf" "main" 1782299516.45053 0
+["pdflatex"] 1782385406.72768 "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" "main.pdf" "main" 1782385409.30663 0
   "Abbreviations.tex" 1782276321 2397 ef29e26fd1b0873fc27d6066584d408e ""
-  "Abstract.tex" 1782296887 2779 3302341e05e2fb4a9799cac3ff80b1d0 ""
+  "Abstract.tex" 1782384414 3190 a8a326b4036fe4f446761591d0309e92 ""
   "Bia.tex" 1782295600 1568 14cd09e9539055d8e645c8abc3cf4d2b ""
   "C:/Users/nguye/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1782267598 89969 e95579120a3aa0ebc21d2737ca2ba701 ""
   "C:/Users/nguye/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/tcrm1200.pk" 1782277958 14064 c1f88a093292a17824faf2d09e691da3 ""
@@ -37,6 +37,7 @@
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/tfm/vntex/urwvn/utmbi8v.tfm" 1124904812 9232 d188c1846fdbd7ca0b8cd68799721241 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/tfm/vntex/urwvn/utmr8v.tfm" 1124904812 9148 527b0537918dbea3d17ce87083d502f6 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/tfm/vntex/urwvn/utmri8v.tfm" 1124904812 9008 675f1fda1424847c1472fe17c01a2c25 ""
+  "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/tfm/vntex/vnr/vnitt10.tfm" 1644004041 1396 2087251ab3f27f74ec1e235b37021ec4 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/tfm/vntex/vnr/vnr10.tfm" 1644004041 3980 a378198bbdb2c6fcd4b722396a62ad27 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/tfm/vntex/vnr/vnr12.tfm" 1644004041 3984 be7b630197255361b12d153ce5e1bc5b ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/tfm/vntex/vnr/vntt12.tfm" 1644004041 1340 06553ed104adbb36180126e32f8c640c ""
@@ -50,6 +51,7 @@
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmbi8v.pfb" 1124904812 72494 cf825f19d8ec4210c2772fe32c09927e ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmr8v.pfb" 1124904812 74601 af4f6d57b2187e967dc73a57a6dbee86 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/urwvn/utmri8v.pfb" 1124904812 74127 d6f34be4a9a064416728f1ae622f3a22 ""
+  "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/vnr/vnitt10.pfb" 1644004041 43956 90692cd137ee3264107603c8b3941b93 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/vntex/vnr/vntt12.pfb" 1644004041 40832 4a1109db0219898270ca9c4c2fdb38d4 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/vf/adobe/times/ptmr8c.vf" 1136747054 3556 8a9a6dcbcd146ef985683f677f4758a6 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/vf/adobe/times/zptmcm7m.vf" 1136747054 1132 27520247d3fe18d4266a226b461885c2 ""
@@ -232,14 +234,14 @@
   "Images/pipeline_retail_osd.jpg" 1782298904 314120 a86d73d57b22c83d7a49a665eb92b3d5 ""
   "LoiNoiDau.tex" 1782295528 2095 1f4da46ab12542abaa4987bc4cdc613e ""
   "PhuLuc.tex" 1782278481 1693 006279da693ccdad2bb88e2aef4866c7 ""
-  "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" 1782299510 64757 9cb6392c7b9317ba62eb480a31637f0e ""
-  "main.aux" 1782299515 16763 91de6d96a8b36bfee7c2eb5eb70c1451 "pdflatex"
-  "main.bbl" 1782299513 2870 6a537eed067cf1dccb6486d09139d784 "bibtex main"
-  "main.lof" 1782299515 1447 b7f2ce05f2f5ed91086c297bdc86c877 "pdflatex"
-  "main.lot" 1782299515 1208 b940013cdb7981a79f4567bc6e55d586 "pdflatex"
-  "main.out" 1782299515 12921 6eed7e9b73c36ab796e67c096a6a0b23 "pdflatex"
-  "main.tex" 1782299510 64757 9cb6392c7b9317ba62eb480a31637f0e ""
-  "main.toc" 1782299515 6678 ae80fe1a548653bd979406245f2b724a "pdflatex"
+  "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" 1782385406 69154 4b841d1fe2e8b002464f7842e9cbc730 ""
+  "main.aux" 1782385408 17460 57433040ed5a98ec0443138b7c819aeb "pdflatex"
+  "main.bbl" 1782385068 2870 6a537eed067cf1dccb6486d09139d784 "bibtex main"
+  "main.lof" 1782385408 1447 b7f2ce05f2f5ed91086c297bdc86c877 "pdflatex"
+  "main.lot" 1782385408 1388 1a680faded91c7b5e999ae319d64f801 "pdflatex"
+  "main.out" 1782385408 13203 e98dee7988522162a51cb5759c04a6a4 "pdflatex"
+  "main.tex" 1782385406 69154 4b841d1fe2e8b002464f7842e9cbc730 ""
+  "main.toc" 1782385408 6754 6b00df34559e4c07ca3c3933ba104014 "pdflatex"
   (generated)
   "main.aux"
   "main.lof"
