@@ -32,28 +32,35 @@ Presets:
 ```text
 DEFAULT (reid0):  configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml
 quality (reidType:2): configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml
-models: nvinfer_yolov11_mmp.yml, nvinfer_reid_swin_sgie_all.yml
+models: nvinfer_yolov11_mmp.yml (→ yolo11n_mmp_retailclean.onnx, deployed 2026-06-26;
+  old yolo11n_mmp.onnx kept for rollback), nvinfer_reid_swin_sgie_all.yml
 tracker: nvdcf_accuracy_mmp_recall_sgie[_reid0].yaml
+live_buffered default: assign_thr=0.50 (tuned from 0.40, 2026-06-26)
 ```
 
 Latest honest result — single-pass full-GT (every frame once, no loop/GT-trimming;
 score with `scripts/eval/score_full_mmp_val.py` after `live_buffered --once`):
 
 ```text
-Full val (24 scenes, buffered, reid0): mean IDF1 0.774
-  lobby 0.893 | office 0.878 | industry 0.829 | café 0.823 | retail 0.616
-  (4/5 envs ≥0.8; excluding retail the mean is 0.853. Baseline DMCT-Ext-TD = 0.741.)
-reid0 vs quality tie on IDF1 (+0.0013) — global IDs come from SGIE embeddings, so
-NvDCF internal ReID adds ~0. reid0 is default (leaner).
+Full val (24 scenes, buffered, reid0, retail-clean detector, assign_thr=0.50): mean IDF1 0.798
+  lobby 0.906 | office 0.880 | industry 0.847 | café 0.839 | retail 0.661
+  (4/5 envs ≥0.8; excluding retail the 16-scene mean is 0.866. Baseline DMCT-Ext-TD = 0.741.)
+  per-camera: precision 0.94, MOTA 0.768, ~46 ID-switch/cam.
+  (prior, old detector @ assign_thr=0.40 was 0.774 — superseded 2026-06-26.)
+reid0 vs quality tie on IDF1 — global IDs come from SGIE embeddings, so NvDCF internal
+ReID adds ~0. reid0 is default (leaner).
 ```
 
 VRAM/throughput are driven by `maxTargetsPerStream` (NvDCF pre-allocates per-target
-state for `maxTargetsPerStream × streams`), NOT the model. reid0@40 ≈ 3.5 GB / ~15 FPS/cam;
-@220 ≈ 9.4 GB / ~10.6 FPS/cam. Default is `maxTargetsPerStream=40`.
+state for `maxTargetsPerStream × streams`), NOT the model. reid0@40 ≈ 3.4 GB / ~15 FPS/cam;
+@150/175/200 ≈ 7.0/7.9/8.7 GB / 12.0/11.5/10.6 FPS; @220 ≈ 9.2 GB / 10.6 FPS — higher values
+buy no quality on MMP (≤~12 ppl/cam). Default is `maxTargetsPerStream=40`.
 
-Known weakness: **retail** is the quality limiter — diagnosed as a *detection/local-identity*
-problem under occlusion (low MOTA, ID switches), not a cross-camera fusion failure. Real
-production resolution is expected to be 1920×1080, but the repo must keep passing 640×360 first.
+Known weakness: **retail** (IDF1 0.661) is the quality limiter. Its phantom-box false-positive
+root cause was FIXED (2026-06-26 retail-clean detector: precision 0.62→0.94, ID-switch −50%).
+The remaining limit is **recall** — real people fully occluded behind shelves are missed; a
+physical CCTV limit, not fixable in post-processing. Real production resolution is expected to
+be 1920×1080, but the repo must keep passing 640×360 first.
 
 ---
 
@@ -83,7 +90,10 @@ python scripts/eval/persist_run.py --run-dir output/runs/<ts>_<preset> --db outp
 - Cleaned root to the production path; archived training/conversion/prototype code (reversible).
 - reid0 default; smoke script; run-dir + `run_manifest.json`; config validator (preflight).
 - Live NPZ embedding export (uncompressed, final-chunk flush); env-grouped `live_buffered`.
-- Honest single-pass full-GT eval (24 scenes, 0.774); reid0/quality tie confirmed.
+- Honest single-pass full-GT eval (24 scenes); reid0/quality tie confirmed.
+- **Retail-clean detector** (`yolo11n_mmp_retailclean.onnx`) retrained + deployed both presets
+  (full-val 0.774→0.798, precision 0.62→0.94); `assign_thr` tuned 0.40→0.50; demos regenerated
+  with real DeepStream OSD; fixed `GROUPS` bash-builtin footgun in demo scripts. (2026-06-26)
 - RTSP smoke (5×office, reid0): clean source-ids, chunks flush, ~15 FPS/cam, 3.1 GB/5cams.
 - Bounded 25-min soak: FPS/VRAM stable, GID plateau, no leak.
 - Retail diagnosis: local identity (switches/frags), not cross-cam.
@@ -103,9 +113,15 @@ python scripts/eval/persist_run.py --run-dir output/runs/<ts>_<preset> --db outp
   (generated videos/RTSP or image-sequence source). Keep the 10-min video benchmark passing.
 
 ### 3.3 Retail quality
-- [ ] Visual audit (missed dets / same-clothes / occlusion) to confirm switch sources.
-- [ ] Then test one lever at a time: detection threshold, tracker confidence/shadow age,
-  SGIE crop-quality gate, retail-specific window-chunk. Avoid broad retraining until proven.
+- [x] Root cause = detector false positives (phantom boxes on shelves/mannequins), NOT identity.
+  Fixed by retraining YOLO on cleaned retail labels (precision 0.62→0.94, retail IDF1 0.616→0.661,
+  ID-switch −50%); deployed 2026-06-26. `assign_thr` tuned 0.40→0.50 (+0.003 full-val, AssA/HOTA up,
+  DetA/MOTA unchanged — pure association gain).
+- [ ] Remaining gap is **recall** under heavy shelf occlusion (physical). If pursued: higher-res
+  input (1080p), camera placement, or amodal-aware detection — not post-processing.
+- Do-not-retry: geometry on the scored `live_buffered` path (STCRA / geo-merge / geo-split) all
+  REGRESS on MMP (overlapping FOV makes single-cam foot projection noisy). The static FP filter
+  once used for retail is now redundant (detector is clean).
 
 ### 3.4 Docker
 - [ ] `scripts/setup/docker_smoke_test.sh --build`; `docker compose run --rm tracker`.
@@ -134,11 +150,20 @@ python scripts/eval/persist_run.py --run-dir output/runs/<ts>_<preset> --db outp
 
 ## 4. Model Work (detector + ReID) — summary & verdict
 
-Detector (exact-source baseline, `models/yolov11/yolo11n_mmp.onnx`):
-`precision 0.965 / recall 0.893 / mAP50 0.957 / mAP50-95 0.757` (61,949 imgs).
-Do NOT promote the one-epoch smoke checkpoint. For improvement, recover the original
-trainable `.pt` behind the deployed ONNX, or run a longer controlled fine-tune that
-beats the baseline before exporting.
+Detector: **`yolo11n_mmp_retailclean.onnx` is the deployed detector (2026-06-26).** Retrained
+30 epochs on hybrid labels = retail labels cleaned with a COCO-YOLO11x verifier + TTA (removes
+~42% phantom/amodal retail boxes) while all other envs keep their labels. Internal mAP50 0.99;
+full-val precision 0.62→0.94, MOTA 0.64→0.77, recall 0.874→0.825 (accepted cost). Cleaning ALL
+envs was REJECTED (verifier over-removed partially-occluded real people → recall loss in
+lobby/office); retail-only is the chosen tradeoff. Old `yolo11n_mmp.onnx` kept for rollback.
+
+Root cause that was fixed: original MMP GT used **amodal projection** (each person's 3D box
+projected into every camera even when fully occluded → teaches "background = person"), and the
+train set had **0 negative images**. `clean_yolo_labels.py` (verifier) existed but had never been
+applied to the deployed detector; `mmp_to_yolo.py` only drops out-of-frame boxes, not occluded ones.
+
+Prior baseline (old detector, for reference): precision 0.965/recall 0.893/mAP50 0.957 on
+exact-source frames — superseded by the retail-clean model above.
 
 ReID retrieval (corrected per-scene gallery, balanced 40/scene-cam — the earlier
 global-gallery numbers were understated by an eval bug pooling all 24 scenes):
@@ -271,8 +296,9 @@ from current run artifacts — low risk, high reuse.
 - **Timestamps & zones are prerequisites, not optional.** "Which shelf at 10am" cannot be
   answered until 5.3's timestamp + named-zone work lands. The MMPTracking eval set has no
   wall-clock and no named shelves — define zones via the ROI editor per environment first.
-- **Retail accuracy caps person-search quality** there (top1 ~0.62 IDF1); image search will be
-  least reliable in retail until the ReID/detection gap (§3.3/§4) improves.
+- **Retail accuracy caps person-search quality** there (IDF1 0.661, the lowest env); the detector
+  phantom-box issue is fixed, but recall under shelf occlusion remains, so image search will be
+  least reliable in retail.
 - **Scope question for the mentor:** is this a demo over *recorded eval runs* (batch persist —
   fastest to ship) or must it run *live* (needs 5.6 ingestion)? Recommend batch first.
 

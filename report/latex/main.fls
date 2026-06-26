@@ -1,6 +1,6 @@
-PWD d:\2025.2\multi_stream_people_tracker\report\latex
+PWD D:\2025.2\multi_stream_people_tracker\report\latex
 INPUT C:\Users\nguye\AppData\Local\MiKTeX\miktex\data\le\pdftex\pdflatex.fmt
-INPUT d:\2025.2\multi_stream_people_tracker\report\latex\main.tex
+INPUT main.tex
 OUTPUT main.log
 INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
 INPUT C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls

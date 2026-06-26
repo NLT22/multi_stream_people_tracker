@@ -748,8 +748,8 @@ VRAM được đo trực tiếp bằng \texttt{nvidia-smi} ở trạng thái ổ
     \hline
     \bfseries Preset & \bfseries \texttt{reidType} & \bfseries \texttt{maxTargets} & \bfseries VRAM (GB) \\
     \hline
-    reid0   & 0 & 40  & \textbf{3,5} \\
-    reid0   & 0 & 220 & 9,4 \\
+    reid0   & 0 & 40  & \textbf{3,4} \\
+    reid0   & 0 & 220 & 9,2 \\
     quality & 2 & 40  & 4,2 \\
     quality & 2 & 220 & 12,8 \\
     \hline
@@ -757,7 +757,7 @@ VRAM được đo trực tiếp bằng \texttt{nvidia-smi} ở trạng thái ổ
     \label{tab:vram_preset}
 \end{table}
 
-NvDCF \textbf{cấp phát trước} trạng thái cho từng target (bộ lọc DCF; cộng thêm bộ đệm ReID khi \texttt{reidType:2}) cho toàn bộ sức chứa \texttt{maxTargetsPerStream}~$\times$~số luồng, dù scene thực tế chỉ có 5--15 người/camera. Do đó: (1) riêng việc tăng \texttt{maxTargets} từ 40 lên 220 trên preset reid0 (thêm bộ lọc DCF cho các ô trống, \textit{không liên quan ReID}) đã làm VRAM tăng +5,9 GB; (2) bật mô hình ReID nội bộ chỉ tốn +0,7 GB tại \texttt{maxTargets=40}, nhưng tới +3,3 GB tại \texttt{maxTargets=220} vì bộ đệm ReID cũng được cấp cho mọi ô. Đây là lý do \texttt{maxTargetsPerStream} --- chứ không phải mô hình ReID --- là đòn bẩy VRAM lớn nhất.
+NvDCF \textbf{cấp phát trước} trạng thái cho từng target (bộ lọc DCF; cộng thêm bộ đệm ReID khi \texttt{reidType:2}) cho toàn bộ sức chứa \texttt{maxTargetsPerStream}~$\times$~số luồng, dù scene thực tế chỉ có 5--15 người/camera. Do đó: (1) riêng việc tăng \texttt{maxTargets} từ 40 lên 220 trên preset reid0 (thêm bộ lọc DCF cho các ô trống, \textit{không liên quan ReID}) đã làm VRAM tăng +5,8 GB; (2) bật mô hình ReID nội bộ chỉ tốn +0,8 GB tại \texttt{maxTargets=40}, nhưng tới +3,6 GB tại \texttt{maxTargets=220} vì bộ đệm ReID cũng được cấp cho mọi ô. Đây là lý do \texttt{maxTargetsPerStream} --- chứ không phải mô hình ReID --- là đòn bẩy VRAM lớn nhất.
 
 Thử nghiệm quantization INT8 không mang lại cải thiện FPS có ý nghĩa (dưới 0{,}5 FPS/cam) trong khi chỉ tiết kiệm $\sim$0{,}37 GB VRAM, nên không được áp dụng trong pipeline production. Đòn bẩy quan trọng hơn nhiều đối với cả VRAM lẫn FPS là tham số \texttt{maxTargetsPerStream}, được khảo sát chi tiết dưới đây.
 

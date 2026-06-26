@@ -16,8 +16,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 source venv/bin/activate
 
 # Run the production pipeline on the current source list
-# Default = reid0 perf preset: same honest IDF1 as the quality preset (~0.81) but
-# faster (~10.6 FPS/cam) and leaner (~3.5 GB at maxTargetsPerStream=40).
+# Default = reid0 perf preset: same honest IDF1 as the quality preset but
+# faster (~15 FPS/cam) and leaner (~3.4 GB) at maxTargetsPerStream=40.
+# (~10.6 FPS/9.4 GB was the old maxTargetsPerStream=220 config.)
 # See Config Presets / Regression Anchors (VRAM is driven by maxTargetsPerStream).
 python -m src.main \
     --config configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml \
@@ -149,16 +150,22 @@ Restore archived scripts only when intentionally starting a new training cycle.
 Use **honest single-pass full-GT** as the canonical measure (every frame processed once, no loop,
 no GT trimming) — score with `scripts/eval/score_full_mmp_val.py` AFTER `live_buffered --once` finishes.
 
-**Full val (all 24 scenes, buffered ID, reid0)** — 2026-06-25, `score_full_mmp_val.py`:
+**Full val (all 24 scenes, buffered ID, reid0)** — 2026-06-26, retail-clean detector
+(`yolo11n_mmp_retailclean.onnx`) + `assign_thr=0.50`, `score_full_mmp_val.py`:
 
-| Environment | Scenes | Mean IDF1 |
-|-------------|--------|-----------|
-| Lobby       | 4      | **0.893** |
-| Office      | 3      | **0.878** |
-| Industry    | 5      | **0.829** |
-| Café        | 4      | **0.823** |
-| Retail      | 8      | 0.616     |
-| **Overall** | **24** | **0.774** |
+| Environment | Scenes | Mean IDF1 | (prev 2026-06-25) |
+|-------------|--------|-----------|-------------------|
+| Lobby       | 4      | **0.906** | 0.893 |
+| Office      | 3      | **0.880** | 0.878 |
+| Industry    | 5      | **0.847** | 0.829 |
+| Café        | 4      | **0.839** | 0.823 |
+| Retail      | 8      | **0.661** | 0.616 |
+| **Overall** | **24** | **0.798** | 0.774 |
+| (ex-retail) | 16     | **0.866** | 0.853 |
+
+The 0.774 → 0.798 jump came from retraining YOLO on cleaned retail labels (detector
+precision 0.62→0.94, MOTA 0.64→0.77, ID-switch −50%) plus tuning `live_buffered`
+`assign_thr` 0.40→0.50. No other model retrained. Old `yolo11n_mmp.onnx` kept for rollback.
 
 **Single-scene (_0 only, 5 scenes)** — older reference numbers:
 
@@ -169,7 +176,9 @@ no GT trimming) — score with `scripts/eval/score_full_mmp_val.py` AFTER `live_
 | 600s looped, processed-segment (optimistic) | `..._sgie.yaml` | 0.8344 |
 | 600s looped, full untrimmed GT (over-penalized) | `..._sgie.yaml` | 0.758 |
 
-The 0.811 single-scene mean is not wrong — it just evaluated only 1 scene per env. The full-val 0.774 is the honest number across all 24 val scenes. Retail pulls it down most (8 scenes, 0.427–0.675 range).
+The 0.811 single-scene mean is not wrong — it just evaluated only 1 scene per env. The full-val
+0.798 (24 scenes) is the canonical honest number. Retail (0.661) is still the limiter, but its
+root cause was detector phantom boxes (now fixed); the residual gap is recall under shelf occlusion.
 
 **VRAM depends almost entirely on `maxTargetsPerStream`, not the preset/model** (measured
 2026-06-25, 20-cam, nvidia-smi steady-state). NvDCF pre-allocates per-target state (DCF
