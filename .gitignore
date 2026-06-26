@@ -26,14 +26,13 @@ models/**/*.pth
 *.pt
 third_party/fast-reid/
 
-# Archived foreign datasets (MTA/MTMC) moved out of dataset/
-old_stuff/datasets_archive/
+# old_stuff is a local-only archive (kept on disk, not pushed to the online repo)
+old_stuff/
 
 tmp/
 reference/
 anchor-guided-implement.md
 models/pose/*.pt
-old_stuff/tracktacular/TrackTacular_clone/
 models/reid_osnet_mmp/
 
 # Local GUI/editor profile cache accidentally created at repo root.
