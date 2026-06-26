@@ -1,825 +1,311 @@
-# Production Readiness TODO
+# Production Readiness & Roadmap
 
-This is the live production roadmap after the 2026-06-20 cleanup. The project is
-now intentionally narrow: YOLO11 detector, NvDCF tracker, SGIE Swin ReID, and
-live-buffered MTMC evaluation.
+Live roadmap for the narrow production system: YOLO11 detector, NvDCF tracker,
+SGIE Swin ReID, live-buffered MTMC. Archived research/training/prototype files
+live under `old_stuff/retired_20260620/` — do not restore unless they re-enter
+the production system.
 
-Archived research/training/prototype files live under `old_stuff/retired_20260620/`.
-Do not restore them into the root path unless they become part of the production
-system again.
+> Section 5 (Natural-Language Q&A / RAG Layer) is the active new workstream
+> (mentor requirement, 2026-06-26). Sections 0–4 are the existing system + open
+> hardening items. This file was condensed on 2026-06-26 — verbose experiment
+> dumps were summarized to their commands + verdicts; nothing actionable was dropped.
+
+---
 
 ## 0. Current Production System
 
-Target:
+Target: 20 cameras, ≥10 FPS/cam, mean IDF1 ≥ 0.8 on the 640×360 mixed validation set,
+production-style buffered/global IDs (not offline-only scoring).
 
-- 20 cameras
-- 10 FPS/cam
-- mean IDF1 >= 0.8 on the current 640x360 mixed validation set
-- production-style buffered/global IDs, not offline-only scoring
-
-Active architecture:
+Architecture:
 
 ```text
 video files or RTSP
   -> DeepStream / pyservicemaker
-  -> YOLO11 PGIE detector
-  -> NvDCF tracker
-  -> SGIE Swin-Tiny ReID on person crops
-  -> PredictionExporter writes cam CSV + det_emb_chunk_*.npz
-  -> src.mtmc.live_buffered groups cameras by environment
-  -> IDF1/stability logs
+  -> YOLO11 PGIE detector  -> NvDCF tracker  -> SGIE Swin-Tiny ReID on person crops
+  -> PredictionExporter (cam CSV + det_emb_chunk_*.npz)
+  -> src.mtmc.live_buffered (groups cameras by environment) -> IDF1/stability logs
 ```
 
-Production quality preset:
+Presets:
 
 ```text
-configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml
-configs/models/nvinfer_yolov11_mmp.yml
-configs/models/nvinfer_reid_swin_sgie_all.yml
-configs/tracker/nvdcf_accuracy_mmp_recall_sgie.yaml
+DEFAULT (reid0):  configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml
+quality (reidType:2): configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml
+models: nvinfer_yolov11_mmp.yml, nvinfer_reid_swin_sgie_all.yml
+tracker: nvdcf_accuracy_mmp_recall_sgie[_reid0].yaml
 ```
 
-Performance preset:
+Latest honest result — single-pass full-GT (every frame once, no loop/GT-trimming;
+score with `scripts/eval/score_full_mmp_val.py` after `live_buffered --once`):
 
 ```text
-configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml
-configs/tracker/nvdcf_accuracy_mmp_recall_sgie_reid0.yaml
+Full val (24 scenes, buffered, reid0): mean IDF1 0.774
+  lobby 0.893 | office 0.878 | industry 0.829 | café 0.823 | retail 0.616
+  (4/5 envs ≥0.8; excluding retail the mean is 0.853. Baseline DMCT-Ext-TD = 0.741.)
+reid0 vs quality tie on IDF1 (+0.0013) — global IDs come from SGIE embeddings, so
+NvDCF internal ReID adds ~0. reid0 is default (leaner).
 ```
 
-Latest verified result — canonical = honest SINGLE-PASS full-GT (every frame once, no loop,
-no GT trimming; score with `scripts/eval/score_longrun_idf1.py` after `live_buffered --once`):
+VRAM/throughput are driven by `maxTargetsPerStream` (NvDCF pre-allocates per-target
+state for `maxTargetsPerStream × streams`), NOT the model. reid0@40 ≈ 3.5 GB / ~15 FPS/cam;
+@220 ≈ 9.4 GB / ~10.6 FPS/cam. Default is `maxTargetsPerStream=40`.
 
-```text
-performance preset (DEFAULT — reid0):
-  mean IDF1: 0.8109  (cafe 0.833 lobby 0.895 office 0.861 industry 0.805 retail 0.660)
-  ~10.6 FPS/cam, ~3.5 GB (maxTargetsPerStream=40)
+Known weakness: **retail** is the quality limiter — diagnosed as a *detection/local-identity*
+problem under occlusion (low MOTA, ID switches), not a cross-camera fusion failure. Real
+production resolution is expected to be 1920×1080, but the repo must keep passing 640×360 first.
 
-quality preset (reidType:2):
-  mean IDF1: 0.8132  (cafe 0.834 lobby 0.895 office 0.877 industry 0.806 retail 0.655)
-  ~9.5 FPS/cam, ~12.7 GB (maxTargetsPerStream=220; ~4.2 GB if dropped to 40)
-```
-
-VRAM note (measured 2026-06-25, nvidia-smi steady-state, 20-cam): VRAM is driven by
-`maxTargetsPerStream`, not the model. NvDCF pre-allocates per-target state (DCF filters +
-ReID buffers when reidType:2) for `maxTargetsPerStream × streams`. So the earlier "~9.4 GB"
-reid0 figure (e.g. the 3.2 soak's 9.45 GB) is NOT wrong — it was reid0 at the old
-`maxTargetsPerStream=220`. The 4.4 audit cut it to 40, giving ~3.5 GB. Reid0@40=3.5,
-quality@40=4.2, quality@220=12.8 — the ReID model itself adds only ~0.7 GB.
-
-The two presets tie on IDF1 (global IDs come from the SGIE embeddings; NvDCF internal ReID only
-aids local continuity, which buffered clustering is robust to) — reid0 is the default (more headroom).
-The older 600s-looped numbers (0.8344 / 0.8098) were processed-segment (optimistic GT trimming);
-untrimmed-looped is ~0.758 (over-penalized). See CHANGE.md 2026-06-21/22.
-
-Known weakness:
-
-- Retail remains the quality limiter.
-- Real production resolution is expected to be 1920x1080, but this repo must
-  keep passing the 640x360 benchmark first.
+---
 
 ## 1. Production Commands
 
-Cheap non-GPU wiring check:
-
 ```bash
+# cheap non-GPU wiring check
 scripts/setup/production_smoke.sh
-```
 
-Main 20-cam quality eval:
-
-```bash
-PIPECFG=configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
-  bash scripts/eval/run_long_eval.sh 600 configs/sources/val_20cam_mixed.txt \
-  "cafe:0-3,lobby:4-7,office:8-11,industry:12-15,retail:16-19"
-```
-
-Lower-VRAM performance eval:
-
-```bash
+# 20-cam eval (default reid0 preset)
 PIPECFG=configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml \
   bash scripts/eval/run_long_eval.sh 600 configs/sources/val_20cam_mixed.txt \
   "cafe:0-3,lobby:4-7,office:8-11,industry:12-15,retail:16-19"
-```
 
-RTSP loop simulation:
-
-```bash
+# RTSP loop / multi-env cycling
 scripts/eval/mediamtx_loop.sh start dataset/MMPTracking_10minute/val/64pm_office_0
-scripts/eval/mediamtx_loop.sh stop
-```
-
-Multi-environment RTSP cycling:
-
-```bash
 scripts/eval/mediamtx_multienv.sh start dataset/MMPTracking_10minute/val
-scripts/eval/mediamtx_multienv.sh stop
+
+# persist a run to SQLite (the store the RAG layer will query — see §5)
+python scripts/eval/persist_run.py --run-dir output/runs/<ts>_<preset> --db output/runs.sqlite
 ```
 
-## 2. Done
+---
 
-- [x] Clean root project to production path.
-- [x] Archive old pipeline/tracker/model configs.
-- [x] Archive training, dataset conversion, benchmark, anchor-guided, analytics,
-  storage, and re-entry prototypes.
-- [x] Keep old material reversible under `old_stuff/retired_20260620/`.
-- [x] Set production default config to
-  `configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml`.
-- [x] Add `scripts/setup/production_smoke.sh`.
-- [x] Fix live embedding chunk export to use uncompressed NPZ and flush final
-  chunks.
-- [x] Group the mixed 20-cam benchmark by environment in `src.mtmc.live_buffered`.
-- [x] Validate target on the current 640x360 mixed benchmark.
-- [x] Simplify Docker Compose to the production tracker service.
-- [x] Add exact MMPTracking zip-source detector conversion, training, and eval
-  helpers.
-- [x] Evaluate the current production YOLO11 detector on exact-source validation
-  frames.
-- [x] Add exact MMPTracking zip-source ReID crop conversion and deployed-ONNX
-  retrieval eval.
-- [x] Add exact MMPTracking zip-source ReID training helper and run an initial
-  controlled training baseline.
-- [x] Add exact-source manual ReID labels and test full-env/no-retail retraining.
-- [x] Add YOLO11x crop verification for exact-source ReID training data and
-  test retraining on verified crops.
-- [x] Verify the IDF1 target honestly (single-pass full-GT): reid0 0.811 / quality 0.813;
-  make reid0 the documented default. (2026-06-21/22)
-- [x] Build run-summary tool, config validator, run-dir + run_manifest.json (3.3/4.1/4.3).
-- [x] RTSP smoke validation (3.1) + fix mediamtx_loop.sh (transcode mpeg4→h264, TCP transport).
-- [x] Bounded 25-min soak: FPS/VRAM stable, GID plateau, no leak (3.2 partial; overnight pending).
-- [x] Diagnose retail failure mode (3.5): local identity (switches/frags), not cross-cam.
+## 2. Done (high level)
 
-## 3. Next Priority
+- Cleaned root to the production path; archived training/conversion/prototype code (reversible).
+- reid0 default; smoke script; run-dir + `run_manifest.json`; config validator (preflight).
+- Live NPZ embedding export (uncompressed, final-chunk flush); env-grouped `live_buffered`.
+- Honest single-pass full-GT eval (24 scenes, 0.774); reid0/quality tie confirmed.
+- RTSP smoke (5×office, reid0): clean source-ids, chunks flush, ~15 FPS/cam, 3.1 GB/5cams.
+- Bounded 25-min soak: FPS/VRAM stable, GID plateau, no leak.
+- Retail diagnosis: local identity (switches/frags), not cross-cam.
+- Append-only SQLite sink (`scripts/eval/persist_run.py`) + run summarizer (`summarize_long_run.py`).
+- MOTA/HOTA per-camera metrics saved to `metrics.json`.
 
-### 3.0 Exact MMPTracking Dataset Path
+---
 
-Detector training/eval now reads the official MMPTracking zip files directly:
+## 3. Open Hardening Items
 
-```bash
-./venv/bin/python scripts/datasets/mmp_exact_to_yolo.py \
-  --output-dir dataset/mmp_exact_yolo \
-  --sample-rate 10 \
-  --clean
+### 3.1 RTSP / stability
+- [ ] Scale RTSP smoke to full 20 streams (multienv) and confirm ≥10 FPS/cam.
+- [ ] 2h file-loop soak; overnight RTSP/file-loop soak (watch RSS creep, GID growth).
 
-./venv/bin/python scripts/eval/eval_yolo_mmp_exact.py \
-  --data dataset/mmp_exact_yolo/dataset.yaml \
-  --weights models/yolov11/yolo11n_mmp.onnx \
-  --imgsz 640 --batch 32 --device 0 \
-  --project output/eval_exact \
-  --name yolo11n_mmp_exact_sr10_baseline
-```
+### 3.2 Exact-source end-to-end
+- [ ] Add exact-source end-to-end IDF1 eval feeding official zip frames to DeepStream
+  (generated videos/RTSP or image-sequence source). Keep the 10-min video benchmark passing.
 
-Current exact-source detector baseline:
+### 3.3 Retail quality
+- [ ] Visual audit (missed dets / same-clothes / occlusion) to confirm switch sources.
+- [ ] Then test one lever at a time: detection threshold, tracker confidence/shadow age,
+  SGIE crop-quality gate, retail-specific window-chunk. Avoid broad retraining until proven.
+
+### 3.4 Docker
+- [ ] `scripts/setup/docker_smoke_test.sh --build`; `docker compose run --rm tracker`.
+- [ ] Confirm generated TensorRT engines stay local (not committed); document GPU/driver/TRT versions.
+
+### 3.5 Pipeline audit findings (2026-06-24, static audit — no code changed)
+
+🔴 Correctness
+- [ ] Display sink missing `async: 0` (`runner.py` ~L401) — can deadlock with tee/dynamic RTSP.
+- [ ] Mux defaults 1920×1080 for 640×360 sources (`run_config.py`) — 9× upscale wastes VRAM/bandwidth.
+
+🟠 Perf / config
+- [ ] SGIE `interval: 0` (`nvinfer_reid_swin_sgie_all.yml`) — try `interval:1/2`, measure IDF1 delta.
+- [ ] `minDetectorConfidence: 0.12` dead zone vs nvinfer 0.25 — align to 0.25.
+- [ ] `maxTargetsPerStream: 220` over-provisioned in quality preset — set 30–40.
+- [ ] `earlyTerminationAge: 1` too aggressive vs `maxShadowTrackingAge: 240` — make consistent (≥10 / 60–90).
+- [ ] `geo_weight` not in pipeline YAML → defaults 0.35; add explicit `geo_weight: 0.25`.
+
+🟡 Hygiene
+- [ ] Engine batch mismatch (built batch=4, runtime batch=n_cams) — pre-build at target cam count.
+- [ ] Quality preset double-loads Swin (~0.4 GB) — prefer reid0 when VRAM-constrained.
+- [ ] SGIE `maintain-aspect-ratio: 0` stretches crops — try `1` and re-eval.
+- [ ] `minIouDiff4NewTarget: 0.50` may suppress new targets in dense scenes — consider 0.35–0.40.
+
+---
+
+## 4. Model Work (detector + ReID) — summary & verdict
+
+Detector (exact-source baseline, `models/yolov11/yolo11n_mmp.onnx`):
+`precision 0.965 / recall 0.893 / mAP50 0.957 / mAP50-95 0.757` (61,949 imgs).
+Do NOT promote the one-epoch smoke checkpoint. For improvement, recover the original
+trainable `.pt` behind the deployed ONNX, or run a longer controlled fine-tune that
+beats the baseline before exporting.
+
+ReID retrieval (corrected per-scene gallery, balanced 40/scene-cam — the earlier
+global-gallery numbers were understated by an eval bug pooling all 24 scenes):
 
 ```text
-images:    61,949
-instances: 422,950
-precision: 0.9653
-recall:    0.8929
-mAP50:     0.9571
-mAP50-95:  0.7565
+deployed swin_tiny_mmp_reid_all : top1 0.847 / mAP 0.773  <- KEEP
+retrained full_env_envmerge_e20 : top1 0.729 / mAP 0.546
 ```
 
-One-epoch smoke training from generic `yolo11n.pt` was worse:
+Verdict (stable across every retrain — exact-source, regrouped, YOLO11x-verified):
+**keep `models/reid/swin_tiny_mmp_reid_all.onnx`; do not promote any ImageNet-Swin retrain.**
+Retail has the largest crop-quality problem (confirmed by YOLO11x crop audit), but more
+training from ImageNet is not the shortest path — recover the original trainable Swin
+checkpoint or add a distillation/fine-tune-from-deployed-embeddings path first.
+
+Tools (kept): `scripts/datasets/mmp_exact_to_{yolo,reid}.py`, `eval_{yolo,reid}_mmp_exact.py`,
+`finetune_reid_mmp_exact.py`, `filter_reid_crops_yolo.py`. Manual label workflow + exact-source
+relabel UI (`reid_label_app_exact.py` → `reid_labels_exact/`) documented in git history / scripts.
+Key correction: ReID training must use regrouped identity labels (`env::manual_person`,
+14 ids/env); raw zip `person_id` resets per scene.
+
+---
+
+## 5. Natural-Language Q&A / RAG Layer  (NEW — mentor requirement, 2026-06-26)
+
+### 5.1 Goal
+
+Let a user ask questions about the tracking/analytics data in two modes:
+
+1. **Person-centric (image + question)** — upload a crop of a person, ask
+   "when did this person appear?", "at 10am which areas did they pass through?".
+   System returns: which cameras, appearance times, dwell, and the BEV trajectory
+   history for that person (same artifacts the demo already renders).
+2. **Aggregate analytics (text only)** — "which shelf got the most attention today?",
+   "top-5 busiest areas this week?". System returns ranked zones/timeseries.
+
+### 5.2 Recommended architecture — a tool-using LLM agent over our metadata
+
+We deliberately do **not** copy NVIDIA VSS's VLM-captioning pipeline (VSS captions raw
+video chunks because it starts from pixels). Our CV pipeline already emits *structured*
+identity + trajectory metadata, so the cheaper, more accurate design is **structured-metadata
+RAG**: an LLM router that calls deterministic retrieval tools and composes the answer.
+This still follows the VSS principle (agentic tools over CV metadata) and the standard
+text-to-SQL + ReID-vector-search patterns (see refs in 5.7).
 
 ```text
-precision: 0.952
-recall:    0.830
-mAP50:     0.927
-mAP50-95:  0.617
+                         ┌─────────────────────────────────────────────┐
+  user question  ─────►  │  LLM router (function-calling / tool-use)    │
+  (+ optional image)     │  picks a tool, fills params, composes answer │
+                         └───────┬─────────────────────────┬───────────┘
+                                 │                          │
+              ┌──────────────────▼─────┐      ┌─────────────▼───────────────┐
+   ROUTE A    │ Aggregate analytics    │  R B │ Person image search          │
+   (text)     │  - canned analytics    │(img) │  - embed crop (Swin ONNX)    │
+              │    functions (safe)    │      │  - cosine search over saved  │
+              │  - text-to-SQL fallback│      │    gallery -> global_id(s)   │
+              │    (read-only, guarded)│      │  - then Route-A queries on gid│
+              └──────────┬─────────────┘      └─────────────┬───────────────┘
+                         └────────────┬─────────────────────┘
+                                      ▼
+                    SQLite (persist_run.py) + saved embedding gallery + named-zone registry
 ```
 
-Do not promote the one-epoch checkpoint. For detector improvement, either recover
-the original trainable `.pt` checkpoint behind `models/yolov11/yolo11n_mmp.onnx`
-or run a longer controlled fine-tune from `yolo11n.pt` and only export if it
-beats the exact-source baseline.
+- **Route A (aggregate):** prefer a small set of **parameterized "analytics functions"**
+  (e.g. `top_zones(time_range, metric)`, `zone_dwell(zone, time_range)`) — deterministic,
+  testable, safe. Add **text-to-SQL** only as a fallback for open-ended questions, with
+  read-only guardrails (SELECT-only, schema-grounded prompt, parameterized, row limits).
+- **Route B (person):** embed the uploaded crop with the **deployed Swin ONNX**, cosine-rank
+  against a **persisted gallery** (reuse `src/reid/matching.py` + `GalleryStore.rank`) to get
+  candidate `global_id`s, then answer the "when/where/dwell/trajectory" parts via Route-A
+  queries scoped to that gid.
+- **LLM:** Claude via the Anthropic Messages API tool-use (Sonnet for routing/most queries,
+  escalate to Opus for multi-step reasoning); a local open model is the on-prem fallback.
+  The LLM never touches raw embeddings — it only orchestrates tools and writes prose.
 
-Remaining exact-dataset gap:
+### 5.3 Data gaps to close first (Phase A — foundation)
 
-- [ ] Add exact-source end-to-end IDF1 evaluation by feeding official zip frames
-  to DeepStream, either as generated videos/RTSP streams or an image-sequence
-  source path.
-- [ ] Keep the existing 10-minute video benchmark passing while exact-source
-  end-to-end eval is added.
+These are reconstructible from existing exports; all land in SQLite. Build offline/batch
+from current run artifacts — low risk, high reuse.
 
-ReID crop/eval also reads the official zip files directly:
+- [ ] **Wall-clock timestamps.** Detections store `frame_no` per cam, not time. Add a run
+  epoch + fps → `ts` column (or capture capture-time), so "today / 10am / this week" resolve.
+- [ ] **Named-zone registry + foot→zone resolver.** Reuse the webUI **ROI editor** (it already
+  emits named regions in `nvdsanalytics_*.txt` format) as the zone vocabulary. Add a resolver
+  mapping a foot point (per-cam pixel ROI, or BEV world XY via `geometry.foot_to_world`) → zone
+  name. This is what makes "which shelf/area" answerable.
+- [ ] **Derived analytics tables** in SQLite (built from `detections` + `tracklet_bev` + zones):
+  - `presence(gid, cam_id, zone, t_start, t_end)` — per-visit intervals.
+  - `dwell(gid, zone, seconds, day/hour bucket)` — Occupancy/Footfall already exist as grids;
+    add per-gid/per-zone dwell from foot points + timestamps.
+  - `zone_occupancy(zone, time_bucket, count)` / `zone_footfall(zone, time_bucket, unique_gids)`
+    timeseries — powers "busiest zone today / top-5 this week".
+- [ ] **Persisted embedding gallery for query-time search.** Persist per-gid (and/or per-tracklet)
+  mean embeddings (already in `tracklet_embeddings.npz`) into the DB / a vectors table so an
+  uploaded image matches without re-running the pipeline. Start with brute-force cosine
+  (gallery is small); add a vector index only if it grows (5.6).
 
-```bash
-./venv/bin/python scripts/datasets/mmp_exact_to_reid.py \
-  --output-dir dataset/mmp_exact_reid_eval \
-  --splits val \
-  --sample-rate 100 \
-  --max-crops-per-scene 1000 \
-  --clean
+### 5.4 Phase B — Query API (deterministic core, no LLM yet)
 
-./venv/bin/python scripts/eval/eval_reid_mmp_exact.py \
-  --crop-root dataset/mmp_exact_reid_eval \
-  --split val \
-  --weights models/reid/swin_tiny_mmp_reid_all.onnx \
-  --batch 64 \
-  --max-crops-per-scene 200
-```
+- [ ] Stand up a small **FastAPI** service (the missing backend; the webUI is currently static).
+- [ ] Implement the analytics functions as JSON endpoints/tools, each independently testable:
+  - `person_timeline(gid, time_range)` → cameras + appearance intervals.
+  - `person_trajectory_bev(gid, time_range)` → BEV foot-point path (from `tracklet_bev`).
+  - `person_dwell(gid, time_range)` → per-zone dwell.
+  - `top_zones(time_range, metric)` / `zone_occupancy(zone, time_range)`.
+  - `search_person_by_image(image)` → candidate gids + scores (embed + cosine).
+- [ ] Unit tests on a persisted demo run (golden answers) — this is the correctness gate;
+  the LLM layer must not be the thing under test.
 
-> **CORRECTION 2026-06-22 — the retrieval numbers below were UNDERSTATED by an eval bug.**
-> `eval_reid_mmp_exact.py` pooled all 24 val scenes into ONE gallery. MMPTracking reuses
-> cam numbers 1–6 in every scene and each scene is an independent camera network, so the
-> gallery was flooded with ~23 unrelated scenes' distractors. Fixed: gallery is now scoped
-> per-scene (`--global-gallery` reproduces the old behaviour). Corrected (balanced, 40/scene-cam):
->
-> | model | old (global, buggy) | **per-scene (correct)** |
-> |---|---|---|
-> | deployed `swin_tiny_mmp_reid_all` | top1 0.514 / mAP 0.389 | **top1 0.847 / mAP 0.773** |
-> | retrained `full_env_envmerge_e20` | top1 0.317 / mAP 0.168 | **top1 0.729 / mAP 0.546** |
->
-> So the deployed model's real cross-camera top1 is ~0.85, not ~0.55. **The ranking is
-> unchanged — deployed still beats every retrain even under the fixed eval — so the "do not
-> promote the retrain" conclusions stand; only the absolute numbers were wrong.** Per-env
-> figures (incl. the retail "0.264") need a per-scene rerun. Caveat still open: possible
-> train/val identity leakage for the deployed model.
+### 5.5 Phase C — LLM agent + Phase D — WebUI
 
-Current deployed ReID ONNX on balanced exact-source val crops (OLD, global-gallery — understated):
+- [ ] **Agent layer:** wire the Phase-B tools as function-calling tools; the LLM selects a
+  tool, fills params (resolve "10am today" → time range; resolve image → gid), and writes the
+  answer + a structured payload. Add text-to-SQL fallback with the read-only guardrails (5.2).
+- [ ] **WebUI "Ask" view** (7th nav entry; React/Vite, `webui/src/components/rag/`): chat box +
+  image-upload; render results as a timeline, a BEV trajectory overlay (reuse heatmap/BEV view),
+  camera jump-links, and a heatmap time-window. Add `webui/src/api/` fetch wrappers.
+- [ ] Start replacing the webUI's mocked `src/data/*` with the same FastAPI endpoints (the
+  README already documents these integration seams).
+
+### 5.6 Phase E — optional scale-out
+
+- [ ] Vector DB (pgvector / Milvus) once the gallery is large or multi-run.
+- [ ] Knowledge-graph / GraphRAG for relationship queries ("who was with X", "co-occurrence")
+  — VSS 2.4 uses GraphRAG-on-ArangoDB for exactly this class of long-form query.
+- [ ] Live ingestion (message bus → online metadata) for real-time Q&A instead of batch persist.
+
+### 5.7 Honest caveats / decisions needed
+
+- **Timestamps & zones are prerequisites, not optional.** "Which shelf at 10am" cannot be
+  answered until 5.3's timestamp + named-zone work lands. The MMPTracking eval set has no
+  wall-clock and no named shelves — define zones via the ROI editor per environment first.
+- **Retail accuracy caps person-search quality** there (top1 ~0.62 IDF1); image search will be
+  least reliable in retail until the ReID/detection gap (§3.3/§4) improves.
+- **Scope question for the mentor:** is this a demo over *recorded eval runs* (batch persist —
+  fastest to ship) or must it run *live* (needs 5.6 ingestion)? Recommend batch first.
+
+### 5.8 Reference systems (patterns borrowed)
+
+- NVIDIA VSS / Metropolis blueprint — agentic tools over CV metadata; GraphRAG for relationships.
+  https://github.com/NVIDIA-AI-Blueprints/video-search-and-summarization ,
+  https://docs.nvidia.com/vss/latest/content/architecture.html
+- Text-to-SQL LLM agents — schema-grounded prompts, agentic validate/refine, read-only guardrails:
+  https://www.k2view.com/blog/llm-text-to-sql/
+- Multi-camera ReID image search — embedding gallery + cosine/Euclidean nearest-neighbor:
+  https://hailo.ai/blog/multi-camera-multi-person-re-identification/
+
+---
+
+## 6. Future Scale-Out (do not build until single-host is stable)
 
 ```text
-cross-camera top1: 0.5504
-cross-camera mAP:  0.4263
-
-env mean top1:
-  cafe_shop:       0.7675
-  industry_safety: 0.5050
-  lobby:           0.8038
-  office:          0.7617
-  retail:          0.2644
-```
-
-This still indicates retail is the weakest env for embeddings (relative ranking holds), but the
-absolute gap was exaggerated by the eval bug above; it is not purely a tracking/clustering problem. Exact-source ReID training is not productionized
-yet because the repo currently has the deployed ONNX, not the original trainable
-Swin checkpoint.
-
-Initial exact-source ReID training baseline:
-
-```bash
-./venv/bin/python scripts/datasets/mmp_exact_to_reid.py \
-  --output-dir dataset/mmp_exact_reid_trainrun \
-  --splits train val \
-  --sample-rate 100 \
-  --max-crops-per-scene 1000 \
-  --clean
-
-./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
-  --crop-root dataset/mmp_exact_reid_trainrun \
-  --output output/reid_mmp_exact_trainrun_e10 \
-  --epochs 10 \
-  --pk-p 16 --pk-k 4 \
-  --accum-steps 2 \
-  --batches-per-epoch 120 \
-  --workers 4 \
-  --early-stop 0
-```
-
-Crop cache:
-
-```text
-train: 43,728 crops, 308 identities, 44 scene zips
-val:   23,571 crops, 168 identities, 24 scene zips
-```
-
-The 10-epoch model exported successfully, but did not beat the deployed ReID
-model on balanced exact-source val crops:
-
-```text
-output/reid_mmp_exact_trainrun_e10/swin_tiny_mmp_exact_reid.onnx
-  cross-camera top1: 0.3675
-  cross-camera mAP:  0.2064
-
-models/reid/swin_tiny_mmp_reid_all.onnx
-  cross-camera top1: 0.5504
-  cross-camera mAP:  0.4263
-```
-
-Verdict:
-
-- Do not promote the new 10-epoch exact-trained ONNX.
-- Keep production on `models/reid/swin_tiny_mmp_reid_all.onnx`.
-- For real ReID improvement, recover the original trainable Swin/ReID
-  checkpoint or run a longer controlled fine-tune with a stronger validation
-  gate before any DeepStream promotion.
-- ONNX Runtime eval currently falls back to CPU because this venv cannot load
-  `libcudnn.so.9`; that slows eval but does not affect DeepStream/TensorRT
-  production inference.
-
-Important correction:
-
-- ReID training must use the manually regrouped identity labels when training
-  from the old 10-minute crop cache.
-- The label files in `reid_labels/*.json` map old extracted-cache scene-track
-  IDs, for example `63am_cafe_shop_0|0 -> P0`; they do not directly match most
-  raw person IDs in the official zip JSON labels.
-- The existing regrouped cache is:
-
-```text
-dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled
-```
-
-Regrouped training smoke:
-
-```bash
-./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
-  --crop-root dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled \
-  --output output/reid_mmp_regrouped_e10 \
-  --epochs 10 \
-  --pk-p 16 --pk-k 4 \
-  --accum-steps 2 \
-  --batches-per-epoch 120 \
-  --workers 4 \
-  --max-crops-per-pid 2000 \
-  --early-stop 0
-```
-
-Regrouped train cache:
-
-```text
-train: 140,000 sampled crops, 70 manually regrouped identities
-val:   220,930 sampled crops, 112 scene-local validation identities
-```
-
-Balanced old-cache validation, 50 crops per scene-camera:
-
-```text
-new regrouped e10:
-  cross-camera top1: 0.4188
-  cross-camera mAP:  0.2931
-
-deployed production ONNX:
-  cross-camera top1: 0.6919
-  cross-camera mAP:  0.6159
-```
-
-Verdict:
-
-- The regrouping correction is real and required.
-- The new regrouped 10-epoch run is still rejected for production promotion.
-- The likely blocker is still missing the original trainable production ReID
-  checkpoint; this run starts from ImageNet Swin-Tiny.
-- Keep production on `models/reid/swin_tiny_mmp_reid_all.onnx`.
-
-Exact-source manual relabel experiment, 2026-06-21:
-
-```text
-labels: reid_labels_exact/
-
-official crop cache:
-  train: 416,011 crops, 308 scene-local pids
-  val:   211,391 crops, 168 scene-local pids
-
-cleaned full-env train:
-  relabeled train:    378,969 kept crops, 70 manual identities
-  filtered:           37,042 small/edge crops
-  sampled by trainer: 164,818 crops
-  best val_gap:       0.550 at epoch 3
-
-cleaned no-retail train:
-  relabeled train:    259,717 kept crops, 56 manual identities
-  excluded retail:    155,601 crops
-  filtered:           693 small/edge crops
-  sampled by trainer: 129,818 crops
-  best val_gap:       0.440 at epoch 15
-```
-
-Important correction:
-
-```text
-An earlier local run accidentally scoped manual identities by time prefix and
-created 72 full-env / 57 no-retail identities. That was superseded. The correct
-identity key is env::manual_person, so each environment has exactly 14 manual
-identities.
-```
-
-Original-val retrieval comparison, 50 crops per scene-camera:
-
-```text
-deployed production ONNX:
-  cross-camera top1: 0.5317
-  cross-camera mAP:  0.4027
-
-full-env exact relabel envmerge e20:
-  cross-camera top1: 0.3317
-  cross-camera mAP:  0.1848
-
-no-retail exact relabel envmerge e20:
-  cross-camera top1: 0.3037
-  cross-camera mAP:  0.1815
-```
-
-Verdict:
-
-- Do not promote either exact-relabel ONNX.
-- Keep production on `models/reid/swin_tiny_mmp_reid_all.onnx`.
-- Keep `reid_labels_exact/` as the manual exact-source label set.
-- More training from ImageNet Swin-Tiny is unlikely to be the shortest path.
-  Recover the trainable checkpoint behind the deployed ONNX or add a
-  distillation/fine-tune path from deployed embeddings first.
-
-YOLO11x crop verification experiment, 2026-06-21:
-
-```text
-script: scripts/datasets/filter_reid_crops_yolo.py
-weights: yolo11x.pt
-gate: person class, conf >= 0.15, imgsz 320
-
-full env:
-  kept:              323,026
-  rejected:          55,943
-  identities kept:   70
-  retail rejected:   41,007
-
-no retail:
-  kept:              244,784
-  rejected:          14,933
-  identities kept:   56
-```
-
-Retraining/eval on original validation crops:
-
-```text
-deployed production ONNX:
-  top1: 0.5317
-  mAP:  0.4027
-
-full-env exact relabel, geometry-clean only:
-  top1: 0.3317
-  mAP:  0.1848
-
-full-env exact relabel, YOLO11x verified:
-  top1: 0.3257
-  mAP:  0.1976
-
-no-retail exact relabel, YOLO11x verified:
-  top1: 0.2988
-  mAP:  0.1774
-```
-
-Verdict:
-
-- YOLO11x verification is a useful crop-cleaning/audit tool.
-- It confirms retail has the largest crop-quality problem.
-- It does not solve the ReID model-quality gap by itself.
-- Do not promote the YOLO11x-trained ONNX models.
-
-### 3.1 RTSP Production Validation
-
-- [x] Run a real RTSP smoke with MediaMTX (5x office_0, reid0). 2026-06-22.
-- [x] Confirm `src.main` consumes `rtsp://` sources without source-id mismatch. (clean)
-- [x] Confirm output chunks continue flushing on RTSP. (10 chunks)
-- [x] Confirm FPS and VRAM sane (15 FPS/cam at native rate, VRAM 3.1 GB / 5 cams).
-- [x] Record command, duration, FPS, VRAM in `CHANGE.md` (2026-06-22).
-- [ ] Scale the RTSP smoke to the full 20 streams (multienv) and confirm >=10 FPS/cam.
-
-Fix applied: `mediamtx_loop.sh` now transcodes non-h264 (the MMP mp4s are mpeg4) to h264 and
-forces `-rtsp_transport tcp` — stream-copy + UDP made the publishers 404 / "Broken pipe".
-
-Acceptance:
-
-```text
-20 RTSP streams start
-pipeline runs without deadlock
-avg FPS/cam >= 10 after warmup
-VRAM stable
-det_emb_chunk_*.npz files keep appearing
-```
-
-### 3.2 Long-Duration Stability
-
-- [x] Bounded 25-min file-loop soak (reid0) — all health checks pass (see below). 2026-06-22.
-- [ ] Run 2h file-loop soak.
-- [ ] Run overnight RTSP/file-loop soak.
-- [x] Watch (validated over 25 min via `summarize_long_run.py`):
-  - FPS stability    — avg 10.93 (min 10.40, max 11.60), no degradation
-  - VRAM/RSS creep   — VRAM avg 9.45 GB stable [at maxTargetsPerStream=220; ~3.5 GB after the
-    4.4 audit cut it to 40 — see VRAM note above]; RSS creep +117 MB/24min (watch overnight)
-  - GID count plateau — active 8 / total 10 (creep +2), no leak
-  - output chunk cadence — steady (81 chunks)
-  - pipeline log errors  — 0
-  - live-buffered clustering latency — 156 ms avg / 313 ms max
-
-Acceptance:
-
-```text
-no process crash
-no VRAM/RSS creep trend
-no unbounded GID growth
-avg FPS/cam remains near target
-logs are actionable and not spammy
-```
-
-### 3.3 Run Summary Tool
-
-Build a cheap post-run summarizer. **DONE 2026-06-22.**
-
-- [x] Add `scripts/eval/summarize_long_run.py`.
-- [x] Read `long_stability.csv`, `long_buffered.csv`, `long_pipe.log`.
-- [x] Report warmup-trimmed FPS/cam, VRAM, RSS trend, active/total GIDs, clustering latency,
-  chunk count + last-chunk time, error/warning counts.
-
-Acceptance:
-
-```bash
-python scripts/eval/summarize_long_run.py output/logs output/eval/long_run
-```
-
-prints one concise health report.
-
-### 3.4 Persistence
-
-Current production persistence is CSV/NPZ/log files only. That is fine for eval
-but thin for a real system.
-
-Recommended first step:
-
-- [x] Add simple append-only SQLite sink (`scripts/eval/persist_run.py`, 2026-06-22) for
-  per-detection rows, global assignments, run health metrics, chunk metadata + run provenance.
-  Idempotent per run_id (`--replace` to overwrite); built around the current export/log schema,
-  NOT the archived analytics/storage prototype.
-
-  `python scripts/eval/persist_run.py --run-dir output/runs/<ts>_<preset> --db output/runs.sqlite`
-
-Future production step:
-
-- [ ] TimescaleDB/Postgres for time-series metadata.
-- [ ] pgvector or a separate vector DB only if ReID search becomes a product
-  requirement.
-
-### 3.5 Retail Quality Work
-
-Retail is the weak environment in both presets.
-
-- [x] Quantitative per-stage diagnosis via `scripts/eval/diagnose_retail.py` (2026-06-22).
-- [x] Check whether retail failure is detector recall, tracker fragmentation, or ReID confusion.
-  FINDING: retail recall only mildly low (0.822 vs 0.896); the dominant loss is LOCAL identity —
-  local IDF1 0.522 vs 0.835, switches 643 vs 212, frags 1574 vs 1185 — while the cross-camera
-  step adds ~0 extra loss (local→global gap ≈ 0 in every env). I.e. weak retail ReID embeddings
-  (retrieval top1 0.264) show up as within-camera ID swaps, not a cross-cam-specific failure.
-- [ ] Visual audit (missed dets / same-clothes / occlusion) to confirm the switch sources.
-- [ ] Only after diagnosing, test one focused lever at a time:
-  - detection threshold
-  - tracker confidence / shadow age
-  - SGIE crop quality gate
-  - retail-specific window-chunk setting
-
-Avoid broad retraining until the failure mode is proven.
-
-## 4. Production Hardening
-
-### 4.1 Config Guardrails
-
-**DONE 2026-06-22:** `scripts/setup/validate_config.py` (run as a preflight by run_long_eval.sh).
-
-- [x] Add a config validator command.
-- [x] Ensure required production files exist.
-- [x] Ensure model paths resolve.
-- [x] Ensure SGIE config is present for production presets.
-- [x] Ensure tracker `outputReidTensor: 0` when SGIE is used.
-- [x] Ensure source count matches expected env map in long eval.
-
-### 4.2 Docker
-
-- [ ] Run `scripts/setup/docker_smoke_test.sh --build`.
-- [ ] Run `docker compose run --rm tracker`.
-- [ ] Confirm generated TensorRT engines stay local and are not committed.
-- [ ] Document GPU/driver/TensorRT version used for verified runs.
-
-### 4.3 Logging
-
-**DONE 2026-06-22:** `run_long_eval.sh USE_RUN_DIR=1` + `scripts/eval/write_run_manifest.py`.
-
-- [x] Standardize run directory naming: `output/runs/YYYYMMDD_HHMMSS_<preset>`.
-- [x] Write one `run_manifest.json` (git commit, pipeline config, sources, env map, duration,
-  GPU name, model files, key thresholds).
-- [x] Store logs/eval output under that run directory.
-
-### 4.4 Pipeline Audit Findings (2026-06-24)
-
-Findings from a static audit of `runner.py`, `run_config.py`, `config.py`,
-`nvinfer_reid_swin_sgie_all.yml`, and `nvdcf_accuracy_mmp_recall_sgie_reid0.yaml`.
-No code changed; items below are ranked by impact.
-
-#### 🔴 Correctness Bugs
-
-- [ ] **Display sink missing `async: 0`** (`src/pipeline/runner.py` ~line 401).
-  The display-only sink (`nveglglessink`) is added without `async: 0`. When used with
-  a tee split or dynamic RTSP sources, DeepStream can deadlock in PAUSED state.
-  Fix: add `"async": 0` alongside `"sync": sink_sync, "qos": 0`.
-
-- [ ] **Mux resolution 1920×1080 for 640×360 sources** (`src/pipeline/run_config.py`,
-  `mux_width`/`mux_height` defaults, labelled "legacy"). A 9× pixel upscale drives up
-  VRAM/bandwidth before YOLO inference. Should be set to 640×360 (source native) or
-  nearest encoder-friendly multiple.
-
-#### 🟠 Performance / Config Correctness
-
-- [ ] **SGIE `interval: 0`** (`configs/models/nvinfer_reid_swin_sgie_all.yml`).
-  Swin SGIE runs on every single frame/batch. Setting `interval: 1` (skip every other)
-  halves SGIE cost with negligible IDF1 impact at 10+ fps; `interval: 2` cuts 66%.
-  Measure IDF1 delta before committing.
-
-- [ ] **`minDetectorConfidence: 0.12` dead zone**
-  (`configs/tracker/nvdcf_accuracy_mmp_recall_sgie_reid0.yaml`).
-  The upstream nvinfer detector threshold is 0.25, so any detection with score
-  0.12–0.25 is filtered before reaching the tracker. This parameter has no effect in
-  its current range — raise it to 0.25 to match, or lower the nvinfer threshold if
-  more recall is intended.
-
-- [ ] **`maxTargetsPerStream: 220` over-provisioned**.
-  MMP scenes have 5–15 persons per camera. 220 slots wastes memory and slows internal
-  tracker bookkeeping. Set to 30–40.
-
-- [ ] **`earlyTerminationAge: 1` too aggressive**.
-  Tracks are terminated after a single missed frame. Brief occlusions (doorframes,
-  pillars) cause unnecessary ID fragmentation. Raise to 5–10 frames.
-
-- [ ] **`maxShadowTrackingAge: 240` (≈22.6 s) asymmetry with `earlyTerminationAge: 1`**.
-  Shadows live 22.6 s but active tracks die after 1 missed frame — conflicting policy.
-  If the intent is short occlusion tolerance, set `earlyTerminationAge` to ≥10 and
-  lower `maxShadowTrackingAge` proportionally (e.g. 60–90 frames / 6–9 s).
-
-- [ ] **`geo_weight` not in pipeline YAML → defaults to 0.35**
-  (`src/reid/config.py` default; CLAUDE.md canonical is 0.25).
-  Add `geo_weight: 0.25` explicitly to
-  `configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml` so the production
-  value is visible and reproducible.
-
-#### 🟡 Low-Impact / Hygiene
-
-- [ ] **Engine batch mismatch**: `engine_prep.py` builds engines at `batch=4`; at
-  runtime `batch = max(n_cameras, batch_size)` (line 116 `runner.py`), so a 20-camera
-  run rebuilds to batch=20 on first launch. Pre-build engines at the target camera
-  count or document expected one-time rebuild.
-
-- [ ] **Double Swin load in `_sgie.yaml` quality preset** (~0.4 GB VRAM). The NvDCF
-  internal ReID tensor and the Swin SGIE both load simultaneously. `reid0` preset
-  avoids this; prefer `reid0` for VRAM-constrained deployments.
-
-- [ ] **SGIE `maintain-aspect-ratio: 0`** (`nvinfer_reid_swin_sgie_all.yml`).
-  Person crops are stretched to fill the input tensor without letterboxing, distorting
-  aspect ratio. Enable `maintain-aspect-ratio: 1` and re-evaluate IDF1.
-
-- [ ] **`minIouDiff4NewTarget: 0.50`** may suppress new-target creation in dense scenes
-  where two detections are close but genuinely distinct people. Consider lowering to
-  0.35–0.40 if re-entering persons are missed.
-
-## 5. Future Scale-Out
-
-Do not build this until the single-host system is stable.
-
-Possible future architecture:
-
-```text
-DeepStream perception
-  -> message bus
-  -> MTMC service
-  -> Timescale/Postgres + vector store
+DeepStream perception -> message bus (Redis Streams; Kafka only if multi-host)
+  -> MTMC service -> TimescaleDB/Postgres (+ pgvector/Milvus if embedding search)
   -> dashboard/API
 ```
 
-Candidate bus:
+Storage today: SQLite/CSV/NPZ for eval; TimescaleDB/Postgres for production metadata;
+pgvector only if ReID search becomes a product requirement (it now is — see §5).
 
-- Redis Streams for simple single-host service split.
-- Kafka only if multi-host or high-volume replay is required.
-
-Candidate storage:
-
-- SQLite/Parquet for eval.
-- TimescaleDB/Postgres for production metadata.
-- pgvector/Milvus only if embedding search is needed.
-
-## 6. Analytics And UI
-
-Analytics/UI are product features, not core tracker readiness.
-
-Build only after:
-
-- RTSP validation passes.
-- overnight stability passes.
-- run summaries are reliable.
-- retail quality is understood.
-
-Future features:
-
-- named zone editor
-- per-zone occupancy
-- entry/exit counts
-- route summaries
-- Grafana or Streamlit dashboard
-
-Keep zones coarse; fine-grained ground-plane analytics will be noisy.
+---
 
 ## 7. Open Questions
 
-- What is the tolerated Global ID latency: near-live, 10 seconds, 30 seconds, or
-  longer?
-- Is single-host 20cam the final deployment, or will production need multi-host?
-- Will real deployment input be all RTSP at 1920x1080?
-- Is retail IDF1 a hard product requirement, or is mean IDF1 the acceptance gate?
-- Should production default be quality preset or performance preset after RTSP
-  validation?
-
-## 8. ReID Manual Label Workflow
-
-The existing manual labels in `reid_labels/*.json` were created for the old
-`MMPTracking_10minute_reid_cache` scene-track IDs. Use the crop-cache workflow
-for regrouping; do not apply those labels directly to raw official zip
-`person_id` values.
-
-Prepare the local SSD cache path expected by the retired label app:
-
-```bash
-ln -sfn reid_cache_ssd/MMPTracking_10minute_reid_cache \
-  dataset/MMPTracking_10minute_reid_cache
-```
-
-Create or refresh the auto proposal:
-
-```bash
-./venv/bin/python old_stuff/retired_20260620/scripts/datasets/consolidate_reid_identities.py \
-  --cache-root dataset/MMPTracking_10minute_reid_cache \
-  --split train \
-  --reid-onnx models/reid/swin_tiny_mmp_reid_all.onnx \
-  --threshold 0.45 \
-  --make-montages
-```
-
-Run the manual label UI:
-
-```bash
-./venv/bin/python old_stuff/retired_20260620/scripts/datasets/reid_label_app.py
-```
-
-Then open `http://localhost:8000`, save labels to `reid_labels/`, and apply
-them:
-
-```bash
-./venv/bin/python old_stuff/retired_20260620/scripts/datasets/apply_reid_labels.py \
-  --labels-dir reid_labels \
-  --cache-root dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache \
-  --out-dir dataset/reid_cache_ssd/MMPTracking_10minute_reid_cache_labeled
-```
-
-ONNXRuntime GPU is the expected host-side runtime for ReID eval/proposal tools.
-`requirements.txt` uses `onnxruntime-gpu`, and the ReID eval/proposal scripts
-preload venv CUDA/cuDNN libraries before creating sessions.
-
-### 8.1 Original MMPTracking Manual Labels
-
-For the official MMPTracking source tree, use the exact-source label tools. This
-does not use the extracted 10-minute videos or the old 10-minute crop cache.
-
-Build exact-source crops from the official image/label zips:
-
-```bash
-./venv/bin/python scripts/datasets/mmp_exact_to_reid.py \
-  --mmp-root dataset/MMPTracking \
-  --output-dir dataset/mmp_exact_reid_original \
-  --splits train \
-  --sample-rate 20 \
-  --clean
-```
-
-Run the exact-source manual label UI:
-
-```bash
-./venv/bin/python scripts/datasets/reid_label_app_exact.py \
-  --crop-root dataset/mmp_exact_reid_original \
-  --split train \
-  --out-dir reid_labels_exact
-```
-
-Open `http://localhost:8000`. The cards are keyed by exact-source `pid_key`,
-for example `63am/cafe_shop_0/1`, meaning `time/scene/raw_pid`.
-
-Do not reuse the old `reid_labels/` files for this exact-source path. Those
-labels were made against the 10-minute extracted crop-cache ID space. The
-official MMPTracking person IDs reset per scene, so exact-source regrouping must
-be reviewed/saved again in `reid_labels_exact/`.
-
-Apply labels into a trainable grouped cache:
-
-```bash
-./venv/bin/python scripts/datasets/apply_reid_labels_exact.py \
-  --labels-dir reid_labels_exact \
-  --crop-root dataset/mmp_exact_reid_original \
-  --out-dir dataset/mmp_exact_reid_original_labeled \
-  --splits train
-```
-
-Train on the grouped exact-source cache:
-
-```bash
-PYTHONUNBUFFERED=1 ./venv/bin/python scripts/train/finetune_reid_mmp_exact.py \
-  --crop-root dataset/mmp_exact_reid_original_labeled \
-  --output output/reid_mmp_exact_original_labeled \
-  --epochs 80 \
-  --pk-p 16 --pk-k 4 \
-  --accum-steps 2 \
-  --batches-per-epoch 400 \
-  --workers 4 \
-  --early-stop 12
-```
+- Tolerated Global ID latency: near-live, 10 s, 30 s, longer?
+- Single-host 20-cam final, or multi-host?
+- Real input all RTSP at 1920×1080?
+- Is retail IDF1 a hard requirement, or is mean IDF1 the acceptance gate?
+- **RAG:** batch (recorded runs) or live? Which zones/shelves must be named per environment?
+  Acceptable answer latency / LLM hosting (Anthropic API vs on-prem)?
