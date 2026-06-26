@@ -609,7 +609,7 @@ Dự án dùng giao thức \textit{honest single-pass full-GT}: toàn bộ video
 
 \subsubsection{Cấu hình pipeline}
 
-Pipeline được chạy với preset mặc định (\texttt{pipeline\_mmp\_nvdcf\_online\_sgie\_reid0.yaml}): NvDCF Legacy DCF với ReID nội tại tắt, Swin-Tiny SGIE là nguồn embedding duy nhất. Các thông số ReID chính: \texttt{threshold = 0{,}62}, \texttt{margin = 0{,}02}, \texttt{geo\_weight = 0{,}25}, \texttt{geo\_min\_overlaps = 8}.
+Pipeline được chạy với preset mặc định: NvDCF Legacy DCF với ReID nội tại tắt, Swin-Tiny SGIE là nguồn embedding duy nhất. Các thông số ReID chính: \texttt{threshold = 0{,}62}, \texttt{margin = 0{,}02}, \texttt{geo\_weight = 0{,}25}, \texttt{geo\_min\_overlaps = 8}.
 
 \subsection{Kết quả định danh xuyên camera}
 
@@ -728,31 +728,6 @@ Hình~\ref{fig:pipeline_all_osd} trình bày đầu ra pipeline trên cả 5 mô
     \label{fig:pipeline_all_bev}
 \end{figure}
 
-\subsubsection{Năng lực hệ thống khi loại trừ môi trường Retail}
-\label{sec:no_retail}
-
-Vì Retail là môi trường duy nhất không đạt ngưỡng --- với nguyên nhân vật lý (che khuất nặng do kệ hàng) chứ không phải hạn chế thuật toán --- Bảng~\ref{tab:no_retail} trình bày kết quả trên 16 scene của 4 môi trường còn lại để định lượng năng lực thực của hệ thống khi không bị Retail kéo xuống.
-
-\begin{table}[H]
-    \centering
-    \caption[Kết quả khi loại trừ môi trường Retail]{\bfseries\fontsize{12pt}{0pt}\selectfont Global IDF1 trên 16 scene của 4 môi trường (loại trừ Retail).}
-    \begin{tabular}{|l|c|c|}
-    \hline
-    \bfseries Môi trường & \bfseries Số scene & \bfseries Global IDF1 \\
-    \hline
-    Lobby    & 4 & 0,893 \\
-    Office   & 3 & 0,878 \\
-    Industry & 5 & 0,829 \\
-    Café     & 4 & 0,823 \\
-    \hline
-    \bfseries Trung bình & \bfseries 16 & \bfseries 0,853 \\
-    \hline
-    \end{tabular}
-    \label{tab:no_retail}
-\end{table}
-
-Loại trừ Retail, điểm trung bình tăng từ \textbf{0,774 lên 0,853} (+0,079) và \textbf{cả bốn môi trường đều vượt ngưỡng 0,8}. Con số này định lượng rõ mức ảnh hưởng cục bộ của riêng Retail lên kết quả toàn tập: đây là vấn đề của một môi trường (lỗi phát hiện do che khuất), không phải hạn chế của toàn hệ thống.
-
 \subsection{Thông lượng xử lý}
 \label{sec:throughput}
 
@@ -861,29 +836,6 @@ Tính trên toàn bộ tập kiểm thử với pipeline hoàn chỉnh, Buffered
 Kết quả trên toàn 24 scene cho thấy sự khác biệt giữa các kích thước cửa sổ rất nhỏ (khoảng cách tối đa 0,005 điểm). Cửa sổ 300 khung ($\sim$30 giây) đạt trung bình cao nhất (0,766), nhỉnh hơn không đáng kể so với 100 khung (0,764). Kết quả đáng chú ý là \textbf{Industry ưa cửa sổ ngắn hơn} (100 khung tốt nhất, 0,845), trái với nhận định từ thí nghiệm 5 scene trước đó --- lý do là cửa sổ ngắn giảm thiểu sự nhầm lẫn khi nhiều người đồng phục xuất hiện rồi biến mất trong cùng khung thời gian. Retail gần như không nhạy cảm với kích thước cửa sổ (0,603--0,609), xác nhận giới hạn của môi trường này nằm ở chất lượng embedding, không phải tham số hậu xử lý. Vì chênh lệch giữa các kích thước nằm trong dải nhiễu, cửa sổ 200 khung ($\sim$20 giây) --- giá trị mặc định --- không phải là tốt nhất tuyệt đối (300 khung nhỉnh hơn 0,005 điểm) nhưng vẫn là lựa chọn hợp lý.
 
 Nếu chọn cửa sổ tối ưu riêng cho từng môi trường (Industry~=~100f, Office~=~200f, Café/Retail~=~300f, Lobby~=~100f) và tính kết quả oracle tốt nhất có thể đạt được trên từng scene, trần trên là \textbf{0,781} --- vẫn dưới ngưỡng 0,800 đặt ra. Điều này xác nhận rào cản chính không nằm ở kích thước cửa sổ mà ở chất lượng embedding ReID trong môi trường retail.
-
-\subsection{Nghiên cứu tối ưu hóa thông lượng}
-
-Để tìm cách tăng FPS mà không giảm IDF1, hệ thống được thử nghiệm với lượng tử hóa INT8 cho cả detector YOLO11n và mạng Swin ReID. Các thí nghiệm trong phần này được thực hiện với \texttt{maxTargetsPerStream=220} (cấu hình tại thời điểm đo), nên mốc FPS gốc ($\sim$10,7 FPS/cam) thấp hơn cấu hình mặc định hiện tại (40); kết luận về \textit{mức thay đổi} FPS giữa các thử nghiệm không bị ảnh hưởng bởi giá trị này. Bảng~\ref{tab:speedup} tổng hợp kết quả:
-
-\begin{table}[H]
-    \centering
-    \caption[Nghiên cứu tăng tốc FPS]{\bfseries\fontsize{12pt}{0pt}\selectfont Kết quả nghiên cứu tăng tốc (20 camera, single-pass)}
-    \begin{tabular}{|l|c|c|l|}
-    \hline
-    \bfseries Thử nghiệm & \bfseries FPS/cam & \bfseries IDF1 & \bfseries Nhận xét \\
-    \hline
-    Gốc (FP16)                     & $\sim$10{,}7 & 0{,}802 & Mốc tham chiếu \\
-    Detector INT8                  & $\sim$11     & 0{,}800 & Giữ IDF1, không tăng FPS \\
-    Swin ReID INT8                 & $\sim$11     & 0{,}800 & Tiết kiệm $\sim$0{,}37 GB VRAM \\
-    SGIE interval tăng             & $\sim$11     & giữ     & Không tăng FPS \\
-    Detector interval 2 (bỏ khung) & $\sim$18     & 0{,}65  & Tăng FPS nhưng phá IDF1 \\
-    \hline
-    \end{tabular}
-    \label{tab:speedup}
-\end{table}
-
-Kết luận: nút thắt là xử lý per-người trên GPU ở kích thước cố định (detector resize về 640$\times$640; ReID resize về 256$\times$128). Khối lượng này không co lại khi lượng tử hóa --- INT8 chỉ tiết kiệm VRAM ($\sim$0{,}37 GB), không tăng FPS. Chỉ khi bỏ bớt khung detect (detector interval) mới tăng FPS, nhưng cách đó phá IDF1 do mất phát hiện và đứt định danh.
 
 \subsection{So sánh kiến trúc mô hình ReID}
 

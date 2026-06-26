@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex main"] 1782459827.85159 "main.aux" "main.bbl" "main" 1782460111.01153 0
+["bibtex main"] 1782460751.04843 "main.aux" "main.bbl" "main" 1782460753.8814 0
   "./MyRef.bib" 1782277883 2775 1c0c90f7d7259431e23989d3d0382471 ""
   "C:/Users/nguye/AppData/Local/Programs/MiKTeX/bibtex/bst/ieeetran/IEEEtran.bst" 1440622569 57748 7c8250ecf02814ce6ddc0cdbb63df1dd ""
-  "main.aux" 1782460110 17460 632924a3165bdbf34df6f35b529ddd0a "pdflatex"
+  "main.aux" 1782460753 16481 283c54620aa40c469dccfac13f8adc6d "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1782460108.30554 "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" "main.pdf" "main" 1782460111.01226 0
+["pdflatex"] 1782460751.28459 "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" "main.pdf" "main" 1782460753.8823 0
   "Abbreviations.tex" 1782276321 2397 ef29e26fd1b0873fc27d6066584d408e ""
   "Abstract.tex" 1782384414 3190 a8a326b4036fe4f446761591d0309e92 ""
   "Bia.tex" 1782295600 1568 14cd09e9539055d8e645c8abc3cf4d2b ""
@@ -234,14 +234,14 @@
   "Images/pipeline_retail_osd.jpg" 1782298904 314120 a86d73d57b22c83d7a49a665eb92b3d5 ""
   "LoiNoiDau.tex" 1782295528 2095 1f4da46ab12542abaa4987bc4cdc613e ""
   "PhuLuc.tex" 1782459765 1659 11400286e0384f77252944d48732bfa0 ""
-  "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" 1782460108 72312 a1ff96288aba66bb9c173895d6c8c047 ""
-  "main.aux" 1782460110 17460 632924a3165bdbf34df6f35b529ddd0a "pdflatex"
-  "main.bbl" 1782459828 2870 6a537eed067cf1dccb6486d09139d784 "bibtex main"
-  "main.lof" 1782460110 1447 52c2a7e566fef20fdb75cc00c7c73724 "pdflatex"
-  "main.lot" 1782460110 1388 1808376ae91dde0b9abf6d67d75bb34c "pdflatex"
-  "main.out" 1782460110 13203 e98dee7988522162a51cb5759c04a6a4 "pdflatex"
-  "main.tex" 1782460108 72312 a1ff96288aba66bb9c173895d6c8c047 ""
-  "main.toc" 1782460110 6754 e73cb829945f25c6b1d9e2193c154e1f "pdflatex"
+  "d:/2025.2/multi_stream_people_tracker/report/latex/main.tex" 1782460748 68775 ef05df14ab3727a7d0d6c14210b4e22c ""
+  "main.aux" 1782460753 16481 283c54620aa40c469dccfac13f8adc6d "pdflatex"
+  "main.bbl" 1782460751 2870 6a537eed067cf1dccb6486d09139d784 "bibtex main"
+  "main.lof" 1782460753 1447 52c2a7e566fef20fdb75cc00c7c73724 "pdflatex"
+  "main.lot" 1782460753 1149 18eae452ef6a8af653897b93122a3d3c "pdflatex"
+  "main.out" 1782460753 12565 f3621e2b5af659dee46ba4823fc116e0 "pdflatex"
+  "main.tex" 1782460748 68775 ef05df14ab3727a7d0d6c14210b4e22c ""
+  "main.toc" 1782460753 6499 ab84fe80c6e2ee55b641507443d5be0d "pdflatex"
   (generated)
   "main.aux"
   "main.lof"
