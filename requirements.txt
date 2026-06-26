@@ -42,3 +42,10 @@ Cython
 # Offline tracking/evaluation
 motmetrics>=1.4
 trackeval>=0.1
+pytest>=8.0
+
+# Natural-language Q&A / RAG layer (src/rag/, production_todo §5)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+anthropic>=0.40        # Phase C agent (needs ANTHROPIC_API_KEY at runtime)

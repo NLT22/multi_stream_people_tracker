@@ -239,45 +239,42 @@ text-to-SQL + ReID-vector-search patterns (see refs in 5.7).
   escalate to Opus for multi-step reasoning); a local open model is the on-prem fallback.
   The LLM never touches raw embeddings — it only orchestrates tools and writes prose.
 
-### 5.3 Data gaps to close first (Phase A — foundation)
+> **IMPLEMENTED 2026-06-26 — `src/rag/` (Phases A+B done, C scaffolded). See `src/rag/README.md`.**
+> Build: `python -m src.rag.ingest --export-dir <scene export> --scene <name> --db output/rag/rag.sqlite`.
+> Tests: `pytest tests/test_rag.py` (12 passing, no LLM/network). API: `uvicorn src.rag.api:app`.
+> Validated on `64pm_cafe_shop_1` (142,985 dets, 10 ids, named TABLE zones, 8 gid embeddings;
+> image self-match rank-1). Phase D (webUI "Ask" view) not built yet.
+
+### 5.3 Data gaps to close first (Phase A — foundation)  ✅ DONE (`src/rag/ingest.py`, `zones.py`)
 
 These are reconstructible from existing exports; all land in SQLite. Build offline/batch
 from current run artifacts — low risk, high reuse.
 
-- [ ] **Wall-clock timestamps.** Detections store `frame_no` per cam, not time. Add a run
-  epoch + fps → `ts` column (or capture capture-time), so "today / 10am / this week" resolve.
-- [ ] **Named-zone registry + foot→zone resolver.** Reuse the webUI **ROI editor** (it already
-  emits named regions in `nvdsanalytics_*.txt` format) as the zone vocabulary. Add a resolver
-  mapping a foot point (per-cam pixel ROI, or BEV world XY via `geometry.foot_to_world`) → zone
-  name. This is what makes "which shelf/area" answerable.
-- [ ] **Derived analytics tables** in SQLite (built from `detections` + `tracklet_bev` + zones):
-  - `presence(gid, cam_id, zone, t_start, t_end)` — per-visit intervals.
-  - `dwell(gid, zone, seconds, day/hour bucket)` — Occupancy/Footfall already exist as grids;
-    add per-gid/per-zone dwell from foot points + timestamps.
-  - `zone_occupancy(zone, time_bucket, count)` / `zone_footfall(zone, time_bucket, unique_gids)`
-    timeseries — powers "busiest zone today / top-5 this week".
-- [ ] **Persisted embedding gallery for query-time search.** Persist per-gid (and/or per-tracklet)
-  mean embeddings (already in `tracklet_embeddings.npz`) into the DB / a vectors table so an
-  uploaded image matches without re-running the pipeline. Start with brute-force cosine
-  (gallery is small); add a vector index only if it grows (5.6).
+- [x] **Wall-clock timestamps.** `ingest.py` sets `ts = epoch + frame_no/fps` (epoch is the
+  configurable `--epoch-iso`), so "today / 10am / this week" resolve.
+- [x] **Named-zone registry + foot→zone resolver.** `zones.py` parses `nvdsanalytics_<env>.txt`
+  ROI polygons (the ROI-editor vocabulary), normalises ROI(1080p)↔pred(360p), and resolves each
+  foot point → `cam{N}:{NAME}` (e.g. `cam1:TABLE`). World XY also reconstructed via calibration.
+- [x] **Derived analytics tables** in SQLite: `presence(gid,cam,zone,t_start,t_end,...)`,
+  `dwell(gid,zone,seconds,visits)`, `zone_timeseries(zone,bucket,occupancy_s,footfall)`.
+- [x] **Persisted embedding gallery.** `gid_embeddings(global_id, vec BLOB)` = per-gid mean L2
+  embedding (from `tracklet_embeddings.npz`, remapped to buffered gids). Brute-force cosine.
 
-### 5.4 Phase B — Query API (deterministic core, no LLM yet)
+### 5.4 Phase B — Query API (deterministic core, no LLM yet)  ✅ DONE (`src/rag/queries.py`, `api.py`)
 
-- [ ] Stand up a small **FastAPI** service (the missing backend; the webUI is currently static).
-- [ ] Implement the analytics functions as JSON endpoints/tools, each independently testable:
-  - `person_timeline(gid, time_range)` → cameras + appearance intervals.
-  - `person_trajectory_bev(gid, time_range)` → BEV foot-point path (from `tracklet_bev`).
-  - `person_dwell(gid, time_range)` → per-zone dwell.
-  - `top_zones(time_range, metric)` / `zone_occupancy(zone, time_range)`.
-  - `search_person_by_image(image)` → candidate gids + scores (embed + cosine).
-- [ ] Unit tests on a persisted demo run (golden answers) — this is the correctness gate;
-  the LLM layer must not be the thing under test.
+- [x] **FastAPI** service `src/rag/api.py` (the previously-missing backend).
+- [x] Analytics functions implemented as `RagStore` methods + JSON endpoints, each independently
+  testable: `person_timeline`, `person_trajectory_bev` (world XY), `person_dwell`,
+  `top_zones(metric)`, `zone_occupancy(zone)`, `search_person_by_image` (embed + cosine).
+- [x] **Unit tests** `tests/test_rag.py` — 12 golden tests incl. the image self-match invariant
+  and pure agent-dispatch; no LLM/network. This is the correctness gate.
 
 ### 5.5 Phase C — LLM agent + Phase D — WebUI
 
-- [ ] **Agent layer:** wire the Phase-B tools as function-calling tools; the LLM selects a
-  tool, fills params (resolve "10am today" → time range; resolve image → gid), and writes the
-  answer + a structured payload. Add text-to-SQL fallback with the read-only guardrails (5.2).
+- [x] **Agent layer:** `src/rag/agent.py` — Anthropic tool-use router (`RagAgent.ask()`); the LLM
+  selects a Phase-B tool, fills params (relative time → ISO; image → gid via search), composes
+  prose + `tool_calls` trace. Tool schemas + `dispatch()` are pure-Python and unit-tested without
+  the API; the live loop needs `ANTHROPIC_API_KEY`. Text-to-SQL fallback (5.2) still TODO.
 - [ ] **WebUI "Ask" view** (7th nav entry; React/Vite, `webui/src/components/rag/`): chat box +
   image-upload; render results as a timeline, a BEV trajectory overlay (reuse heatmap/BEV view),
   camera jump-links, and a heatmap time-window. Add `webui/src/api/` fetch wrappers.
