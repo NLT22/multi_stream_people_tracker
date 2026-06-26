@@ -46,7 +46,16 @@ def _parse_groups(spec: str | None) -> list[tuple[str, set[int] | None]]:
         if not raw:
             continue
         if ":" not in raw:
-            raise ValueError(f"Invalid group spec {raw!r}; expected name:start-end")
+            hint = ""
+            if raw.isdigit():
+                # Classic footgun: a caller shell script used a variable named
+                # GROUPS (a bash special/readonly array = the user's group IDs),
+                # so an empty value leaked the gid (e.g. "1000") into --groups.
+                hint = (" — this looks like a leaked shell group id: do NOT use a "
+                        "bash variable named GROUPS to build --groups (it is the "
+                        "special array of the user's group IDs); rename it, e.g. GRP")
+            raise ValueError(
+                f"Invalid group spec {raw!r}; expected name:start-end{hint}")
         name, span = raw.split(":", 1)
         name = name.strip()
         cams: set[int] = set()
