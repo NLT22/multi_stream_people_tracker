@@ -47,23 +47,38 @@ for ENV in "${ENVS[@]}"; do
   NGID=$(tail -n +2 "$WORK/gids.csv" 2>/dev/null | cut -d, -f4 | sort -un | wc -l)
   echo "[env:$ENV] buffered IDs: $NGID"
 
-  # 2) FULL-length real-OSD video with Buffered IDs (no trim)
-  echo "[env:$ENV] rendering full-length OSD video ..."
+  # 2) FULL-length real-OSD video with Buffered IDs + trajectory trails (no trim).
+  #    This is the single OSD video (replaces the old OpenCV *_live_buffered_osd.mp4).
+  echo "[env:$ENV] rendering full-length OSD video (with trajectories) ..."
   $PY -m src.main --config "$PIPECFG" --sources "$SRC" \
-      --no-display --no-sync \
+      --no-display --no-sync --show-trajectories \
       --buffered-remap "$WORK/gids.csv" \
       --save-video "$DEST/${ENV}_osd_buffered.mp4" > "$WORK/render.log" 2>&1
   DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 \
         "$DEST/${ENV}_osd_buffered.mp4" 2>/dev/null)
-  echo "[env:$ENV] video -> $DEST/${ENV}_osd_buffered.mp4 (${DUR}s)"
+  echo "[env:$ENV] OSD video -> ${ENV}_osd_buffered.mp4 (${DUR}s)"
 
-  # 3) Heatmaps: occupancy/footfall/dwell per-cam + BEV (no tracking video)
-  echo "[env:$ENV] heatmaps ..."
+  # 3) Analytics overlay video (gst-nvdsanalytics: ROI / line-crossing / overcrowding)
+  AN="configs/analytics/nvdsanalytics_${ENV}.txt"; [ -f "$AN" ] || AN=configs/analytics/nvdsanalytics_mmp.txt
+  echo "[env:$ENV] analytics video ..."
+  $PY -m src.main --config "$PIPECFG" --sources "$SRC" \
+      --no-display --no-sync --show-trajectories --nvdsanalytics-config "$AN" \
+      --save-video "$DEST/${ENV}_analytics.mp4" > "$WORK/analytics.log" 2>&1
+
+  # 4) Heatmaps (occupancy/footfall/dwell per-cam + BEV) and the BEV top-down
+  #    tracking video, via venv_visualize.
+  echo "[env:$ENV] heatmaps + BEV ..."
   $PY scripts/eval/venv_visualize.py --export-dir "$EXPORT" \
       --video-dir "$VALROOT/$S" --calib "$CALIB" --cams $CAMS \
-      --assign-csv "$WORK/assign.csv" --video-steps 2 \
+      --assign-csv "$WORK/assign.csv" --video-steps 2 --track-frames 1500 \
       --out-dir "$DEST/heatmap" > "$WORK/heatmap.log" 2>&1 \
       && echo "[env:$ENV] heatmaps -> $DEST/heatmap/ ($(ls "$DEST/heatmap"/*.png 2>/dev/null | wc -l) png)" \
       || { echo "[env:$ENV] heatmap FAILED"; tail -5 "$WORK/heatmap.log"; }
+  # promote the BEV tracking video; drop only the timelapse + the redundant OpenCV OSD
+  [ -f "$DEST/heatmap/bev_tracking.mp4" ] && mv -f "$DEST/heatmap/bev_tracking.mp4" "$DEST/${ENV}_tracking_bev.mp4"
+  rm -f "$DEST/heatmap/timelapse_"*.mp4 "$DEST/heatmap/cam_tracking.mp4" \
+        "$DEST/${ENV}_live_buffered_osd.mp4"
+  rm -rf "$WORK"
+  echo "[env:$ENV] videos: $(ls "$DEST"/*.mp4 2>/dev/null | xargs -n1 basename | tr '\n' ' ')"
 done
 echo "ALL_ENV_DEMOS_DONE"

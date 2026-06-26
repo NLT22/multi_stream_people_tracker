@@ -67,7 +67,7 @@ fi
 # ---- Pass 2: real OSD render with buffered IDs ----
 echo "[demo:$NAME] rendering real-OSD video (trim ${TRIM}s) ..."
 $PY -m src.main --config "$PIPECFG" --sources "$SOURCES" \
-    --no-display --no-sync --trim-seconds "$TRIM" \
+    --no-display --no-sync --trim-seconds "$TRIM" --show-trajectories \
     --buffered-remap "$WORK/gids.csv" \
     --save-video "$OUT/${NAME}_osd_buffered.mp4" \
     > "$WORK/pass2.log" 2>&1
