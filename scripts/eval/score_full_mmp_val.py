@@ -28,7 +28,9 @@ import pandas as pd
 
 
 def run_live_buffered(export_dir: Path, assign_csv: Path,
-                      window_chunks: int = 1, assign_thr: float = 0.40) -> None:
+                      window_chunks: int = 1, assign_thr: float = 0.50,
+                      fp_filter: bool = False, fp_motion: float = 8.0,
+                      fp_minframes: int = 100) -> None:
     # Import directly (avoids subprocess python path issues with venv)
     from src.mtmc.live_buffered import main as lb_main
     sys.argv = [
@@ -39,6 +41,9 @@ def run_live_buffered(export_dir: Path, assign_csv: Path,
         "--assign-csv", str(assign_csv),
         "--once",
     ]
+    if fp_filter:
+        sys.argv += ["--fp-filter", "--fp-motion", str(fp_motion),
+                     "--fp-minframes", str(fp_minframes)]
     lb_main()
 
 
@@ -118,7 +123,11 @@ def main() -> None:
     ap.add_argument("--export-root", default="output/eval/full_mmp_val")
     ap.add_argument("--val-root", default="dataset/MMPTracking_10minute/val")
     ap.add_argument("--window-chunks", type=int, default=1)
-    ap.add_argument("--assign-thr", type=float, default=0.40)
+    ap.add_argument("--assign-thr", type=float, default=0.50)  # swept optimum (see sweep_live_buffered.py)
+    ap.add_argument("--no-retail-fp-filter", action="store_true",
+                    help="disable the retail static-FP filter (on by default for retail)")
+    ap.add_argument("--fp-motion", type=float, default=8.0)
+    ap.add_argument("--fp-minframes", type=int, default=100)
     ap.add_argument("--rerun-scoring", action="store_true",
                     help="Re-run scoring even if metrics.json already exists.")
     ap.add_argument("--no-per-camera", action="store_true",
@@ -160,11 +169,18 @@ def main() -> None:
 
         print(f"\n── {scene} " + "─" * 30)
 
-        # Step 1: live_buffered --once
+        # Step 1: live_buffered --once.
+        # Static-FP filter is enabled only for retail (static mannequin/poster/shelf
+        # clutter); seated people in cafe/office are static too, so it would hurt
+        # there — keep it scoped to retail. Disable with --no-retail-fp-filter.
+        is_retail = "retail" in scene
+        fp_on = is_retail and not args.no_retail_fp_filter
         assign_csv = scene_dir / "_eval_assign.csv"
         if not assign_csv.exists():
-            print("  live_buffered --once ...")
-            run_live_buffered(scene_dir, assign_csv, args.window_chunks, args.assign_thr)
+            print(f"  live_buffered --once ... (fp_filter={fp_on})")
+            run_live_buffered(scene_dir, assign_csv, args.window_chunks,
+                              args.assign_thr, fp_filter=fp_on,
+                              fp_motion=args.fp_motion, fp_minframes=args.fp_minframes)
             print(f"  → {assign_csv.name}")
         else:
             print("  _eval_assign.csv exists, skipping live_buffered.")

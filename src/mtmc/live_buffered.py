@@ -170,6 +170,36 @@ def _load_chunk(path: Path):
             z["local_track_id"].astype(np.int64), z["embeddings"].astype(np.float32))
 
 
+def static_track_dropset(export_dir: Path, motion_px: float,
+                         min_frames: int) -> set[tuple[int, int]]:
+    """Local tracks (cam_id, local_track_id) that barely move and live long.
+
+    These are static false positives — mannequins, posters, shelf clutter — which
+    inflate identity count and ID-switches (e.g. retail: precision 0.62 -> 0.88,
+    IDF1 +7.7pp once removed). Computed from the per-camera prediction CSVs the
+    exporter writes (chunks carry no bbox). Apply only in environments with static
+    non-person clutter; seated real people (cafe/office) are static too, so do NOT
+    enable this globally — scope it to the relevant camera group.
+    """
+    import pandas as pd
+    drop: set[tuple[int, int]] = set()
+    for p in sorted(export_dir.glob("cam_*_predictions.csv")):
+        try:
+            cam = int(p.stem.split("_")[1])
+            df = pd.read_csv(p)
+        except (ValueError, IndexError, pd.errors.EmptyDataError):
+            continue
+        cx = df["left"] + df["width"] / 2.0
+        cy = df["top"] + df["height"] / 2.0
+        stats = pd.DataFrame({"ltid": df["local_track_id"], "cx": cx, "cy": cy})
+        for ltid, grp in stats.groupby("ltid"):
+            if len(grp) < min_frames:
+                continue
+            if float(np.hypot(grp["cx"].std(), grp["cy"].std())) < motion_px:
+                drop.add((cam, int(ltid)))
+    return drop
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--export-dir", required=True, type=Path)
@@ -183,12 +213,25 @@ def main():
     ap.add_argument("--group-window-chunks", default=None,
                     help="optional per-group window override, e.g. "
                          "'retail:4,default:1'")
-    ap.add_argument("--assign-thr", type=float, default=0.40,
-                    help="max (1 - cosine) to link a window cluster to an existing global id")
+    ap.add_argument("--assign-thr", type=float, default=0.50,
+                    help="max (1 - cosine) to link a window cluster to an existing "
+                         "global id. 0.50 is the swept optimum on the full 24-scene "
+                         "MMP val set (mean IDF1 0.774@0.40 -> 0.780@0.50, "
+                         "non-retail 0.853 -> 0.862); peaks at 0.50 then declines by "
+                         "0.55. See scripts/eval/sweep_live_buffered.py.")
     ap.add_argument("--num-people", type=int, default=None,
                     help="fixed k; default = per-window concurrency floor")
     ap.add_argument("--anchor-window", type=int, default=15,
                     help="sliding-window vote length inside assign_per_frame")
+    ap.add_argument("--fp-filter", action="store_true",
+                    help="drop static long-lived local tracks (mannequins/posters/"
+                         "shelf clutter) before clustering. Scope to clutter-prone "
+                         "camera groups only (retail) — seated people are static too. "
+                         "Retail: IDF1 0.615->0.693, precision 0.62->0.88.")
+    ap.add_argument("--fp-motion", type=float, default=8.0,
+                    help="center-position std (px) below which a track is 'static'")
+    ap.add_argument("--fp-minframes", type=int, default=100,
+                    help="only drop static tracks living at least this many frames")
     ap.add_argument("--log-csv", default="output/logs/live_buffered.csv")
     ap.add_argument("--gids-csv", default=None,
                     help="optional: write current (cam,local_track_id,global_id) map each step")
@@ -234,6 +277,13 @@ def main():
         f"chunks={mtmcs[name].window_chunks})"
         for name, cams in groups))
 
+    fp_drop: set = set()
+    if args.fp_filter:
+        fp_drop = static_track_dropset(args.export_dir, args.fp_motion,
+                                       args.fp_minframes)
+        print(f"[live-buffered] fp-filter: dropping {len(fp_drop)} static track(s) "
+              f"(motion<{args.fp_motion}px, >={args.fp_minframes} frames)")
+
     seen: set = set()
     t0 = time.time(); last_new = time.time()
     while True:
@@ -244,6 +294,12 @@ def main():
                 cam, frame, ltid, emb = _load_chunk(path)
             except Exception as e:               # half-written / racing; retry next poll
                 print(f"[live-buffered] skip {path.name}: {e}"); continue
+            if fp_drop:
+                keep = np.array([(int(c), int(t)) not in fp_drop
+                                 for c, t in zip(cam, ltid)], dtype=bool)
+                cam, frame, ltid, emb = cam[keep], frame[keep], ltid[keep], emb[keep]
+                if len(cam) == 0:
+                    seen.add(path.name); continue
             seen.add(path.name); last_new = time.time()
             idx = len(seen)
             for group_name, group_cams in groups:

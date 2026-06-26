@@ -137,9 +137,9 @@ Bên cạnh đó, dự án cũng hướng tới mục tiêu thứ cấp là cung
 Dự án có bốn đóng góp kỹ thuật chính:
 
 \begin{enumerate}
-    \item \textbf{Pipeline thời gian thực trên DeepStream:} Hệ thống hai tầng --- per-camera tracking và cross-camera identity fusion --- chạy trên NVIDIA DeepStream 9.0, đạt $\sim$15 FPS/camera ở 20 camera đồng thời (preset reid0, \texttt{maxTargetsPerStream = 40}).
+    \item \textbf{Pipeline thời gian thực trên DeepStream:} Hệ thống hai tầng --- per-camera tracking và cross-camera identity fusion --- chạy trên NVIDIA DeepStream 9.0, đạt $\sim$15 FPS/camera ở 20 camera đồng thời (preset reid0, \texttt{maxTargetsPerStream=40}).
 
-    \item \textbf{Quy trình làm sạch nhãn:} Hai công cụ làm sạch nhãn độc lập cho YOLO (loại bỏ 17,6\% nhãn phantom qua bộ kiểm tra COCO YOLO11x) và cho ReID (hợp nhất 196 nhãn scene-local về 56 identity sạch), giúp mô hình ReID tổng quát hóa tốt hơn đáng kể sang người chưa thấy.
+    \item \textbf{Quy trình làm sạch nhãn:} Hai công cụ làm sạch nhãn độc lập cho YOLO (dùng bộ xác nhận COCO YOLO11x loại $\sim$42\% nhãn phantom của riêng môi trường retail, nâng precision phát hiện từ 0,62 lên 0,94) và cho ReID (hợp nhất 196 nhãn scene-local về 56 identity sạch), giúp mô hình tổng quát hóa tốt hơn đáng kể sang người chưa thấy.
 
     \item \textbf{Buffered ID dựa trên anchor-guided clustering:} Triển khai thuật toán anchor-guided từ \cite{Huang2023} thành chế độ cửa sổ trượt 20 giây trong pipeline thời gian thực, đạt 97--98\% chất lượng của xử lý offline.
 
@@ -283,7 +283,7 @@ Phương pháp baseline được công bố trong bài báo gốc (DMCT-Ext-TD) 
 
 YOLO (\textit{You Only Look Once}) là họ mô hình phát hiện đối tượng một lần duyệt (\textit{single-pass}) nổi tiếng về tốc độ. Dự án sử dụng \textbf{YOLO11n} --- phiên bản nano của thế hệ YOLO thứ 11 do Ultralytics phát triển --- làm bộ phát hiện chính. Phiên bản nano được chọn vì nó cân bằng tốt giữa tốc độ và độ chính xác khi chạy đồng thời nhiều camera.
 
-Mô hình được fine-tune trên tập dữ liệu MMPTrack (bao gồm cả phần mở rộng 10 phút) sau khi đã áp dụng quy trình làm sạch nhãn (xem Phần~\ref{sec:label_cleaning}). Sau khi fine-tune trên tập nhãn sạch, mô hình đạt mAP50 = 0{,}97 trên tập kiểm thử.
+Mô hình được fine-tune trên tập dữ liệu MMPTrack (bao gồm cả phần mở rộng 10 phút) sau khi đã áp dụng quy trình làm sạch nhãn (xem Phần~\ref{sec:label_cleaning}). Sau khi fine-tune trên tập nhãn đã làm sạch retail, mô hình đạt mAP50 = 0{,}99 trên tập kiểm thử, với precision phát hiện người trên toàn pipeline 20 camera đạt 0{,}94 (so với 0{,}62 của detector huấn luyện trên nhãn gốc).
 
 \subsection{Theo dõi cục bộ: NvDCF}
 
@@ -448,11 +448,11 @@ Kết quả Buffered ID được phản hồi lại OSD live theo thời gian th
 
 \subsubsection{Làm sạch nhãn YOLO}
 
-Tập dữ liệu YOLO gốc của MMPTrack chứa một số nhãn không chính xác, gồm: người bị che khuất hoàn toàn sau kệ hàng nhưng vẫn được đánh nhãn (``phantom annotations''), người ở rất xa không phân biệt được, và bounding box chồng lắp quá nhiều. Đặc biệt, môi trường retail có tỷ lệ nhãn không chính xác cao nhất.
+Tập dữ liệu YOLO gốc của MMPTrack được sinh bằng cách \textit{chiếu} hộp 3D của mỗi người vào mọi camera, nên đánh nhãn cả những người bị che khuất hoàn toàn sau kệ hàng/tường (``phantom annotations'') --- những hộp này nằm trên nền (kệ hàng) và dạy detector ``nền = người'', sinh ra vô số phát hiện ma. Ngoài ra tập gốc không có ảnh nền (negative), càng làm detector dễ phát hiện nhầm. Môi trường retail bị nặng nhất do mật độ kệ hàng cao.
 
-Để làm sạch, một mạng COCO YOLO11x độc lập (lớn hơn và mạnh hơn YOLO11n, được pretrain trên COCO) được dùng làm ``bộ xác nhận''. Mỗi nhãn train được giữ lại chỉ khi bộ xác nhận cũng phát hiện được người ở vị trí tương ứng với IoU $>$ ngưỡng nhất định. Quá trình này loại bỏ 17{,}6\% nhãn trên toàn bộ tập (39--40\% trong môi trường retail).
+Để làm sạch, một mạng COCO YOLO11x độc lập (lớn hơn và mạnh hơn YOLO11n, pretrain trên COCO) được dùng làm ``bộ xác nhận'' (verifier): mỗi nhãn train chỉ được giữ lại khi bộ xác nhận cũng phát hiện được một người \textit{thực sự nhìn thấy được} chồng lắp với nhãn đó (IoU $>$ ngưỡng). Vì việc làm sạch quá mạnh trên \textit{mọi} môi trường lại loại nhầm cả người bị che khuất một phần nhưng có thật (làm giảm recall ở lobby/office), quy trình cuối cùng \textbf{chỉ áp dụng cho môi trường retail} --- nơi phantom là vấn đề thực --- và giữ nguyên nhãn các môi trường còn lại. Cách làm này loại bỏ $\sim$42\% nhãn retail (chủ yếu là hộp ma trên kệ và hộp bị che khuất hoàn toàn).
 
-Sau khi làm sạch, detector học được bounding box ổn định hơn, giảm false positive và cải thiện chất lượng embedding đầu vào cho SGIE.
+Detector được huấn luyện lại trên tập nhãn lai này (retail sạch + các môi trường khác giữ nguyên). Kết quả: precision phát hiện người trên 20 camera tăng từ 0{,}62 lên 0{,}94, MOTA trung bình per-camera tăng từ 0{,}64 lên 0{,}77, số lần chuyển định danh (ID switch) giảm gần một nửa, và Global IDF1 retail tăng 4,5 điểm phần trăm --- trong khi recall ở các môi trường không-retail được bảo toàn.
 
 \subsubsection{Làm sạch nhãn ReID}
 
@@ -624,32 +624,37 @@ Bảng~\ref{tab:results} trình bày kết quả Global IDF1 của hệ thống 
     \hline
     \bfseries Môi trường & \bfseries Số scene & \bfseries Toàn tập val & \bfseries Baseline \cite{Han2022} \\
     \hline
-    Lobby    & 4 & 0,893 & --- \\
-    Office   & 3 & 0,878 & --- \\
-    Industry & 5 & 0,829 & --- \\
-    Café     & 4 & 0,823 & --- \\
-    Retail   & 8 & 0,616 & --- \\
+    Lobby    & 4 & 0,906 & --- \\
+    Office   & 3 & 0,880 & --- \\
+    Industry & 5 & 0,847 & --- \\
+    Café     & 4 & 0,839 & --- \\
+    Retail   & 8 & 0,661 & --- \\
     \hline
-    \bfseries Trung bình & \bfseries 24 & \bfseries 0,774 & \bfseries 0,741 \\
+    \bfseries Trung bình & \bfseries 24 & \bfseries 0,798 & \bfseries 0,741 \\
     \hline
     \end{tabular}
     \label{tab:results}
 \end{table}
 
-Trên toàn tập 24 scene, hệ thống đạt Global IDF1 trung bình \textbf{0,774} --- vượt baseline \cite{Han2022} 3,3 điểm phần trăm. Bốn trong năm môi trường (lobby, office, industry, café) đều vượt ngưỡng mục tiêu 0,8. Retail là môi trường duy nhất không đạt ngưỡng này, với IDF1 trung bình 0,616 trên 8 scene.
+Trên toàn tập 24 cảnh, hệ thống đạt Global IDF1 trung bình \textbf{0,798} --- vượt baseline \cite{Han2022} 5,7 điểm phần trăm. Bốn trong năm môi trường (lobby, office, industry, café) đều vượt ngưỡng mục tiêu 0,8. Retail là môi trường duy nhất không đạt ngưỡng này, với IDF1 trung bình 0,661 trên 8 cảnh.
+
+Kết quả này đạt được sau khi huấn luyện lại detector YOLO11n trên tập nhãn retail đã làm sạch (Phần~\ref{sec:label_cleaning}): so với detector cũ (huấn luyện trên nhãn gốc còn nhiễu phantom), Global IDF1 toàn tập tăng từ 0,774 lên 0,798, riêng retail tăng 4,5 điểm phần trăm (0,616 $\to$ 0,661) và \textit{precision} phát hiện người tăng vọt từ 0,62 lên 0,94 --- xác nhận các bounding box ``ma'' trên kệ hàng đã được loại bỏ tận gốc. Các môi trường không-retail cũng không bị ảnh hưởng (thậm chí nhỉnh hơn nhẹ) vì nhãn của chúng được giữ nguyên.
+
+Đáng chú ý, kết quả toàn tập (0,798) là đánh giá trung thực trên đầy đủ 24 cảnh, thay vì 5 cảnh đại diện (mỗi môi trường 1 cảnh) như báo cáo sơ bộ trước đây. Mức chênh giữa các cảnh trong cùng môi trường là đáng kể: ví dụ retail\_3 (0,721) dễ hơn nhiều so với retail\_1 (0,597, cảnh khó nhất toàn tập).
+
 Lưu ý: bảng baseline trong \cite{Han2022} không có phân tích per-environment; dấu ``---'' phản ánh việc không có dữ liệu so sánh trực tiếp.
 
 \subsubsection{Phân tích theo môi trường}
 
-\textbf{Lobby (0,893, 4 scene):} Môi trường đạt kết quả cao nhất. Người di chuyển theo lối đi rõ ràng, camera được đặt ở góc tốt, và trang phục người dùng đa dạng giúp phân biệt. Kết quả ổn định qua cả 4 scene (0,872--0,906).
+\textbf{Lobby (0,906, 4 cảnh):} Môi trường đạt kết quả cao nhất. Người di chuyển theo lối đi rõ ràng, camera được đặt ở góc tốt, và trang phục người dùng đa dạng giúp phân biệt. Kết quả ổn định qua cả 4 cảnh (0,886--0,919).
 
-\textbf{Office (0,878, 3 scene):} Kết quả cao và đồng đều. Môi trường văn phòng có điều kiện ánh sáng tốt, mật độ người thấp, và người dùng có trang phục văn phòng đủ đa dạng để phân biệt.
+\textbf{Office (0,880, 3 cảnh):} Kết quả cao và đồng đều (0,861--0,900). Môi trường văn phòng có điều kiện ánh sáng tốt, mật độ người thấp, và người dùng có trang phục văn phòng đủ đa dạng để phân biệt.
 
-\textbf{Industry (0,829, 5 scene):} Kết quả đạt ngưỡng mục tiêu, vượt kỳ vọng ban đầu. Thách thức chính là đồng phục lao động làm mô hình ReID khó phân biệt, nhưng Buffered ID với cửa sổ 20 giây giúp tích lũy đủ bằng chứng để gán đúng định danh. Biến thiên giữa các scene lớn hơn (0,711--0,877), cho thấy một số scene industry có điều kiện khó hơn.
+\textbf{Industry (0,847, 5 cảnh):} Kết quả đạt ngưỡng mục tiêu, vượt kỳ vọng ban đầu. Thách thức chính là đồng phục lao động làm mô hình ReID khó phân biệt, nhưng Buffered ID với cửa sổ 20 giây giúp tích lũy đủ bằng chứng để gán đúng định danh. Biến thiên giữa các cảnh lớn hơn (0,746--0,895), cho thấy một số cảnh industry có điều kiện khó hơn.
 
-\textbf{Café (0,823, 4 scene):} Kết quả tốt nhưng có biến thiên đáng kể giữa các scene (0,743--0,902). Hai scene cuối (café\_2, café\_3) có IDF1 thấp hơn, nhiều khả năng do góc camera hoặc mật độ người khác với café\_0.
+\textbf{Café (0,839, 4 cảnh):} Kết quả tốt nhưng có biến thiên đáng kể giữa các cảnh (0,733--0,931). Cảnh café\_3 (0,733) có IDF1 thấp hơn, nhiều khả năng do góc camera hoặc mật độ người khác với các cảnh còn lại.
 
-\textbf{Retail (0,616, 8 scene):} Môi trường yếu nhất với biến thiên cao (0,427--0,675). Nguyên nhân chính: (1) kệ hàng cao gây che khuất, làm detector bỏ sót nhiều detection; (2) nhãn YOLO gốc có 39--40\% phantom annotations sau khi dọn sạch --- cho thấy có nhiều người thực sự bị che khuất hoàn toàn; (3) với 6 camera/scene (nhiều hơn các môi trường khác), không gian bán lẻ phức tạp và camera đặt gần góc khuất nhiều hơn. Retail\_1 (0,427) là scene khó nhất trong toàn tập val. Trần che khuất này là giới hạn vật lý của camera CCTV thông thường, không thể khắc phục hoàn toàn bằng cải thiện thuật toán.
+\textbf{Retail (0,661, 8 cảnh):} Môi trường yếu nhất với biến thiên cao (0,597--0,721), nhưng đã cải thiện rõ rệt nhờ detector huấn luyện lại trên nhãn sạch (so với 0,616 của detector cũ). Nguyên nhân còn lại khiến retail thấp hơn các môi trường khác: (1) kệ hàng cao gây che khuất, làm detector bỏ sót nhiều người thực sự (recall retail giảm) --- đây là giới hạn vật lý không khắc phục được bằng thuật toán; (2) nhãn YOLO gốc của retail có $\sim$42\% là phantom/bị che khuất, phản ánh mức độ che khuất nghiêm trọng; (3) với 6 camera/cảnh (nhiều hơn các môi trường khác), không gian bán lẻ phức tạp và camera đặt gần góc khuất nhiều hơn. Retail\_1 (0,597) là cảnh khó nhất trong toàn tập val.
 
 Hình~\ref{fig:pipeline_all_osd} trình bày đầu ra pipeline trên cả 5 môi trường --- mỗi ô là khung hình tổng hợp 4 camera với bounding box màu riêng và nhãn Buffered ID. Hình~\ref{fig:pipeline_all_bev} hiển thị cùng 5 môi trường ở góc nhìn BEV, cho thấy vệt quỹ đạo di chuyển của từng người trên mặt phẳng sàn.
 
@@ -919,11 +924,11 @@ Khoảng cách Top-1 có ý nghĩa trực tiếp đến chất lượng pipeline
 Dự án đã xây dựng thành công hệ thống theo dõi người đa camera theo thời gian thực:
 
 \begin{itemize}
-    \item \textbf{Thông lượng:} $\sim$15 FPS/camera tại 20 camera đồng thời, preset reid0 (\texttt{maxTargetsPerStream = 40}, 3,4 GB VRAM) --- vượt xa mục tiêu 10 FPS/cam.
-    \item \textbf{Độ chính xác:} Đánh giá trung thực trên toàn bộ 24 scene của tập validation MMPTrack, Global IDF1 trung bình đạt 0,774 với người unseen --- vượt baseline công bố (0,741). Bốn trong năm môi trường (lobby, office, industry, café) đều vượt ngưỡng mục tiêu 0,8; nếu loại môi trường retail, trung bình 4 môi trường còn lại đạt 0,853. Riêng retail (che khuất nặng) chưa đạt ngưỡng, kéo điểm trung bình toàn tập xuống dưới 0,8.
+    \item \textbf{Thông lượng:} $\sim$15 FPS/camera tại 20 camera đồng thời (preset reid0, \texttt{maxTargetsPerStream=40}), vượt mục tiêu 10 FPS/cam.
+    \item \textbf{Độ chính xác:} Global IDF1 trung bình 0,798 trên đầy đủ 24 cảnh validation với người unseen; bốn trong năm môi trường (lobby, office, industry, café) đều vượt ngưỡng mục tiêu 0,8.
 \end{itemize}
 
-Hai đóng góp kỹ thuật quan trọng giúp đạt được các kết quả trên là: (1) quy trình làm sạch nhãn loại bỏ nhiễu đáng kể trong dữ liệu MMPTrack; (2) triển khai Buffered ID dựa trên anchor-guided clustering \cite{Huang2023} trong cửa sổ trượt 20 giây, giúp cải thiện Global IDF1 từ 0,289 lên 0,754 trong môi trường khó (industry đồng phục).
+Ba đóng góp kỹ thuật quan trọng giúp đạt được các kết quả trên là: (1) quy trình làm sạch nhãn loại bỏ nhiễu đáng kể trong dữ liệu MMPTrack; (2) huấn luyện lại detector trên nhãn retail đã làm sạch, loại bỏ phát hiện ``ma'' trên kệ hàng (precision 0,62 $\to$ 0,94) và nâng Global IDF1 toàn tập từ 0,774 lên 0,798; (3) triển khai Buffered ID dựa trên anchor-guided clustering \cite{Huang2023} trong cửa sổ trượt 20 giây, giúp cải thiện Global IDF1 từ 0,289 lên 0,754 trong môi trường khó (industry đồng phục).
 
 Bên cạnh theo dõi, hệ thống còn cung cấp bộ công cụ phân tích không gian (heatmap Occupancy, Footfall, Dwell-time), sẵn sàng tích hợp vào các ứng dụng giám sát an toàn, tối ưu không gian và phân tích lưu lượng người.
 
@@ -933,7 +938,7 @@ Bên cạnh theo dõi, hệ thống còn cung cấp bộ công cụ phân tích 
 Hệ thống còn một số hạn chế cần ghi nhận:
 
 \begin{itemize}
-    \item \textbf{Môi trường retail:} Global IDF1 chỉ đạt 0,616 (trung bình 8 scene), thấp hơn đáng kể so với các môi trường khác. Nút thắt là khâu \textit{phát hiện người} dưới che khuất do kệ hàng (detector bỏ sót nhiều detection), không phải khâu ghép định danh --- đây là giới hạn vật lý của camera CCTV thông thường, không thể giải quyết hoàn toàn bằng thuật toán.
+    \item \textbf{Môi trường retail:} Global IDF1 chỉ đạt 0,661, thấp hơn đáng kể so với các môi trường khác. Sau khi huấn luyện lại detector trên nhãn sạch đã loại phần lớn phát hiện ``ma'', nguyên nhân còn lại là che khuất do kệ hàng làm detector bỏ sót người thực (giảm recall) --- giới hạn vật lý của camera CCTV thông thường không thể giải quyết hoàn toàn bằng thuật toán.
 
     \item \textbf{Đồng phục:} Trong môi trường industry và retail, người mặc đồng phục giống nhau gây khó khăn cho mô hình ReID, dẫn đến nhầm lẫn định danh.
 

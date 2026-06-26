@@ -9,7 +9,7 @@ source_configs:
 
 detection:
   enabled: true
-  config_file: configs/models/nvinfer_yolov11_mmp.yml
+  config_file: configs/models/nvinfer_yolov11_mmp_retailclean.yml
   reid_sgie_config: configs/models/nvinfer_reid_swin_sgie_all.yml
 
 tracker:
