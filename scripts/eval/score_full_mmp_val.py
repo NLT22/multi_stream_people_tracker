@@ -124,8 +124,9 @@ def main() -> None:
     ap.add_argument("--val-root", default="dataset/MMPTracking_10minute/val")
     ap.add_argument("--window-chunks", type=int, default=1)
     ap.add_argument("--assign-thr", type=float, default=0.50)  # swept optimum (see sweep_live_buffered.py)
-    ap.add_argument("--no-retail-fp-filter", action="store_true",
-                    help="disable the retail static-FP filter (on by default for retail)")
+    ap.add_argument("--retail-fp-filter", action="store_true",
+                    help="opt-in: apply the static-FP filter to retail (OBSOLETE with "
+                         "the retail-clean detector; only useful for the old amodal detector)")
     ap.add_argument("--fp-motion", type=float, default=8.0)
     ap.add_argument("--fp-minframes", type=int, default=100)
     ap.add_argument("--rerun-scoring", action="store_true",
@@ -170,11 +171,12 @@ def main() -> None:
         print(f"\n── {scene} " + "─" * 30)
 
         # Step 1: live_buffered --once.
-        # Static-FP filter is enabled only for retail (static mannequin/poster/shelf
-        # clutter); seated people in cafe/office are static too, so it would hurt
-        # there — keep it scoped to retail. Disable with --no-retail-fp-filter.
-        is_retail = "retail" in scene
-        fp_on = is_retail and not args.no_retail_fp_filter
+        # NOTE: the static-FP filter is now OBSOLETE — the deployed retail-clean
+        # detector removes the shelf/phantom boxes at the source, so the filter
+        # only clips real static people and HURTS (retail 0.661 -> 0.636). It is
+        # therefore OFF by default. Opt back in (e.g. to evaluate the old amodal
+        # detector) with --retail-fp-filter.
+        fp_on = ("retail" in scene) and args.retail_fp_filter
         assign_csv = scene_dir / "_eval_assign.csv"
         if not assign_csv.exists():
             print(f"  live_buffered --once ... (fp_filter={fp_on})")
