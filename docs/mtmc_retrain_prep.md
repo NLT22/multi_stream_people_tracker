@@ -107,3 +107,30 @@ Exports `output/reid_mtmc/swin_tiny_*_reid.onnx` → drop into the SGIE / nvtrac
 - Warehouse scenes are denser and lower-resolution-per-person than MMP; expect to retune
   detector `imgsz` and the small-box filters.
 - Identity count is modest (~60/warehouse); the variety comes from 20 warehouses × many cameras.
+
+## Results (2026-06-27) — detector + ReID retrained
+
+**Dataset fix (important).** The first conversion used `--min-h 30`, which silently dropped
+all small / behind-shelf people (0 boxes <24 px) — the detector would never learn the hard
+warehouse cases. Re-converted at **`--min-h 8 --min-w 4`** → `dataset/mtmc_yolo` (71.7k train /
+10.2k val, all 20+3 warehouses); **8.8 % of boxes are now <24 px** (small/occluded restored).
+Note: MTMC GT is `2d bounding box visible` (real visible boxes, NOT MMP-style amodal projection),
+so verifier label-cleaning is the WRONG tool here — it would drop ~33 % real-but-hard people
+(COCO-domain-gap + occlusion). Trained directly on the size-filtered visible-box set.
+
+**Detector — `yolo11n_mtmc.onnx`** (YOLO11n, imgsz **960**, batch 16, 30 ep, 6.6 h, best ep22):
+- val **mAP50 0.694**, mAP50-95 0.501, precision 0.913, recall 0.615.
+- Recall by GT box height (val, conf 0.25 / IoU 0.5): large ≥96 px **0.94**, med 48–96 **0.66**,
+  small 24–48 **0.25**, tiny <24 px **0.08**. So large/medium people are solid; **small/tiny
+  remain the limit** — yolo11n@960 can't resolve sub-48 px warehouse people. Keeping them was
+  right (the model now tries + the gap is measured); to actually lift small-box recall: imgsz
+  1280, a bigger model (yolo11s/m), or tiled/SAHI inference.
+
+**ReID — `models/reid/swin_tiny_mtmc_reid.onnx`** (Swin-Tiny, PK 24×4, early-stopped, val_gap 0.764):
+cross-camera retrieval on MTMC val (57 ids, 16 cams) **top-1 0.929 / mAP 0.884**, vs the deployed
+MMP ReID **0.609 / 0.287** on the same data — a large gain, confirming MTMC's true cross-camera
+`object id` is a much cleaner ReID signal than MMP's scene-local `person_id`.
+
+**Artifacts:** `models/yolov11/yolo11n_mtmc.onnx`, `models/reid/swin_tiny_mtmc_reid.onnx` (LFS).
+The `yolo11n_mtmc_overfit` model (tiny overfit experiment) is left untouched. Next: §5 deploy +
+BEV geometry adapter, and (if small-box recall matters) a higher-res / larger detector pass.
