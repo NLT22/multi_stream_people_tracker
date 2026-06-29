@@ -68,8 +68,12 @@ def main():
     if args.sources:
         _src = [l.strip() for l in open(args.sources) if l.strip() and not l.strip().startswith("#")]
         def cam_video(c): return _src[c]
+        # export cam_N -> real calibration camera number (non-contiguous in W020/W021)
+        cam_calib = {i: int(p.split("Camera_")[-1].split(".")[0]) for i, p in enumerate(_src)}
     else:
         def cam_video(c): return str(whdir / "videos" / f"Camera_{c:04d}.mp4")
+        cam_calib = {}
+    def calib_cam(c): return cam_calib.get(c, c)
     cal = WarehouseCalibration(whdir / "calibration.json")
     import json
     calj = json.load(open(whdir / "calibration.json"))
@@ -143,7 +147,7 @@ def main():
                 cv2.drawMarker(bev, (mx, my), (255, 255, 255), cv2.MARKER_TILTED_CROSS, 14, 2)
         gid_world = defaultdict(list)
         for (c, t, l, tp, w, h, gid) in byframe.get(frame_idx, []):
-            wpt = cal.foot_to_world(c, l + w / 2.0, tp + h)
+            wpt = cal.foot_to_world(calib_cam(c), l + w / 2.0, tp + h)
             if wpt:
                 gid_world[gid].append(wpt)
         for gid, pts in gid_world.items():
