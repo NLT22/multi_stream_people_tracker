@@ -103,6 +103,31 @@ def main():
 
     out = Path(args.out_dir)
     save_set(out, "bev", bev_occ, bev_ids, mp)
+    # bev_heatmap.png (alias of occupancy, matches MMP folder) + bev_trajectory.png (world paths)
+    cv2.imwrite(str(out / "bev_heatmap.png"), colorize(cv2.resize(bev_occ, (MW, MH)), mp))
+    traj = mp.copy()
+    gid_path = defaultdict(list)
+    for f in sorted(Path(args.export_dir).glob("cam_*_predictions.csv")):
+        ec = int(f.stem.split("_")[1]); cc = cam_calib.get(ec, ec)
+        d = pd.read_csv(f); d = d[d.frame_no_cam <= args.max_frame] if "frame_no_cam" in d else d
+        for r in d.itertuples():
+            gid = gid_of.get((ec, int(r.frame_no_cam), int(r.local_track_id)), -1)
+            if gid < 0:
+                continue
+            w = cal.foot_to_world(cc, r.left + r.width / 2.0, r.top + r.height)
+            if w is None:
+                continue
+            px = (w[0] + tx) * sf; py = (w[1] + ty) * sf
+            if args.flip_y:
+                py = MH - py
+            gid_path[gid].append((int(px), int(py), int(r.frame_no_cam)))
+    for gid, pts in gid_path.items():
+        pts.sort(key=lambda x: x[2]); col = tuple(int(v) for v in
+            cv2.cvtColor(np.uint8([[[(gid * 47) % 180, 200, 255]]]), cv2.COLOR_HSV2BGR)[0, 0])
+        for k in range(1, len(pts)):
+            if abs(pts[k][2] - pts[k - 1][2]) <= 15:
+                cv2.line(traj, pts[k - 1][:2], pts[k][:2], col, 1, cv2.LINE_AA)
+    cv2.imwrite(str(out / "bev_trajectory.png"), traj)
     for ec in sorted(cam_occ):
         base = cv2.imread(str(whdir / "videos" / f"Camera_{cam_calib.get(ec, ec):04d}.mp4")) if False else \
                cv2.resize(np.full((1080, 1920, 3), 30, np.uint8), (1920, 1080))

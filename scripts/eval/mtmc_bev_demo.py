@@ -49,7 +49,7 @@ def main():
                     help="the source list used for the export (e.g. configs/sources/mtmc_val_w020.txt). "
                          "Maps export cam_N -> the N-th video path. REQUIRED when camera numbers are "
                          "non-contiguous (W020/W021); without it, cam_N is assumed to be Camera_<N>.mp4.")
-    ap.add_argument("--mode", choices=["split", "bev", "camera", "tiled", "heatmap"], default="split",
+    ap.add_argument("--mode", choices=["split", "bev", "camera", "tiled", "heatmap", "analytics"], default="split",
                     help="split = camera|BEV side-by-side; bev = top-down map tracking; camera = one "
                          "camera OSD; tiled = all cameras grid with cross-camera IDs; heatmap = live "
                          "accumulating density heatmap video on the real floor map")
@@ -216,16 +216,18 @@ def main():
         print(f"[bev-demo] wrote {args.out} ({args.max_frame + 1} frames, mode=heatmap)")
         return
 
-    # tiled mode: all cameras in a grid, each with OSD + the same cross-camera IDs
-    if args.mode == "tiled":
+    # tiled / analytics mode: all cameras in a grid with OSD + cross-camera IDs.
+    # analytics also overlays per-person trajectory trails + a live people count.
+    if args.mode in ("tiled", "analytics"):
+        analytics = args.mode == "analytics"
         cam_ids = sorted(int(f.stem.split("_")[1]) for f in Path(args.export_dir).glob("cam_*_predictions.csv"))
         caps = {c: cv2.VideoCapture(cam_video(c)) for c in cam_ids}
         import math
         cols = max(1, math.ceil(math.sqrt(len(cam_ids))))   # 4->2x2, 16->4x4, 19->5x4
         rows = -(-len(cam_ids) // cols)
-        # shrink tiles as the grid grows so the canvas stays ~<=2560 wide
         TW = 640 if len(cam_ids) > 4 else 960
         TH = int(TW * 9 / 16)
+        trail = defaultdict(lambda: deque(maxlen=args.trail))   # (cam,ltid) -> foot pixels
         writer = None; idx = 0
         while idx <= args.max_frame:
             frames = {}
@@ -239,15 +241,21 @@ def main():
                 break
             tiles = []
             for c in cam_ids:
-                im = frames[c]
+                im = frames[c]; count = 0
                 for (cc, t, l, tp, w, h, gid) in byframe.get(idx, []):
                     if cc != c:
                         continue
-                    col = color_for(gid)
+                    count += 1; col = color_for(gid)
+                    if analytics:
+                        trail[(c, t)].append((int(l + w / 2), int(tp + h)))
+                        pts = list(trail[(c, t)])
+                        for k in range(1, len(pts)):
+                            cv2.line(im, pts[k - 1], pts[k], col, 2)
                     cv2.rectangle(im, (int(l), int(tp)), (int(l + w), int(tp + h)), col, 3)
                     cv2.putText(im, f"ID{gid}", (int(l), int(tp) - 8), cv2.FONT_HERSHEY_SIMPLEX, 1.0, col, 2)
                 cv2.rectangle(im, (0, 0), (im.shape[1], 46), (0, 0, 0), -1)
-                cv2.putText(im, f"Camera {c}", (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (40, 230, 200), 2)
+                label = f"Camera {c}" + (f"   people: {count}" if analytics else "")
+                cv2.putText(im, label, (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (40, 230, 200), 2)
                 tiles.append(cv2.resize(im, (TW, TH)))
             while len(tiles) < rows * cols:
                 tiles.append(np.zeros((TH, TW, 3), np.uint8))
@@ -260,7 +268,7 @@ def main():
             writer.release()
         for cc in caps.values():
             cc.release()
-        print(f"[bev-demo] wrote {args.out} ({idx} frames, mode=tiled {len(cam_ids)} cams)")
+        print(f"[bev-demo] wrote {args.out} ({idx} frames, mode={args.mode} {len(cam_ids)} cams)")
         return
 
     def read_frame(idx):
