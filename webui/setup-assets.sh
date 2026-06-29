@@ -2,7 +2,7 @@
 # Populate webui/public/ with real pipeline assets:
 #   frames/   <- still camera frames (small, copied)
 #   heatmaps/ <- occupancy/footfall/dwell PNGs (small, copied)
-#   feeds/    <- per-zone OSD videos (large, symlinked)
+#   feeds/    <- per-camera OSD crops (cropped) + full ${s}_osd.mp4 (symlinked)
 # Re-run any time the demo outputs are regenerated. Safe to run repeatedly.
 set -euo pipefail
 
@@ -35,8 +35,14 @@ for s in "${SCENES[@]}"; do
     echo "  WARN: missing $DEMO/$s/heatmap"
   fi
 
-  feed="$DEMO/$s/${s}_live_buffered_osd.mp4"
+  # Demo OSD video (renamed osd_buffered; older runs used live_buffered_osd — accept both).
+  feed="$DEMO/$s/${s}_osd_buffered.mp4"
+  [[ -f "$feed" ]] || feed="$DEMO/$s/${s}_live_buffered_osd.mp4"
   if [[ -f "$feed" ]]; then
+    # Full-OSD REPLAY symlink (relative, so it survives a repo move and never
+    # dangles as ${s}_osd.mp4 -> a renamed source — that broke `npm run build`).
+    rel="$(realpath --relative-to="$PUB/feeds" "$feed")"
+    ln -sfn "$rel" "$PUB/feeds/${s}_osd.mp4"
     for n in 1 2 3 4; do
       out="$PUB/feeds/${s}_cam${n}.mp4"
       [[ -f "$out" ]] && continue                       # skip if already cropped
@@ -45,7 +51,8 @@ for s in "${SCENES[@]}"; do
         && echo "  feeds/${s}_cam${n}.mp4 ✓" || echo "  WARN: crop ${s}_cam${n} failed"
     done
   else
-    echo "  WARN: missing $feed"
+    echo "  WARN: missing $feed — removing stale ${s}_osd.mp4 symlink if any"
+    rm -f "$PUB/feeds/${s}_osd.mp4"
   fi
 done
 
