@@ -68,7 +68,21 @@ PIPECFG=configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml \
   "cafe:0-3,lobby:4-7,office:8-11,industry:12-15,retail:16-19"
 ```
 
-See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, benchmarks). MTA/Wildtrack/MTMC/FastReID/YOLOv8/pose support has been moved to `old_stuff/` — the pipeline is now MMP-only.
+See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, benchmarks). The legacy MTA/Wildtrack/FastReID/YOLOv8/pose code and the *old* online-gallery MTMC research were moved to `old_stuff/`. MMP is the **production** path.
+
+### MTMC_Tracking_2026 (warehouse) — a SEPARATE parallel eval path (do not mix with MMP)
+
+A second dataset is now supported: the NVIDIA AI-City warehouse `MTMC_Tracking_2026` (disjoint
+cameras, metric `calibration.json`, true cross-camera `object id`). It is kept **completely separate**
+from the MMP production path — its own pipeline/detector/ReID/tracker configs and its own linkers.
+Full write-up + the inference chain is in `docs/mtmc_retrain_prep.md`. Key facts:
+
+- Run with `--no-tiler` (source-space coords) and score with `scripts/eval/score_mtmc_idf1.py --no-rescale`.
+- Cross-camera identity is **geometry-first, not appearance** (the opposite of MMP): deployed warehouse
+  crops are not separable, but people are 8–16 m apart, so back-projected foot position drives linking.
+  `src/mtmc/mtmc_global_linker.py` (constrained correlation clustering) is the best linker
+  (W022 Global IDF1 **0.856**, 92% of the 0.932 oracle). See `docs/mtmc_retrain_prep.md` for why >0.9
+  is detector/occlusion-bound, not a linker problem.
 
 ## Architecture
 
@@ -111,7 +125,13 @@ See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, bench
 - `src/reid/geometry.py` — ground-plane geometry from MMPTracking calibration JSONs
 - `src/config/loader.py` — PipelineConfig YAML loader
 - `src/eval/mmp_metrics/` — MOTA/IDF1/Global IDF1 engine (`core.py`) + CLI (`cli.py`); `src/eval/metrics_mmp.py` is a thin `-m` shim
-- `src/mtmc/live_buffered.py` — production live-buffered MTMC consumer for long eval
+- `src/mtmc/live_buffered.py` — production live-buffered MTMC consumer for long eval (MMP path)
+- `src/mtmc/mtmc_calib.py` — MTMC warehouse calibration adapter (foot↔world ground-plane projection)
+- `scripts/eval/mtmc_{position,tracklet,global}_linker.py` — geometry-first cross-camera linkers for
+  `MTMC_Tracking_2026` (global = best, 0.856); `mtmc_occlusion_fill.py` = cross-camera reprojection
+  experiment; `score_mtmc_idf1.py` = the MTMC Global IDF1 scorer (`--no-rescale`, `--max-frame`)
+- `src/rag/` — natural-language Q&A layer over tracking metadata (FastAPI + Anthropic tool-use agent);
+  `webui` "Ask" view (`webui/src/components/rag/`) is the frontend. See `src/rag/README.md`.
 
 ### Config Presets
 
@@ -119,6 +139,15 @@ See `old_stuff/COMMANDS.md` for archived commands (MTA, Wildtrack, sweeps, bench
 |------|---------|-------|
 | `configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml` | MMPTracking_short / mixed 20cam | **Production default (recommended):** NvDCF internal ReID off, SGIE drives global IDs. Ties the quality preset on IDF1 (~0.81) but faster/leaner. |
 | `configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml` | MMPTracking_short / mixed 20cam | Quality preset: YOLO11 + NvDCF (reidType:2) + SGIE ReID. Double-ReID buys ~0 IDF1 over reid0 (global IDs come from SGIE); keep only if local-track continuity matters. |
+| `configs/pipelines/pipeline_mtmc_nvdcf_online_sgie_reid0[_1280].yaml` | MTMC_Tracking_2026 warehouse | **Separate from MMP.** YOLO11n@960 (or @1280) + MTMC Swin ReID + `maxTargetsPerStream=100`. Run `--no-tiler`; link with `mtmc_global_linker.py`. Do not point MMP eval at these. |
+
+### Web UI & live demo
+
+- `webui/` — React/Vite console. The Live Wall opens on "◉ PIPELINE LIVE" (HLS of the real pipeline OSD).
+- `webui/scripts/start-live.sh` — end-to-end live demo: loops local videos as RTSP (default) **or**
+  `--rtsp [list.txt]` to ingest real RTSP cameras directly (no MediaMTX). Chain: RTSP → DeepStream
+  (buffered-ID OSD) → HLS → browser.
+- `webui/setup-assets.sh` — populates `webui/public/` from `output/demo/<scene>/<scene>_osd_buffered.mp4`.
 
 ### Metadata Iteration
 

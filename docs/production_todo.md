@@ -105,6 +105,10 @@ python scripts/eval/persist_run.py --run-dir output/runs/<ts>_<preset> --db outp
 ## 3. Open Hardening Items
 
 ### 3.1 RTSP / stability
+- [x] Live web demo on RTSP verified (2026-06-29): `webui/scripts/start-live.sh` runs RTSP →
+  DeepStream (buffered-ID OSD) → HLS → browser at ~15 FPS/cam, segments rotating (the old 0-fps stall
+  is fixed: RTP-over-TCP + `hlssink2 sync=0` + `--no-sync`). New `--rtsp [list.txt]` mode ingests real
+  cameras directly (no MediaMTX/looping); default mode still loops local videos for a self-contained demo.
 - [ ] Scale RTSP smoke to full 20 streams (multienv) and confirm ≥10 FPS/cam.
 - [ ] 2h file-loop soak; overnight RTSP/file-loop soak (watch RSS creep, GID growth).
 
