@@ -1,0 +1,12 @@
+[property]
+enable=1
+config-width=1920
+config-height=1080
+osd-mode=2
+display-font-size=14
+
+[roi-filtering-stream-2]
+enable=1
+roi-Zone-1=765;37;659;529;1221;545;1113;41
+inverse-roi=0
+class-id=0
