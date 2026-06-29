@@ -84,3 +84,9 @@
 /* autosave status line */
 .roi__savestatus { font-size: 11px; color: var(--dim); margin-bottom: 6px; font-family: var(--font-mono); }
 .roi__savestatus.is-ok { color: var(--signal-deep); }
+
+/* Sidebar panels must keep their natural height in the scrolling flex column —
+   otherwise they shrink and content (e.g. wrapped analytics chips) overflows and
+   overlaps the panel below. The column scrolls instead. */
+.roi__side > * { flex-shrink: 0; }
+.roi__chips { row-gap: 6px; }
