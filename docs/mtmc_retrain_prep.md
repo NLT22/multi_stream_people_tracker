@@ -291,3 +291,39 @@ Why it can't reach 0.9 — a hard *data* ceiling, measured on the 2 544 missed G
 bracketed occlusion fill 0.857). Exceeding 0.9 is blocked by the detector/occlusion ceiling, not the
 linker — it would need joint *multi-view detection* (detect at the fused world level) or a static
 occupancy/occlusion map to gate reprojection. Both are research-scope. **All MTMC-only.**
+
+### Multi-warehouse: W020 / W021 (16 cams each) + 20-cam perf (2026-06-29)
+
+W022 ships only 4 cameras; **W020 and W021 have 16 each**. Ran both (`--no-tiler`, @960 reid0),
+linked, and tuned against GT.
+
+**Critical bug fixed:** the export `cam_N` is the source-list **order**, not the `Camera_XXXX`
+number — and W020/W021 cameras are non-contiguous (no 0006/0007/0008/0014). The linker + renderer
+were using the wrong per-camera calibration (and silently dropping cameras whose export index had no
+calibration key), corrupting world positions. Both now take `--sources <list>` to map cam_N → the
+real calibration camera. (`score_mtmc_w.py` applies the same remap for GT alignment.)
+
+| Warehouse | broken calib | calib fixed | + tuned | oracle (perfect IDs) |
+|-----------|--------------|-------------|---------|----------------------|
+| W020 (16 cam) | 0.227 | 0.438 | **0.507** | 0.745 (recall 0.59) |
+| W021 (16 cam) | – | – | **0.443** | – |
+
+Tuning (`scripts/eval/mtmc_tune_linker.py` sweeps params, builds tracklets+GT once; clustering
+rewritten O(n³)→sparse, 11 s vs >10 min at 1060 tracklets): the big sparse warehouses need
+**`spatial_thr=9, conflict_thr=18`** — their distant cameras have larger back-projection error, so
+W022's tight 1.5/4.0 thresholds wrongly *forbade* genuine cross-camera pairs (must-not-link). W022
+keeps its own 1.5/4.0 optimum (compact, low error). The dominant cap on W020 is **detection recall
+0.59** — ~41 % of people are never detected (large warehouse, small/distant), so even perfect IDs
+cap at 0.745. Demos (tiled cross-camera + top-down on `map.png`) re-rendered for all three warehouses
+under `output/demo/mtmc_warehouse_0XX/` via `mtmc_bev_demo.py --mode {tiled,bev,split,camera}`.
+
+**20-camera VRAM/FPS** (measured, `mtmc_val_20cam.txt` = 16×W020 + 4×W022, @960 reid0,
+maxTargetsPerStream=100, steady-state, `--no-display --no-sync`):
+
+| Pipeline | maxTargets | 20-cam VRAM | FPS/cam |
+|----------|-----------|-------------|---------|
+| MTMC @960 reid0 | 100 | **~6.3 GB** | **~11–12** |
+| (MMP @960 reid0, for reference) | 40 | ~3.5 GB | ~15 |
+
+MTMC is heavier than MMP at the same 20 cameras — 1080p sources, `maxTargetsPerStream=100` (vs 40),
+and more people per frame — but fits comfortably in 16 GB.
