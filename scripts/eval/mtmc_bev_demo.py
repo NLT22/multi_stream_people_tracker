@@ -45,6 +45,10 @@ def main():
     ap.add_argument("--export-dir", default="output/eval/mtmc_w022_1280")
     ap.add_argument("--assign", required=True, help="global-linker assign-csv")
     ap.add_argument("--cam", type=int, default=2, help="export cam id for the camera panel")
+    ap.add_argument("--sources", default=None,
+                    help="the source list used for the export (e.g. configs/sources/mtmc_val_w020.txt). "
+                         "Maps export cam_N -> the N-th video path. REQUIRED when camera numbers are "
+                         "non-contiguous (W020/W021); without it, cam_N is assumed to be Camera_<N>.mp4.")
     ap.add_argument("--mode", choices=["split", "bev", "camera", "tiled"], default="split",
                     help="split = camera|BEV side-by-side; bev = full-frame top-down map only "
                          "(MMP-style tracking-BEV video, on the real floor map); camera = one camera OSD; "
@@ -59,6 +63,13 @@ def main():
     args = ap.parse_args()
 
     whdir = Path(args.root) / args.warehouse
+    # export cam_N -> source video path (source-list order; camera numbers are
+    # non-contiguous in W020/W021 so cam_N != Camera_<N>.mp4).
+    if args.sources:
+        _src = [l.strip() for l in open(args.sources) if l.strip() and not l.strip().startswith("#")]
+        def cam_video(c): return _src[c]
+    else:
+        def cam_video(c): return str(whdir / "videos" / f"Camera_{c:04d}.mp4")
     cal = WarehouseCalibration(whdir / "calibration.json")
     import json
     calj = json.load(open(whdir / "calibration.json"))
@@ -104,7 +115,7 @@ def main():
     need_cam_outer = args.mode in ("split", "camera")
     cap = None
     if need_cam_outer:
-        cap = cv2.VideoCapture(str(whdir / "videos" / f"Camera_{args.cam:04d}.mp4"))
+        cap = cv2.VideoCapture(cam_video(args.cam))
 
     trails = defaultdict(lambda: deque(maxlen=args.trail))  # gid -> deque of (px,py)
 
@@ -165,10 +176,13 @@ def main():
     # tiled mode: all cameras in a grid, each with OSD + the same cross-camera IDs
     if args.mode == "tiled":
         cam_ids = sorted(int(f.stem.split("_")[1]) for f in Path(args.export_dir).glob("cam_*_predictions.csv"))
-        caps = {c: cv2.VideoCapture(str(whdir / "videos" / f"Camera_{c:04d}.mp4")) for c in cam_ids}
-        cols = 2 if len(cam_ids) > 1 else 1
+        caps = {c: cv2.VideoCapture(cam_video(c)) for c in cam_ids}
+        import math
+        cols = max(1, math.ceil(math.sqrt(len(cam_ids))))   # 4->2x2, 16->4x4, 19->5x4
         rows = -(-len(cam_ids) // cols)
-        TW, TH = 960, 540
+        # shrink tiles as the grid grows so the canvas stays ~<=2560 wide
+        TW = 640 if len(cam_ids) > 4 else 960
+        TH = int(TW * 9 / 16)
         writer = None; idx = 0
         while idx <= args.max_frame:
             frames = {}
