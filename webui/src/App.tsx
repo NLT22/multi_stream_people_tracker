@@ -33,21 +33,38 @@ const navFromHash = (): Partial<Nav> => {
   return { view, cameraId: c ? c.id : null, zoneId: c ? c.zoneId : null }
 }
 
+// Persist drawn ROIs per dataset so they survive a page refresh (the config file on
+// disk is derived output; the editable ROI objects need their own store).
+const roisKey = (ds: DatasetKey) => `sentinel.rois.${ds}`
+function loadRois(ds: DatasetKey): Roi[] {
+  try {
+    const s = localStorage.getItem(roisKey(ds))
+    if (s) return JSON.parse(s) as Roi[]
+  } catch { /* ignore */ }
+  return ds === 'mmp' ? SEED_ROIS : []
+}
+
 export default function App() {
   const init = navFromHash()
   const [nav, setNav] = useState<Nav>({ view: init.view ?? 'dashboard', zoneId: init.zoneId ?? null, cameraId: init.cameraId ?? null })
-  // ROIs live at app level so the editor + analytics + config preview share them.
-  const [rois, setRois] = useState<Roi[]>(SEED_ROIS)
   const [dataset, setDataset] = useState<DatasetKey>(getActiveDatasetKey())
+  // ROIs live at app level so the editor + analytics + config preview share them;
+  // restored from localStorage on load so refreshing keeps your drawn zones.
+  const [rois, setRois] = useState<Roi[]>(() => loadRois(getActiveDatasetKey()))
   const events = useMemo(() => seedEvents(Date.now()), [])
 
+  // autosave ROIs to localStorage on every change (keyed by the active dataset)
+  useEffect(() => {
+    try { localStorage.setItem(roisKey(dataset), JSON.stringify(rois)) } catch { /* ignore */ }
+  }, [rois, dataset])
+
   // Switch camera network (MMP ⇄ MTMC): point zones/cameras at the new dataset,
-  // reset ROIs (MMP ships seeds; MTMC starts empty for custom drawing) + nav, and
-  // remount the view tree (key={dataset}) so every view re-reads the new cameras.
+  // restore that dataset's saved ROIs + reset nav, and remount the view tree
+  // (key={dataset}) so every view re-reads the new cameras.
   const switchDataset = (k: DatasetKey) => {
     if (k === dataset) return
     setActiveDataset(k)
-    setRois(() => (k === 'mmp' ? SEED_ROIS : []))
+    setRois(loadRois(k))
     setNav({ view: 'dashboard', zoneId: null, cameraId: null })
     setDataset(k)
   }
