@@ -44,7 +44,10 @@ def main():
     ap.add_argument("--warehouse", default="Warehouse_022")
     ap.add_argument("--export-dir", default="output/eval/mtmc_w022_1280")
     ap.add_argument("--assign", required=True, help="global-linker assign-csv")
-    ap.add_argument("--cam", type=int, default=2, help="export cam id for the left (camera) panel")
+    ap.add_argument("--cam", type=int, default=2, help="export cam id for the camera panel")
+    ap.add_argument("--mode", choices=["split", "bev", "camera"], default="split",
+                    help="split = camera|BEV side-by-side; bev = full-frame top-down map only "
+                         "(MMP-style tracking-BEV video, on the real floor map); camera = camera OSD only")
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-frame", type=int, default=1799)
     ap.add_argument("--fps", type=int, default=15)
@@ -96,22 +99,26 @@ def main():
                 continue
             byframe[fr].append((c, int(r.local_track_id), r.left, r.top, r.width, r.height, gid))
 
-    # camera video for the left panel
-    vid = whdir / "videos" / f"Camera_{args.cam:04d}.mp4"
-    cap = cv2.VideoCapture(str(vid))
-    OUT_H = 720
+    # camera video for the camera panel (not needed in bev-only mode)
+    need_cam_outer = args.mode in ("split", "camera")
+    cap = None
+    if need_cam_outer:
+        cap = cv2.VideoCapture(str(whdir / "videos" / f"Camera_{args.cam:04d}.mp4"))
 
     trails = defaultdict(lambda: deque(maxlen=args.trail))  # gid -> deque of (px,py)
 
+    need_cam = args.mode in ("split", "camera")
+
     def render(frame_idx, cam_img):
-        # LEFT: camera OSD
-        left = cam_img.copy()
-        for (c, t, l, tp, w, h, gid) in byframe.get(frame_idx, []):
-            if c != args.cam:
-                continue
-            col = color_for(gid)
-            cv2.rectangle(left, (int(l), int(tp)), (int(l + w), int(tp + h)), col, 2)
-            cv2.putText(left, f"ID{gid}", (int(l), int(tp) - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, col, 2)
+        # LEFT: camera OSD (only when the camera panel is shown)
+        left = cam_img.copy() if cam_img is not None else None
+        if left is not None:
+            for (c, t, l, tp, w, h, gid) in byframe.get(frame_idx, []):
+                if c != args.cam:
+                    continue
+                col = color_for(gid)
+                cv2.rectangle(left, (int(l), int(tp)), (int(l + w), int(tp + h)), col, 2)
+                cv2.putText(left, f"ID{gid}", (int(l), int(tp) - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, col, 2)
         # BEV: one world point per gid this frame (mean over cameras), + trail
         bev = mp.copy()
         for cid, (cx, cy) in cam_world.items():
@@ -137,31 +144,45 @@ def main():
             cv2.circle(bev, (px, py), 7, col, -1)
             cv2.circle(bev, (px, py), 7, (255, 255, 255), 1)
             cv2.putText(bev, f"ID{gid}", (px + 9, py - 9), cv2.FONT_HERSHEY_SIMPLEX, 0.6, col, 2)
-        # compose side by side at common height
+        def banner(img, text, col):
+            cv2.rectangle(img, (0, 0), (img.shape[1], 30), (0, 0, 0), -1)
+            cv2.putText(img, text, (10, 21), cv2.FONT_HERSHEY_SIMPLEX, 0.6, col, 2)
+            return img
+
+        if args.mode == "bev":
+            B = bev.copy()
+            return banner(B, f"{args.warehouse}  bird's-eye tracking  (frame {frame_idx})", (255, 130, 124))
+        OUT_H = 720
         def fit(img):
             h, w = img.shape[:2]; return cv2.resize(img, (int(w * OUT_H / h), OUT_H))
-        L, B = fit(left), fit(bev)
-        # banners
-        cv2.rectangle(L, (0, 0), (L.shape[1], 30), (0, 0, 0), -1)
-        cv2.putText(L, f"Camera {args.cam}  (frame {frame_idx})", (10, 21), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (40, 230, 200), 2)
-        cv2.rectangle(B, (0, 0), (B.shape[1], 30), (0, 0, 0), -1)
-        cv2.putText(B, f"{args.warehouse}  bird's-eye (world meters)", (10, 21), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 130, 124), 2)
+        if args.mode == "camera":
+            return banner(fit(left), f"Camera {args.cam}  (frame {frame_idx})", (40, 230, 200))
+        L = banner(fit(left), f"Camera {args.cam}  (frame {frame_idx})", (40, 230, 200))
+        B = banner(fit(bev), f"{args.warehouse}  bird's-eye (world meters)", (255, 130, 124))
         return np.hstack([L, np.full((OUT_H, 4, 3), 60, np.uint8), B])
 
-    if args.probe_frame >= 0:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, args.probe_frame)
-        ok, img = cap.read()
-        if not ok:
-            print("cannot read probe frame"); return
-        cv2.imwrite(args.out, render(args.probe_frame, img))
-        print(f"[probe] wrote {args.out} (frame {args.probe_frame}); check box + BEV-dot alignment / Y orientation")
-        cap.release(); return
+    def read_frame(idx):
+        if cap is None:
+            return True, None
+        return cap.read()
 
-    comp0 = None
+    if args.probe_frame >= 0:
+        img = None
+        if cap is not None:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, args.probe_frame)
+            ok, img = cap.read()
+            if not ok:
+                print("cannot read probe frame"); return
+        cv2.imwrite(args.out, render(args.probe_frame, img))
+        print(f"[probe] wrote {args.out} (frame {args.probe_frame}); check alignment / Y orientation")
+        if cap:
+            cap.release()
+        return
+
     writer = None
     idx = 0
     while idx <= args.max_frame:
-        ok, img = cap.read()
+        ok, img = read_frame(idx)
         if not ok:
             break
         comp = render(idx, img)
@@ -172,8 +193,9 @@ def main():
         idx += 1
     if writer:
         writer.release()
-    cap.release()
-    print(f"[bev-demo] wrote {args.out} ({idx} frames @ {args.fps} fps)")
+    if cap:
+        cap.release()
+    print(f"[bev-demo] wrote {args.out} ({idx} frames @ {args.fps} fps, mode={args.mode})")
 
 
 if __name__ == "__main__":
