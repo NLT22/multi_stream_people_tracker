@@ -42,6 +42,24 @@ export function RoiEditor({ nav, go, rois, setRois }: {
   const selected = camRois.find((r) => r.id === selectedId) ?? null
   const configText = useMemo(() => generateConfig(rois, camId), [rois, camId])
 
+  // AUTOSAVE: debounced write of the nvdsanalytics config straight to disk
+  // (configs/analytics/) via the Vite dev middleware — no manual Export needed.
+  const [saveStatus, setSaveStatus] = useState('idle')
+  useEffect(() => {
+    const name = `nvdsanalytics_${cam.streamIndex}.txt`
+    setSaveStatus('saving…')
+    const t = setTimeout(() => {
+      fetch('/__save-analytics', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, text: configText }),
+      })
+        .then((r) => r.json())
+        .then((j) => setSaveStatus(j.ok ? `autosaved → ${j.path}` : `save failed`))
+        .catch(() => setSaveStatus('autosave needs npm run dev'))
+    }, 600)
+    return () => clearTimeout(t)
+  }, [configText, cam.streamIndex])
+
   // Esc cancels a draft; Enter closes a polygon.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -215,13 +233,16 @@ export function RoiEditor({ nav, go, rois, setRois }: {
           </Panel>
         )}
 
-        <Panel title="nvdsanalytics config" right={
+        <Panel title="nvdsanalytics config — autosaved" right={
           <div className="roi__cfgbtns">
             <button onClick={() => navigator.clipboard?.writeText(configText)}>Copy</button>
-            <button onClick={() => download(`nvdsanalytics_${cam.streamIndex}.txt`, configText)}>Export</button>
+            <button onClick={() => download(`nvdsanalytics_${cam.streamIndex}.txt`, configText)}>Download</button>
             <button onClick={resetCam}>Reset</button>
           </div>
         }>
+          <div className={`roi__savestatus ${saveStatus.startsWith('autosaved') ? 'is-ok' : ''}`}>
+            ● {saveStatus}
+          </div>
           <pre className="roi__config mono">{configText}</pre>
         </Panel>
 

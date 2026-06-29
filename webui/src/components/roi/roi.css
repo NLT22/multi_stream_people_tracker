@@ -80,3 +80,7 @@
 .roi__gozone { padding: 10px; border-radius: var(--r); background: var(--card);
   border: 1px solid var(--line); color: var(--ink); font-size: 12px; }
 .roi__gozone:hover { border-color: var(--signal-deep); color: var(--signal); }
+
+/* autosave status line */
+.roi__savestatus { font-size: 11px; color: var(--dim); margin-bottom: 6px; font-family: var(--font-mono); }
+.roi__savestatus.is-ok { color: var(--signal-deep); }

@@ -4,31 +4,31 @@
    amber/red telemetry, indigo for analytics. HUD-grade type.
    ============================================================ */
 :root {
-  /* surfaces */
-  --void: #0a0e14;
-  --panel: #10161f;
-  --card: #161e2a;
-  --card-hi: #1c2735;
-  --line: #232f3e;
-  --line-soft: #1a2330;
+  /* surfaces — LIGHT theme (bright, high-readability) */
+  --void: #eef1f6;
+  --panel: #ffffff;
+  --card: #f5f7fa;
+  --card-hi: #eaeef3;
+  --line: #d3dae3;
+  --line-soft: #e6eaf0;
 
-  /* ink */
-  --ink: #c9d5e1;
-  --ink-strong: #eef4fa;
-  --dim: #687889;
-  --dim-2: #4a5867;
+  /* ink (dark text on light surfaces) */
+  --ink: #2a3340;
+  --ink-strong: #0e1722;
+  --dim: #5c6b7b;
+  --dim-2: #93a0b0;
 
-  /* signal palette */
-  --signal: #2de2c8;       /* teal — live / active / primary */
-  --signal-deep: #14a896;
-  --warn: #f6a821;         /* amber — degraded / warning */
-  --alert: #ff4d5e;        /* red — offline / restricted / alarm */
-  --scan: #7c83ff;         /* indigo — analytics / heatmap */
+  /* signal palette — deepened for contrast on white */
+  --signal: #0ea58f;       /* teal — live / active / primary */
+  --signal-deep: #0a7d6e;
+  --warn: #c47a00;         /* amber — degraded / warning */
+  --alert: #db2f3e;        /* red — offline / restricted / alarm */
+  --scan: #5249d6;         /* indigo — analytics / heatmap */
 
   /* status (explicit so badges read instantly) */
-  --st-online: #2de2c8;
-  --st-warn: #f6a821;
-  --st-offline: #ff4d5e;
+  --st-online: #0ea58f;
+  --st-warn: #c47a00;
+  --st-offline: #db2f3e;
 
   /* thermal ramp for heatmaps */
   --heat-0: #15173a;
