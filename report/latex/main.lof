@@ -1,9 +1,12 @@
 \contentsline {figure}{\numberline {2.1}{\ignorespaces Khung hình đại diện từ 5 môi trường trong bộ dữ liệu MMPTrack.}}{5}{figure.caption.9}%
-\contentsline {figure}{\numberline {3.1}{\ignorespaces Theo dõi đa camera --- office, 4 camera, Buffered ID.}}{9}{figure.caption.10}%
-\contentsline {figure}{\numberline {3.2}{\ignorespaces So sánh Live ID và Buffered ID --- office, 4 camera.}}{11}{figure.caption.11}%
-\contentsline {figure}{\numberline {3.3}{\ignorespaces Góc nhìn BEV (Bird's-Eye View) --- tracking đa camera, môi trường office.}}{12}{figure.caption.12}%
-\contentsline {figure}{\numberline {3.4}{\ignorespaces Heatmap góc camera --- office, cam 0.}}{14}{figure.caption.13}%
-\contentsline {figure}{\numberline {3.5}{\ignorespaces Heatmap BEV mặt sàn --- office, tổng hợp tất cả camera.}}{14}{figure.caption.14}%
-\contentsline {figure}{\numberline {3.6}{\ignorespaces Phân tích vùng với \texttt {gst-nvdsanalytics} --- ROI, overcrowding, line-crossing.}}{16}{figure.caption.16}%
-\contentsline {figure}{\numberline {4.1}{\ignorespaces Kết quả theo dõi Buffered ID trên 5 môi trường --- bounding box màu riêng, nhãn Global ID nhất quán xuyên camera.}}{20}{figure.caption.19}%
-\contentsline {figure}{\numberline {4.2}{\ignorespaces Góc nhìn BEV trên 5 môi trường --- mỗi chấm màu là một người, vệt màu là quỹ đạo di chuyển.}}{21}{figure.caption.20}%
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Theo dõi đa camera --- office, 4 camera, Buffered ID.}}{10}{figure.caption.12}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces So sánh Live ID và Buffered ID --- office, 4 camera.}}{12}{figure.caption.13}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Góc nhìn BEV (Bird's-Eye View) --- tracking đa camera, môi trường office.}}{13}{figure.caption.14}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces Heatmap góc camera --- office, cam 0.}}{15}{figure.caption.15}%
+\contentsline {figure}{\numberline {3.5}{\ignorespaces Heatmap BEV mặt sàn --- office, tổng hợp tất cả camera.}}{15}{figure.caption.16}%
+\contentsline {figure}{\numberline {3.6}{\ignorespaces Phân tích vùng với \texttt {gst-nvdsanalytics} --- ROI, overcrowding, line-crossing.}}{17}{figure.caption.18}%
+\contentsline {figure}{\numberline {3.7}{\ignorespaces Kiến trúc triển khai production}}{17}{figure.caption.19}%
+\contentsline {figure}{\numberline {3.8}{\ignorespaces Giao diện Web của hệ thống --- Dashboard, Live Wall, ROI editor và Heatmap.}}{18}{figure.caption.20}%
+\contentsline {figure}{\numberline {4.1}{\ignorespaces Kết quả theo dõi Buffered ID trên 5 môi trường --- bounding box màu riêng, nhãn Global ID nhất quán xuyên camera.}}{21}{figure.caption.23}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces Góc nhìn BEV trên 5 môi trường --- mỗi chấm màu là một người, vệt màu là quỹ đạo di chuyển.}}{22}{figure.caption.24}%
+\contentsline {figure}{\numberline {4.3}{\ignorespaces Phân tích vùng tuỳ biến trên kho hàng Warehouse\_022, cấu hình qua ROI editor của Web UI.}}{28}{figure.caption.31}%

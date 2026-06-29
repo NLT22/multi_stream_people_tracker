@@ -1,9 +1,12 @@
 \contentsline {table}{\numberline {2.1}{\ignorespaces Đặc điểm bộ dữ liệu MMPTrack}}{4}{table.caption.8}%
-\contentsline {table}{\numberline {3.1}{\ignorespaces Cấu hình gst-nvdsanalytics theo môi trường}}{15}{table.caption.15}%
-\contentsline {table}{\numberline {4.1}{\ignorespaces Cấu hình phần cứng thực nghiệm}}{17}{table.caption.17}%
-\contentsline {table}{\numberline {4.2}{\ignorespaces Kết quả Global IDF1 theo môi trường --- toàn tập validation}}{18}{table.caption.18}%
-\contentsline {table}{\numberline {4.3}{\ignorespaces Phân rã VRAM theo preset và maxTargetsPerStream}}{22}{table.caption.21}%
-\contentsline {table}{\numberline {4.4}{\ignorespaces Khảo sát maxTargetsPerStream}}{23}{table.caption.22}%
-\contentsline {table}{\numberline {4.5}{\ignorespaces So sánh Live ID và Buffered ID}}{23}{table.caption.23}%
-\contentsline {table}{\numberline {4.6}{\ignorespaces Khảo sát kích thước cửa sổ Buffered ID --- toàn tập 24 scene}}{24}{table.caption.24}%
-\contentsline {table}{\numberline {4.7}{\ignorespaces So sánh Swin-Tiny và OSNet trên tập MMP}}{25}{table.caption.25}%
+\contentsline {table}{\numberline {2.2}{\ignorespaces So sánh MMPTrack và MTMC}}{6}{table.caption.10}%
+\contentsline {table}{\numberline {2.3}{\ignorespaces Hình học đặt camera MMP vs MTMC}}{6}{table.caption.11}%
+\contentsline {table}{\numberline {3.1}{\ignorespaces Cấu hình gst-nvdsanalytics theo môi trường}}{16}{table.caption.17}%
+\contentsline {table}{\numberline {4.1}{\ignorespaces Cấu hình phần cứng thực nghiệm}}{19}{table.caption.21}%
+\contentsline {table}{\numberline {4.2}{\ignorespaces Kết quả Global IDF1 theo môi trường --- toàn tập validation}}{20}{table.caption.22}%
+\contentsline {table}{\numberline {4.3}{\ignorespaces Thông lượng pipeline MMP ở 1080p, 20 camera}}{23}{table.caption.25}%
+\contentsline {table}{\numberline {4.4}{\ignorespaces Phân rã VRAM theo preset và maxTargetsPerStream}}{24}{table.caption.26}%
+\contentsline {table}{\numberline {4.5}{\ignorespaces Khảo sát maxTargetsPerStream}}{25}{table.caption.27}%
+\contentsline {table}{\numberline {4.6}{\ignorespaces So sánh Live ID và Buffered ID}}{25}{table.caption.28}%
+\contentsline {table}{\numberline {4.7}{\ignorespaces Khảo sát kích thước cửa sổ Buffered ID --- toàn tập 24 scene}}{26}{table.caption.29}%
+\contentsline {table}{\numberline {4.8}{\ignorespaces So sánh Swin-Tiny và OSNet trên tập MMP}}{27}{table.caption.30}%

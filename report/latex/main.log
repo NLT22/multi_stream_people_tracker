@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.6.24)  26 JUN 2026 16:51
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.6.24)  29 JUN 2026 23:22
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -708,81 +708,93 @@ File: tikzlibrarytopaths.code.tex 2025-08-29 v3.1.11a (3.1.11a)
 z/libraries\tikzlibrarycalc.code.tex
 File: tikzlibrarycalc.code.tex 2025-08-29 v3.1.11a (3.1.11a)
 )
+(C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/generic/pgf/frontendlayer/tik
+z/libraries\tikzlibrarypositioning.code.tex
+File: tikzlibrarypositioning.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/generic/pgf/libraries\pgflibr
+aryarrows.meta.code.tex
+File: pgflibraryarrows.meta.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgfarrowinset=\dimen274
+\pgfarrowlength=\dimen275
+\pgfarrowwidth=\dimen276
+\pgfarrowlinewidth=\dimen277
+)
 (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/tools\indentfirst.sty
 Package: indentfirst 2023/07/02 v1.03 Indent first paragraph (DPC)
 )
 (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/booktabs\booktabs.sty
 Package: booktabs 2020/01/12 v1.61803398 Publication quality tables
-\heavyrulewidth=\dimen274
-\lightrulewidth=\dimen275
-\cmidrulewidth=\dimen276
-\belowrulesep=\dimen277
-\belowbottomsep=\dimen278
-\aboverulesep=\dimen279
-\abovetopsep=\dimen280
-\cmidrulesep=\dimen281
-\cmidrulekern=\dimen282
-\defaultaddspace=\dimen283
+\heavyrulewidth=\dimen278
+\lightrulewidth=\dimen279
+\cmidrulewidth=\dimen280
+\belowrulesep=\dimen281
+\belowbottomsep=\dimen282
+\aboverulesep=\dimen283
+\abovetopsep=\dimen284
+\cmidrulesep=\dimen285
+\cmidrulekern=\dimen286
+\defaultaddspace=\dimen287
 \@cmidla=\count320
 \@cmidlb=\count321
-\@aboverulesep=\dimen284
-\@belowrulesep=\dimen285
+\@aboverulesep=\dimen288
+\@belowrulesep=\dimen289
 \@thisruleclass=\count322
 \@lastruleclass=\count323
-\@thisrulewidth=\dimen286
+\@thisrulewidth=\dimen290
 )
 (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/titlesec\titlesec.sty
 Package: titlesec 2025/01/04 v2.17 Sectioning titles
 \ttl@box=\box68
 \beforetitleunit=\skip54
 \aftertitleunit=\skip55
-\ttl@plus=\dimen287
-\ttl@minus=\dimen288
+\ttl@plus=\dimen291
+\ttl@minus=\dimen292
 \ttl@toksa=\toks40
-\titlewidth=\dimen289
-\titlewidthlast=\dimen290
-\titlewidthfirst=\dimen291
+\titlewidth=\dimen293
+\titlewidthlast=\dimen294
+\titlewidthfirst=\dimen295
 )
 (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption.sty
 Package: caption 2023/08/05 v3.6o Customizing captions (AR)
 
 (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption3.sty
 Package: caption3 2023/07/31 v2.4d caption3 kernel (AR)
-\caption@tempdima=\dimen292
-\captionmargin=\dimen293
-\caption@leftmargin=\dimen294
-\caption@rightmargin=\dimen295
-\caption@width=\dimen296
-\caption@indent=\dimen297
-\caption@parindent=\dimen298
-\caption@hangindent=\dimen299
+\caption@tempdima=\dimen296
+\captionmargin=\dimen297
+\caption@leftmargin=\dimen298
+\caption@rightmargin=\dimen299
+\caption@width=\dimen300
+\caption@indent=\dimen301
+\caption@parindent=\dimen302
+\caption@hangindent=\dimen303
 Package caption Info: Standard document class detected.
 )
 \c@caption@flags=\count324
 \c@continuedfloat=\count325
 Package caption Info: float package is loaded.
 Package caption Info: scrextend package is loaded.
-\caption@addmargin@hsize=\dimen300
-\caption@addmargin@linewidth=\dimen301
+\caption@addmargin@hsize=\dimen304
+\caption@addmargin@linewidth=\dimen305
 )
 (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/tools\tabularx.sty
 Package: tabularx 2023/12/11 v2.12a `tabularx' package (DPC)
 
 (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/tools\array.sty
 Package: array 2025/09/25 v2.6n Tabular extension package (FMi)
-\col@sep=\dimen302
+\col@sep=\dimen306
 \ar@mcellbox=\box69
-\extrarowheight=\dimen303
+\extrarowheight=\dimen307
 \NC@list=\toks41
 \extratabsurround=\skip56
 \backup@length=\skip57
 \ar@cellbox=\box70
 )
-\TX@col@width=\dimen304
-\TX@old@table=\dimen305
-\TX@old@col=\dimen306
-\TX@target=\dimen307
-\TX@delta=\dimen308
+\TX@col@width=\dimen308
+\TX@old@table=\dimen309
+\TX@old@col=\dimen310
+\TX@target=\dimen311
+\TX@delta=\dimen312
 \TX@cols=\count326
 \TX@ftn=\toks42
 )
@@ -864,7 +876,7 @@ ty
 Package: stringenc 2019/11/29 v1.12 Convert strings between diff. encodings (HO
 )
 )
-\@linkdim=\dimen309
+\@linkdim=\dimen313
 \Hy@linkcounter=\count334
 \Hy@pagecounter=\count335
  (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\pd1enc.def
@@ -895,7 +907,7 @@ Package hyperref Info: Bookmarks ON on input line 4462.
 Package: url 2013/09/16  ver 3.4  Verb mode for urls, etc.
 )
 LaTeX Info: Redefining \url on input line 4801.
-\XeTeXLinkMargin=\dimen310
+\XeTeXLinkMargin=\dimen314
 
 (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/generic/bitset\bitset.sty
 Package: bitset 2019/12/09 v1.3 Handle bit-vector datatype (HO)
@@ -906,8 +918,8 @@ Package: bigintcalc 2019/12/15 v1.5 Expandable calculations on big integers (HO
 )
 ))
 \Fld@menulength=\count338
-\Field@Width=\dimen311
-\Fld@charsize=\dimen312
+\Field@Width=\dimen315
+\Fld@charsize=\dimen316
 Package hyperref Info: Hyper figures OFF on input line 6078.
 Package hyperref Info: Link nesting OFF on input line 6083.
 Package hyperref Info: Hyper index ON on input line 6086.
@@ -1021,13 +1033,13 @@ LaTeX Font Info:    ... okay on input line 70.
 ii
 [Loading MPS to PDF converter (version 2006.09.02).]
 \scratchcounter=\count346
-\scratchdimen=\dimen313
+\scratchdimen=\dimen317
 \scratchbox=\box71
 \nofMPsegments=\count347
 \nofMParguments=\count348
 \everyMPshowfont=\toks44
 \MPscratchCnt=\count349
-\MPscratchDim=\dimen314
+\MPscratchDim=\dimen318
 \MPnumerator=\count350
 \makeMPintoPDFobject=\count351
 \everyMPtoPDFconversion=\toks45
@@ -1051,7 +1063,7 @@ Package hyperref Info: Link coloring OFF on input line 70.
 \openout4 = `main.out'.
 
  (Bia.tex
-<Images/VSF_logo.jpg, id=259, 2055.68pt x 2055.68pt>
+<Images/VSF_logo.jpg, id=255, 2055.68pt x 2055.68pt>
 File: Images/VSF_logo.jpg Graphic file (type jpg)
 <use Images/VSF_logo.jpg>
 Package pdftex.def Info: Images/VSF_logo.jpg  used on input line 18.
@@ -1110,7 +1122,7 @@ l.13 \clearpage
 
 ] [3]
 LaTeX Font Info:    Trying to load font information for T5+cmtt on input line 5
-6.
+4.
 
 (C:\Users\nguye\AppData\Local\Programs\MiKTeX\tex/latex/vntex\t5cmtt.fd
 File: t5cmtt.fd 1999/05/25 v2.5h Standard LaTeX font definitions
@@ -1161,29 +1173,29 @@ been already used, duplicate ignored
                    \relax 
 l.203 \begin{equation}
                        [3]
-<Images/orig_cafe_shop_cam1.jpg, id=443, 642.4pt x 361.35pt>
+<Images/orig_cafe_shop_cam1.jpg, id=452, 642.4pt x 361.35pt>
 File: Images/orig_cafe_shop_cam1.jpg Graphic file (type jpg)
 <use Images/orig_cafe_shop_cam1.jpg>
 Package pdftex.def Info: Images/orig_cafe_shop_cam1.jpg  used on input line 245
 .
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/orig_lobby_cam1.jpg, id=444, 642.4pt x 361.35pt>
+<Images/orig_lobby_cam1.jpg, id=453, 642.4pt x 361.35pt>
 File: Images/orig_lobby_cam1.jpg Graphic file (type jpg)
 <use Images/orig_lobby_cam1.jpg>
 Package pdftex.def Info: Images/orig_lobby_cam1.jpg  used on input line 251.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/orig_office_cam1.jpg, id=445, 642.4pt x 361.35pt>
+<Images/orig_office_cam1.jpg, id=454, 642.4pt x 361.35pt>
 File: Images/orig_office_cam1.jpg Graphic file (type jpg)
 <use Images/orig_office_cam1.jpg>
 Package pdftex.def Info: Images/orig_office_cam1.jpg  used on input line 257.
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/orig_industry_safety_cam1.jpg, id=446, 642.4pt x 361.35pt>
+<Images/orig_industry_safety_cam1.jpg, id=455, 642.4pt x 361.35pt>
 File: Images/orig_industry_safety_cam1.jpg Graphic file (type jpg)
 <use Images/orig_industry_safety_cam1.jpg>
 Package pdftex.def Info: Images/orig_industry_safety_cam1.jpg  used on input li
 ne 263.
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/orig_retail_cam1.jpg, id=447, 642.4pt x 361.35pt>
+<Images/orig_retail_cam1.jpg, id=456, 642.4pt x 361.35pt>
 File: Images/orig_retail_cam1.jpg Graphic file (type jpg)
 <use Images/orig_retail_cam1.jpg>
 Package pdftex.def Info: Images/orig_retail_cam1.jpg  used on input line 269.
@@ -1196,205 +1208,304 @@ been already used, duplicate ignored
 l.275 
        [4] [5 <./Images/orig_cafe_shop_cam1.jpg> <./Images/orig_lobby_cam1.jpg>
  <./Images/orig_office_cam1.jpg> <./Images/orig_industry_safety_cam1.jpg> <./Im
-ages/orig_retail_cam1.jpg>] [6] [7]
-Overfull \hbox (14.02707pt too wide) in paragraph at lines 362--363
+ages/orig_retail_cam1.jpg>] [6] [7] [8]
+Overfull \hbox (14.02707pt too wide) in paragraph at lines 390--391
 []\T5/ptm/m/n/13 Mët ^^_iºm kÿ thuªt quan trång: probe thu thªp \T5/cmtt/m/n/13
  source_id \T5/ptm/m/n/13 (\T5/ptm/b/n/13 SourceIdCollectorProbe\T5/ptm/m/n/13 
 )
  []
 
-<Images/buffered_camera.png, id=483, 1284.8pt x 722.7pt>
+<Images/buffered_camera.png, id=505, 1284.8pt x 722.7pt>
 File: Images/buffered_camera.png Graphic file (type png)
 <use Images/buffered_camera.png>
-Package pdftex.def Info: Images/buffered_camera.png  used on input line 366.
+Package pdftex.def Info: Images/buffered_camera.png  used on input line 394.
 (pdftex.def)             Requested size: 418.82375pt x 235.58047pt.
-[8]
-Overfull \hbox (44.09755pt too wide) in paragraph at lines 391--392
+[9]
+Overfull \hbox (44.09755pt too wide) in paragraph at lines 419--420
 []\T5/ptm/b/n/13 CrossCameraGalleryProbe \T5/ptm/m/n/13 l  GStreamer probe tòy 
 ch¿nh g­n sau \T5/cmtt/m/n/13 nvmultistreamtiler\T5/ptm/m/n/13 .
  []
 
-[9 <./Images/buffered_camera.png (PNG copy)>] [10]
-<Images/live_id.png, id=504, 1927.2pt x 1084.05pt>
+[10 <./Images/buffered_camera.png (PNG copy)>] [11]
+<Images/live_id.png, id=526, 1927.2pt x 1084.05pt>
 File: Images/live_id.png Graphic file (type png)
 <use Images/live_id.png>
-Package pdftex.def Info: Images/live_id.png  used on input line 426.
+Package pdftex.def Info: Images/live_id.png  used on input line 454.
 (pdftex.def)             Requested size: 223.07211pt x 125.46538pt.
-<Images/buffered_camera2.png, id=505, 1284.8pt x 722.7pt>
+<Images/buffered_camera2.png, id=527, 1284.8pt x 722.7pt>
 File: Images/buffered_camera2.png Graphic file (type png)
 <use Images/buffered_camera2.png>
-Package pdftex.def Info: Images/buffered_camera2.png  used on input line 432.
+Package pdftex.def Info: Images/buffered_camera2.png  used on input line 460.
 (pdftex.def)             Requested size: 223.07211pt x 125.47089pt.
-<Images/buffered_bev.png, id=506, 762.85pt x 1230.5975pt>
+<Images/buffered_bev.png, id=528, 762.85pt x 1230.5975pt>
 File: Images/buffered_bev.png Graphic file (type png)
 <use Images/buffered_bev.png>
-Package pdftex.def Info: Images/buffered_bev.png  used on input line 441.
+Package pdftex.def Info: Images/buffered_bev.png  used on input line 469.
 (pdftex.def)             Requested size: 295.90588pt x 477.33983pt.
- [11 <./Images/live_id.png> <./Images/buffered_camera2.png (PNG copy)>]
-Overfull \hbox (1.77882pt too wide) in paragraph at lines 453--454
+ [12 <./Images/live_id.png> <./Images/buffered_camera2.png (PNG copy)>]
+Overfull \hbox (1.77882pt too wide) in paragraph at lines 481--482
 []\T5/ptm/m/n/13 ^^^º l m s¤ch, mët m¤ng COCO YOLO11x ^^_ëc lªp (lîn hìn v  m¤n
 h hìn YOLO11n,
  []
 
-[12 <./Images/buffered_bev.png (PNG copy)>] [13]
-<Images/hm23_cam0_occupancy.png, id=525, 642.4pt x 361.35pt>
+[13 <./Images/buffered_bev.png (PNG copy)>] [14]
+<Images/hm23_cam0_occupancy.png, id=547, 642.4pt x 361.35pt>
 File: Images/hm23_cam0_occupancy.png Graphic file (type png)
 <use Images/hm23_cam0_occupancy.png>
-Package pdftex.def Info: Images/hm23_cam0_occupancy.png  used on input line 487
+Package pdftex.def Info: Images/hm23_cam0_occupancy.png  used on input line 515
 .
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/hm23_cam0_footfall.png, id=526, 642.4pt x 361.35pt>
+<Images/hm23_cam0_footfall.png, id=548, 642.4pt x 361.35pt>
 File: Images/hm23_cam0_footfall.png Graphic file (type png)
 <use Images/hm23_cam0_footfall.png>
-Package pdftex.def Info: Images/hm23_cam0_footfall.png  used on input line 493.
+Package pdftex.def Info: Images/hm23_cam0_footfall.png  used on input line 521.
 
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/hm23_cam0_dwelltime.png, id=527, 642.4pt x 361.35pt>
+<Images/hm23_cam0_dwelltime.png, id=549, 642.4pt x 361.35pt>
 File: Images/hm23_cam0_dwelltime.png Graphic file (type png)
 <use Images/hm23_cam0_dwelltime.png>
-Package pdftex.def Info: Images/hm23_cam0_dwelltime.png  used on input line 499
+Package pdftex.def Info: Images/hm23_cam0_dwelltime.png  used on input line 527
 .
 (pdftex.def)             Requested size: 145.68144pt x 81.94534pt.
-<Images/hm23_bev_occupancy.png, id=528, 762.85pt x 1178.4025pt>
+<Images/hm23_bev_occupancy.png, id=550, 762.85pt x 1178.4025pt>
 File: Images/hm23_bev_occupancy.png Graphic file (type png)
 <use Images/hm23_bev_occupancy.png>
-Package pdftex.def Info: Images/hm23_bev_occupancy.png  used on input line 510.
+Package pdftex.def Info: Images/hm23_bev_occupancy.png  used on input line 538.
 
 (pdftex.def)             Requested size: 145.68144pt x 225.0316pt.
-<Images/hm23_bev_footfall.png, id=529, 762.85pt x 1178.4025pt>
+<Images/hm23_bev_footfall.png, id=551, 762.85pt x 1178.4025pt>
 File: Images/hm23_bev_footfall.png Graphic file (type png)
 <use Images/hm23_bev_footfall.png>
-Package pdftex.def Info: Images/hm23_bev_footfall.png  used on input line 516.
+Package pdftex.def Info: Images/hm23_bev_footfall.png  used on input line 544.
 (pdftex.def)             Requested size: 145.68144pt x 225.0316pt.
-<Images/hm23_bev_dwelltime.png, id=530, 762.85pt x 1178.4025pt>
+<Images/hm23_bev_dwelltime.png, id=552, 762.85pt x 1178.4025pt>
 File: Images/hm23_bev_dwelltime.png Graphic file (type png)
 <use Images/hm23_bev_dwelltime.png>
-Package pdftex.def Info: Images/hm23_bev_dwelltime.png  used on input line 522.
+Package pdftex.def Info: Images/hm23_bev_dwelltime.png  used on input line 550.
 
 (pdftex.def)             Requested size: 145.68144pt x 225.0316pt.
- [14 <./Images/hm23_cam0_occupancy.png (PNG copy)> <./Images/hm23_cam0_footfall
+ [15 <./Images/hm23_cam0_occupancy.png (PNG copy)> <./Images/hm23_cam0_footfall
 .png (PNG copy)> <./Images/hm23_cam0_dwelltime.png (PNG copy)> <./Images/hm23_b
 ev_occupancy.png (PNG copy)> <./Images/hm23_bev_footfall.png (PNG copy)> <./Ima
 ges/hm23_bev_dwelltime.png (PNG copy)>]
-Overfull \hbox (30.77565pt too wide) in paragraph at lines 546--558
+Overfull \hbox (30.77565pt too wide) in paragraph at lines 574--586
  [][] 
  []
 
-<Images/analytics.png, id=539, 1927.2pt x 1084.05pt>
+<Images/analytics.png, id=561, 1927.2pt x 1084.05pt>
 File: Images/analytics.png Graphic file (type png)
 <use Images/analytics.png>
-Package pdftex.def Info: Images/analytics.png  used on input line 562.
+Package pdftex.def Info: Images/analytics.png  used on input line 590.
 (pdftex.def)             Requested size: 418.82375pt x 235.58047pt.
 LaTeX Font Info:    Font shape `T5/cmtt/bx/n' in size <13> not available
-(Font)              Font shape `T5/cmtt/m/n' tried instead on input line 563.
-[15] [16 <./Images/analytics.png>] [17] [18]
-<Images/pipeline_cafe_shop_osd.jpg, id=568, 1284.8pt x 722.7pt>
+(Font)              Font shape `T5/cmtt/m/n' tried instead on input line 591.
+[16]
+LaTeX Font Info:    Calculating math sizes for size <11.86258> on input line 61
+0.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <11.86258> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 610.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <8.77837> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 610.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7.11761> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 610.
+
+Overfull \hbox (1.77492pt too wide) in paragraph at lines 621--622
+ [][] 
+ []
+
+[17 <./Images/analytics.png>]
+Overfull \hbox (59.00706pt too wide) in paragraph at lines 631--632
+[]\T5/ptm/b/n/13 ROI ed-i-tor \T5/ptm/m/n/13 --- v³ vòng/v¤ch trüc ti¸p tr¶n kh
+ung h¼nh v  \T5/ptm/m/it/13 sinh ra c§u h¼nh \T5/cmtt/m/n/13 gst-nvdsanalytics
+ []
+
+<Images/webui_dashboard.png, id=576, 1606.0pt x 1003.75pt>
+File: Images/webui_dashboard.png Graphic file (type png)
+<use Images/webui_dashboard.png>
+Package pdftex.def Info: Images/webui_dashboard.png  used on input line 642.
+(pdftex.def)             Requested size: 218.51521pt x 136.57251pt.
+<Images/webui_live_cafe.png, id=577, 1606.0pt x 1003.75pt>
+File: Images/webui_live_cafe.png Graphic file (type png)
+<use Images/webui_live_cafe.png>
+Package pdftex.def Info: Images/webui_live_cafe.png  used on input line 648.
+(pdftex.def)             Requested size: 218.51521pt x 136.57251pt.
+<Images/webui_roi_editor.png, id=578, 1606.0pt x 1003.75pt>
+File: Images/webui_roi_editor.png Graphic file (type png)
+<use Images/webui_roi_editor.png>
+Package pdftex.def Info: Images/webui_roi_editor.png  used on input line 654.
+(pdftex.def)             Requested size: 218.51521pt x 136.57251pt.
+<Images/webui_heatmap.png, id=579, 1606.0pt x 1003.75pt>
+File: Images/webui_heatmap.png Graphic file (type png)
+<use Images/webui_heatmap.png>
+Package pdftex.def Info: Images/webui_heatmap.png  used on input line 660.
+(pdftex.def)             Requested size: 218.51521pt x 136.57251pt.
+[18 <./Images/webui_dashboard.png (PNG copy)> <./Images/webui_live_cafe.png (PN
+G copy)> <./Images/webui_roi_editor.png (PNG copy)> <./Images/webui_heatmap.png
+ (PNG copy)>] [19] [20]
+<Images/pipeline_cafe_shop_osd.jpg, id=600, 1284.8pt x 722.7pt>
 File: Images/pipeline_cafe_shop_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_cafe_shop_osd.jpg>
 Package pdftex.def Info: Images/pipeline_cafe_shop_osd.jpg  used on input line 
-665.
+755.
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/pipeline_lobby_osd.jpg, id=569, 1284.8pt x 722.7pt>
+<Images/pipeline_lobby_osd.jpg, id=601, 1284.8pt x 722.7pt>
 File: Images/pipeline_lobby_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_lobby_osd.jpg>
-Package pdftex.def Info: Images/pipeline_lobby_osd.jpg  used on input line 671.
+Package pdftex.def Info: Images/pipeline_lobby_osd.jpg  used on input line 761.
 
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/pipeline_office_osd.jpg, id=570, 1284.8pt x 722.7pt>
+<Images/pipeline_office_osd.jpg, id=602, 1284.8pt x 722.7pt>
 File: Images/pipeline_office_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_office_osd.jpg>
-Package pdftex.def Info: Images/pipeline_office_osd.jpg  used on input line 677
+Package pdftex.def Info: Images/pipeline_office_osd.jpg  used on input line 767
 .
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/pipeline_industry_safety_osd.jpg, id=571, 1284.8pt x 722.7pt>
+<Images/pipeline_industry_safety_osd.jpg, id=603, 1284.8pt x 722.7pt>
 File: Images/pipeline_industry_safety_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_industry_safety_osd.jpg>
 Package pdftex.def Info: Images/pipeline_industry_safety_osd.jpg  used on input
- line 683.
+ line 773.
 (pdftex.def)             Requested size: 218.51521pt x 122.9125pt.
-<Images/pipeline_retail_osd.jpg, id=572, 1284.8pt x 722.7pt>
+<Images/pipeline_retail_osd.jpg, id=604, 1284.8pt x 722.7pt>
 File: Images/pipeline_retail_osd.jpg Graphic file (type jpg)
 <use Images/pipeline_retail_osd.jpg>
-Package pdftex.def Info: Images/pipeline_retail_osd.jpg  used on input line 689
+Package pdftex.def Info: Images/pipeline_retail_osd.jpg  used on input line 779
 .
 (pdftex.def)             Requested size: 273.14923pt x 153.64615pt.
- [19]
-<Images/pipeline_cafe_shop_bev.jpg, id=577, 762.85pt x 706.64pt>
+<Images/pipeline_cafe_shop_bev.jpg, id=605, 762.85pt x 706.64pt>
 File: Images/pipeline_cafe_shop_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_cafe_shop_bev.jpg>
 Package pdftex.def Info: Images/pipeline_cafe_shop_bev.jpg  used on input line 
-700.
+790.
 (pdftex.def)             Requested size: 145.68144pt x 134.94229pt.
-<Images/pipeline_lobby_bev.jpg, id=578, 762.85pt x 1505.625pt>
+<Images/pipeline_lobby_bev.jpg, id=606, 762.85pt x 1505.625pt>
 File: Images/pipeline_lobby_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_lobby_bev.jpg>
-Package pdftex.def Info: Images/pipeline_lobby_bev.jpg  used on input line 706.
+Package pdftex.def Info: Images/pipeline_lobby_bev.jpg  used on input line 796.
 
 (pdftex.def)             Requested size: 145.68144pt x 287.51909pt.
-<Images/pipeline_office_bev.jpg, id=579, 762.85pt x 1230.5975pt>
+<Images/pipeline_office_bev.jpg, id=607, 762.85pt x 1230.5975pt>
 File: Images/pipeline_office_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_office_bev.jpg>
-Package pdftex.def Info: Images/pipeline_office_bev.jpg  used on input line 712
+Package pdftex.def Info: Images/pipeline_office_bev.jpg  used on input line 802
 .
 (pdftex.def)             Requested size: 145.68144pt x 234.99893pt.
-<Images/pipeline_industry_safety_bev.jpg, id=580, 762.85pt x 1017.8025pt>
+<Images/pipeline_industry_safety_bev.jpg, id=608, 762.85pt x 1017.8025pt>
 File: Images/pipeline_industry_safety_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_industry_safety_bev.jpg>
 Package pdftex.def Info: Images/pipeline_industry_safety_bev.jpg  used on input
- line 718.
+ line 808.
 (pdftex.def)             Requested size: 218.51521pt x 291.53659pt.
-<Images/pipeline_retail_bev.jpg, id=581, 762.85pt x 841.1425pt>
+<Images/pipeline_retail_bev.jpg, id=609, 762.85pt x 841.1425pt>
 File: Images/pipeline_retail_bev.jpg Graphic file (type jpg)
 <use Images/pipeline_retail_bev.jpg>
-Package pdftex.def Info: Images/pipeline_retail_bev.jpg  used on input line 724
+Package pdftex.def Info: Images/pipeline_retail_bev.jpg  used on input line 814
 .
 (pdftex.def)             Requested size: 218.51521pt x 240.93457pt.
- [20 <./Images/pipeline_cafe_shop_osd.jpg> <./Images/pipeline_lobby_osd.jpg> <.
+ [21 <./Images/pipeline_cafe_shop_osd.jpg> <./Images/pipeline_lobby_osd.jpg> <.
 /Images/pipeline_office_osd.jpg> <./Images/pipeline_industry_safety_osd.jpg> <.
-/Images/pipeline_retail_osd.jpg>] [21 <./Images/pipeline_cafe_shop_bev.jpg> <./
+/Images/pipeline_retail_osd.jpg>] [22 <./Images/pipeline_cafe_shop_bev.jpg> <./
 Images/pipeline_lobby_bev.jpg> <./Images/pipeline_office_bev.jpg> <./Images/pip
 eline_industry_safety_bev.jpg> <./Images/pipeline_retail_bev.jpg>]
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 830.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `\times' on input line 830.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 830.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <12> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 837.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <9> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 837.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 837.
+
+Overfull \hbox (35.12872pt too wide) in paragraph at lines 838--848
+ [][] 
+ []
+
+[23]
 LaTeX Font Info:    Font shape `T5/cmtt/bx/n' in size <12> not available
-(Font)              Font shape `T5/cmtt/m/n' tried instead on input line 746.
+(Font)              Font shape `T5/cmtt/m/n' tried instead on input line 858.
 LaTeX Font Info:    Font shape `T5/cmtt/bx/it' in size <13> not available
-(Font)              Font shape `T5/cmtt/m/it' tried instead on input line 764.
- [22]
+(Font)              Font shape `T5/cmtt/m/it' tried instead on input line 876.
+ [24]
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 811.
+            Default family used instead on input line 923.
 
 
 LaTeX Font Warning: Font shape `TS1/cmr/m/n' in size <13> not available
-(Font)              size <12> substituted on input line 811.
+(Font)              size <12> substituted on input line 923.
 
 LaTeX Info: Symbol \textrightarrow not provided by
             font family ptm in TS1 encoding.
-            Default family used instead on input line 811.
-[23] [24]
-Overfull \hbox (1.79257pt too wide) in paragraph at lines 876--877
+            Default family used instead on input line 923.
+[25] [26]
+Overfull \hbox (1.79257pt too wide) in paragraph at lines 988--989
 []\T5/ptm/m/n/13 Kho£ng c¡ch Top-1 câ þ ngh¾a trüc ti¸p ^^_¸n ch§t l÷ñng pipeli
 ne: thuªt to¡n Buffered
  []
 
-[25] [26] [27] (main.bbl
-Underfull \hbox (badness 10000) in paragraph at lines 43--47
+[27]
+<Images/webui_roi_w022_zone.png, id=655, 3212.0pt x 2007.5pt>
+File: Images/webui_roi_w022_zone.png Graphic file (type png)
+<use Images/webui_roi_w022_zone.png>
+Package pdftex.def Info: Images/webui_roi_w022_zone.png  used on input line 100
+5.
+(pdftex.def)             Requested size: 145.68144pt x 91.03813pt.
+<Images/webui_roi_w022_linecross.png, id=656, 3212.0pt x 2007.5pt>
+File: Images/webui_roi_w022_linecross.png Graphic file (type png)
+<use Images/webui_roi_w022_linecross.png>
+Package pdftex.def Info: Images/webui_roi_w022_linecross.png  used on input lin
+e 1011.
+(pdftex.def)             Requested size: 145.68144pt x 91.03813pt.
+<Images/webui_roi_w022_overcrowd.png, id=657, 3212.0pt x 2007.5pt>
+File: Images/webui_roi_w022_overcrowd.png Graphic file (type png)
+<use Images/webui_roi_w022_overcrowd.png>
+Package pdftex.def Info: Images/webui_roi_w022_overcrowd.png  used on input lin
+e 1017.
+(pdftex.def)             Requested size: 145.68144pt x 91.03813pt.
+<Images/webui_roi_w022_restricted.png, id=658, 3212.0pt x 2007.5pt>
+File: Images/webui_roi_w022_restricted.png Graphic file (type png)
+<use Images/webui_roi_w022_restricted.png>
+Package pdftex.def Info: Images/webui_roi_w022_restricted.png  used on input li
+ne 1023.
+(pdftex.def)             Requested size: 218.51521pt x 136.5572pt.
+<Images/webui_custom_analytics_w022.png, id=659, 3212.0pt x 2007.5pt>
+File: Images/webui_custom_analytics_w022.png Graphic file (type png)
+<use Images/webui_custom_analytics_w022.png>
+Package pdftex.def Info: Images/webui_custom_analytics_w022.png  used on input 
+line 1029.
+(pdftex.def)             Requested size: 218.51521pt x 136.5572pt.
+ [28 <./Images/webui_roi_w022_zone.png (PNG copy)> <./Images/webui_roi_w022_lin
+ecross.png (PNG copy)> <./Images/webui_roi_w022_overcrowd.png (PNG copy)> <./Im
+ages/webui_roi_w022_restricted.png (PNG copy)> <./Images/webui_custom_analytics
+_w022.png (PNG copy)>] [29] [30] (main.bbl
+Underfull \hbox (badness 10000) in paragraph at lines 60--64
 []\T5/ptm/m/n/13 NVIDIA Cor-po-ra-tion, ``State-of-the-art real-time multi-obje
 ct track-ers
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 43--47
+Underfull \hbox (badness 10000) in paragraph at lines 60--64
 \T5/ptm/m/n/13 with NVIDIA Deep-Stream SDK 6.2,'' []$https : / / developer . nv
 idia . com / blog /
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 43--47
+Underfull \hbox (badness 10000) in paragraph at lines 60--64
 \T5/ptm/m/n/13 state-[]of-[]the-[]art-[]real-[]time-[]multi-[]object-[]trackers
 -[]with-[]nvidia-[]deepstream-[]sdk-[]6-[]2/$[],
  []
 
-) [28] (PhuLuc.tex
+[31]) [32] (PhuLuc.tex
 Underfull \hbox (badness 1194) in paragraph at lines 31--32
 []|\T5/ptm/m/n/13 15 £nh PNG: \T5/cmtt/m/n/13 cam_{0--3}_{typeheatmap}.png \T5/
 ptm/m/n/13 v 
@@ -1405,7 +1516,7 @@ Overfull \hbox (35.05788pt too wide) in paragraph at lines 24--34
  [][] 
  []
 
-) [29] (main.aux)
+) [33] (main.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2025-12-24>
@@ -1416,16 +1527,16 @@ LaTeX Font Warning: Size substitutions with differences
 (Font)              up to 1.0pt have occurred.
 
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: F3621E2B5AF659DEE46BA4823FC116E0;12565.
+(rerunfilecheck)             Checksum: 5AD5D69ACE949E01AC39B44BA5351FB6;12572.
  ) 
 Here is how much of TeX's memory you used:
- 25044 strings out of 467871
- 471248 string characters out of 5418376
- 964543 words of memory out of 5000000
- 53319 multiletter control sequences out of 15000+600000
- 686756 words of font info for 97 fonts, out of 8000000 for 9000
+ 25662 strings out of 467871
+ 487286 string characters out of 5418376
+ 976701 words of memory out of 5000000
+ 53907 multiletter control sequences out of 15000+600000
+ 708817 words of font info for 146 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 108i,12n,107p,911b,532s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 108i,12n,107p,1356b,927s stack positions out of 10000i,1000n,20000p,200000b,200000s
  <C:\Users\nguye\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\tcrm
 1200.pk><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfon
 ts/cm/cmmi10.pfb><C:/Users/nguye/AppData/Local/Programs/MiKTeX/fonts/type1/publ
@@ -1441,9 +1552,9 @@ iKTeX/fonts/type1/urw/times/utmri8a.pfb><C:/Users/nguye/AppData/Local/Programs/
 MiKTeX/fonts/type1/vntex/urwvn/utmri8v.pfb><C:/Users/nguye/AppData/Local/Progra
 ms/MiKTeX/fonts/type1/vntex/vnr/vnitt10.pfb><C:/Users/nguye/AppData/Local/Progr
 ams/MiKTeX/fonts/type1/vntex/vnr/vntt12.pfb>
-Output written on main.pdf (38 pages, 12885679 bytes).
+Output written on main.pdf (42 pages, 25599189 bytes).
 PDF statistics:
- 739 PDF objects out of 1000 (max. 8388607)
- 141 named destinations out of 1000 (max. 500000)
- 660 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 790 PDF objects out of 1000 (max. 8388607)
+ 152 named destinations out of 1000 (max. 500000)
+ 697 words of extra memory for PDF output out of 10000 (max. 10000000)
 
