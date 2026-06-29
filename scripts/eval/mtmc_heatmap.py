@@ -17,27 +17,33 @@ from src.mtmc.mtmc_calib import WarehouseCalibration
 import json
 
 
-def colorize(acc, base_bgr, alpha=0.75):
-    a = acc.astype(np.float32)
-    if a.max() > 0:
-        a = np.power(a / a.max(), 0.5)          # gamma to lift low-density tails
-    a = cv2.GaussianBlur(a, (0, 0), sigmaX=max(2, base_bgr.shape[1] // 240))
-    if a.max() > 0:
-        a /= a.max()
-    cm = cv2.applyColorMap((a * 255).astype(np.uint8), cv2.COLORMAP_JET)
-    m = (a > 0.06)[..., None]
-    out = base_bgr.copy()
-    blend = (base_bgr * (1 - alpha) + cm * alpha).astype(np.uint8)
-    out[m[..., 0]] = blend[m[..., 0]]
+def colorize(acc, base_bgr, alpha_max=0.85, gamma=0.45, title=None):
+    """Match the MMP demo heatmap look (venv_visualize._overlay): JET with a gamma<1
+    lift so EVERY density level shows, and a CONTINUOUS alpha (no hard mask) that fades
+    smoothly into the background — not isolated patches. The floor map is dimmed so the
+    heat reads like MMP's dark canvas while keeping the real warehouse structure."""
+    g = cv2.GaussianBlur(acc.astype(np.float32), (0, 0), sigmaX=max(2, base_bgr.shape[1] // 200))
+    if g.max() > 0:
+        g = np.power(g / g.max(), gamma)
+    g = np.clip(g, 0, 1)
+    cm = cv2.applyColorMap((g * 255).astype(np.uint8), cv2.COLORMAP_JET).astype(np.float32)
+    a = (g * alpha_max)[..., None]
+    bg = base_bgr.astype(np.float32) * 0.5          # dim floor so heat dominates (MMP-like)
+    out = (bg * (1 - a) + cm * a).astype(np.uint8)
+    if title:
+        cv2.putText(out, title, (12, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (235, 235, 235), 1, cv2.LINE_AA)
     return out
 
 
-def save_set(out_dir, prefix, occ, foot_ids, base_bgr):
+def save_set(out_dir, prefix, occ, foot_ids, base_bgr, label=""):
     out_dir.mkdir(parents=True, exist_ok=True)
     foot = np.array([[len(s) for s in row] for row in foot_ids], np.float32)
     dwell = np.where(foot > 0, occ / np.maximum(foot, 1), 0)
+    titles = {"occupancy": "top-down Occupancy (area density)",
+              "footfall": "Footfall (distinct people)", "dwelltime": "Dwell time (occupancy / footfall)"}
     for name, acc in [("occupancy", occ), ("footfall", foot), ("dwelltime", dwell)]:
-        img = colorize(cv2.resize(acc, (base_bgr.shape[1], base_bgr.shape[0])), base_bgr)
+        img = colorize(cv2.resize(acc, (base_bgr.shape[1], base_bgr.shape[0])), base_bgr,
+                       title=f"{label} - {titles[name]}" if label else titles[name])
         cv2.imwrite(str(out_dir / f"{prefix}_{name}.png"), img)
 
 
@@ -102,7 +108,7 @@ def main():
                 if gid >= 0: bev_ids[gy][gx].add(gid)
 
     out = Path(args.out_dir)
-    save_set(out, "bev", bev_occ, bev_ids, mp)
+    save_set(out, "bev", bev_occ, bev_ids, mp, label=args.warehouse)
     # bev_heatmap.png (alias of occupancy, matches MMP folder) + bev_trajectory.png (world paths)
     cv2.imwrite(str(out / "bev_heatmap.png"), colorize(cv2.resize(bev_occ, (MW, MH)), mp))
     traj = mp.copy()
@@ -135,7 +141,7 @@ def main():
         cap = cv2.VideoCapture((src[ec] if args.sources else str(whdir / "videos" / f"Camera_{ec:04d}.mp4")))
         cap.set(cv2.CAP_PROP_POS_FRAMES, min(args.max_frame, 900)); ok, frm = cap.read(); cap.release()
         if ok: base = frm
-        save_set(out, f"cam_{ec}", cam_occ[ec], cam_ids[ec], base)
+        save_set(out, f"cam_{ec}", cam_occ[ec], cam_ids[ec], base, label=f"{args.warehouse} cam{ec}")
     print(f"[heatmap] wrote bev + {len(cam_occ)} per-camera x3 metrics -> {out}")
 
 
