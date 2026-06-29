@@ -49,10 +49,12 @@ def main():
                     help="the source list used for the export (e.g. configs/sources/mtmc_val_w020.txt). "
                          "Maps export cam_N -> the N-th video path. REQUIRED when camera numbers are "
                          "non-contiguous (W020/W021); without it, cam_N is assumed to be Camera_<N>.mp4.")
-    ap.add_argument("--mode", choices=["split", "bev", "camera", "tiled"], default="split",
-                    help="split = camera|BEV side-by-side; bev = full-frame top-down map only "
-                         "(MMP-style tracking-BEV video, on the real floor map); camera = one camera OSD; "
-                         "tiled = all cameras in a grid with OSD + cross-camera IDs (MMP osd_buffered style)")
+    ap.add_argument("--mode", choices=["split", "bev", "camera", "tiled", "heatmap"], default="split",
+                    help="split = camera|BEV side-by-side; bev = top-down map tracking; camera = one "
+                         "camera OSD; tiled = all cameras grid with cross-camera IDs; heatmap = live "
+                         "accumulating density heatmap video on the real floor map")
+    ap.add_argument("--heat-decay", type=float, default=0.99,
+                    help="per-frame heatmap decay (1.0=cumulative, <1=live sliding density)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-frame", type=int, default=1799)
     ap.add_argument("--fps", type=int, default=15)
@@ -176,6 +178,43 @@ def main():
         L = banner(fit(left), f"Camera {args.cam}  (frame {frame_idx})", (40, 230, 200))
         B = banner(fit(bev), f"{args.warehouse}  bird's-eye (world meters)", (255, 130, 124))
         return np.hstack([L, np.full((OUT_H, 4, 3), 60, np.uint8), B])
+
+    # heatmap mode: live accumulating density on the real floor map
+    if args.mode == "heatmap":
+        cell = 12; GW, GH = MW // cell, MH // cell
+        acc = np.zeros((GH, GW), np.float32)
+        writer = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"mp4v"), args.fps, (MW, MH))
+        for idx in range(args.max_frame + 1):
+            acc *= args.heat_decay
+            for (c, t, l, tp, w, h, gid) in byframe.get(idx, []):
+                wpt = cal.foot_to_world(calib_cam(c), l + w / 2.0, tp + h)
+                if wpt is None:
+                    continue
+                px = (wpt[0] + tx) * sf; py = (wpt[1] + ty) * sf
+                if args.flip_y:
+                    py = MH - py
+                gx, gy = int(px // cell), int(py // cell)
+                if 0 <= gx < GW and 0 <= gy < GH:
+                    acc[gy, gx] += 1.0
+            a = acc.copy()
+            if a.max() > 0:
+                a = np.power(a / a.max(), 0.5)
+            a = cv2.resize(a, (MW, MH))
+            a = cv2.GaussianBlur(a, (0, 0), sigmaX=max(2, MW // 240))
+            if a.max() > 0:
+                a /= a.max()
+            cm = cv2.applyColorMap((a * 255).astype(np.uint8), cv2.COLORMAP_JET)
+            m = (a > 0.06)[..., None]
+            frame = mp.copy()
+            blend = (mp * 0.25 + cm * 0.75).astype(np.uint8)
+            frame[m[..., 0]] = blend[m[..., 0]]
+            cv2.rectangle(frame, (0, 0), (MW, 30), (0, 0, 0), -1)
+            cv2.putText(frame, f"{args.warehouse}  live density heatmap  (frame {idx})", (10, 21),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (60, 200, 255), 2)
+            writer.write(frame)
+        writer.release()
+        print(f"[bev-demo] wrote {args.out} ({args.max_frame + 1} frames, mode=heatmap)")
+        return
 
     # tiled mode: all cameras in a grid, each with OSD + the same cross-camera IDs
     if args.mode == "tiled":
