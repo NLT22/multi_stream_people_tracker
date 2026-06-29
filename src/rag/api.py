@@ -14,12 +14,21 @@ import os
 import tempfile
 from datetime import datetime
 
-from fastapi import FastAPI, UploadFile, File, Query, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.rag.queries import RagStore
 
 DB = os.environ.get("RAG_DB", "output/rag/rag.sqlite")
 app = FastAPI(title="MTMC RAG query API", version="1.0")
+
+# the webUI "Ask" view (Phase D) runs on the Vite dev server (a different origin),
+# so allow cross-origin calls. RAG_CORS can pin specific origins in production.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.environ.get("RAG_CORS", "*").split(","),
+    allow_methods=["*"], allow_headers=["*"],
+)
 
 
 def _store(run_id: str | None) -> RagStore:
@@ -91,3 +100,33 @@ async def search_image(file: UploadFile = File(...), run_id: str | None = Query(
     finally:
         os.unlink(tmp)
     return {"candidates": out}
+
+
+@app.post("/ask")
+async def ask(question: str = Form(...), run_id: str | None = Form(None),
+              file: UploadFile | None = File(None)):
+    """Phase C/D natural-language entry point: the LLM agent picks Phase-B tools,
+    fills params (relative time -> ISO, image -> gid) and composes prose. Needs
+    ANTHROPIC_API_KEY; without it returns a clear, non-fatal message so the rest of
+    the Ask view (which can call the deterministic endpoints directly) still works."""
+    from src.rag.agent import RagAgent
+    tmp = None
+    if file is not None:
+        data = await file.read()
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            f.write(data); tmp = f.name
+    try:
+        agent = RagAgent(DB, run_id)
+        out = agent.ask(question, image_path=tmp)
+    except Exception as e:
+        msg = str(e)
+        if "ANTHROPIC_API_KEY" in msg or "api_key" in msg.lower():
+            return {"answer": "The language model is not configured on this server "
+                              "(set ANTHROPIC_API_KEY). The analytics and person-search "
+                              "endpoints still work without it.",
+                    "tool_calls": [], "llm_disabled": True}
+        raise HTTPException(500, f"agent error: {msg}")
+    finally:
+        if tmp:
+            os.unlink(tmp)
+    return out

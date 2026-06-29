@@ -6,7 +6,7 @@ import './TopBar.css'
 
 const CRumb: Record<Nav['view'], string> = {
   dashboard: 'Overview', live: 'Live Wall', zone: 'Zone', roi: 'ROI Editor',
-  analytics: 'Analytics Config', heatmap: 'Heatmaps',
+  analytics: 'Analytics Config', heatmap: 'Heatmaps', ask: 'Ask the Data',
 }
 
 export function TopBar({ nav, events }: {

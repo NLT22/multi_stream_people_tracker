@@ -7,6 +7,7 @@ import { ZoneView } from './components/zone/ZoneView'
 import { RoiEditor } from './components/roi/RoiEditor'
 import { AnalyticsConfig } from './components/analytics/AnalyticsConfig'
 import { HeatmapView } from './components/heatmap/HeatmapView'
+import { AskView } from './components/rag/AskView'
 import { LiveMosaicProvider } from './components/live/LiveMosaic'
 import { camById } from './data/zones'
 import { seedEvents } from './data/events'
@@ -14,7 +15,7 @@ import { SEED_ROIS } from './data/rois'
 import type { Roi } from './data/types'
 import './app.css'
 
-export type View = 'dashboard' | 'live' | 'zone' | 'roi' | 'analytics' | 'heatmap'
+export type View = 'dashboard' | 'live' | 'zone' | 'roi' | 'analytics' | 'heatmap' | 'ask'
 
 export interface Nav {
   view: View
@@ -22,7 +23,7 @@ export interface Nav {
   cameraId: string | null
 }
 
-const VIEWS: View[] = ['dashboard', 'live', 'zone', 'roi', 'analytics', 'heatmap']
+const VIEWS: View[] = ['dashboard', 'live', 'zone', 'roi', 'analytics', 'heatmap', 'ask']
 // Hash forms: "#live" or "#live/cam-3" (deep-link a specific camera detail).
 const navFromHash = (): Partial<Nav> => {
   const [v, cam] = window.location.hash.replace('#', '').split('/')
@@ -58,6 +59,7 @@ export default function App() {
           {nav.view === 'roi' && <RoiEditor nav={nav} go={go} rois={rois} setRois={setRois} />}
           {nav.view === 'analytics' && <AnalyticsConfig nav={nav} go={go} rois={rois} />}
           {nav.view === 'heatmap' && <HeatmapView nav={nav} go={go} />}
+          {nav.view === 'ask' && <AskView nav={nav} go={go} />}
         </main>
       </div>
     </div>

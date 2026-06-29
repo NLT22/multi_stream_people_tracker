@@ -10,6 +10,7 @@ const NAV: { view: View; label: string; glyph: string }[] = [
   { view: 'roi', label: 'ROI Editor', glyph: '✎' },
   { view: 'analytics', label: 'Analytics', glyph: '⚙' },
   { view: 'heatmap', label: 'Heatmaps', glyph: '▦' },
+  { view: 'ask', label: 'Ask', glyph: '✦' },
 ]
 
 export function Sidebar({ nav, go }: { nav: Nav; go: (n: Partial<Nav>) => void }) {

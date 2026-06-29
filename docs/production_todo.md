@@ -275,11 +275,21 @@ from current run artifacts — low risk, high reuse.
   selects a Phase-B tool, fills params (relative time → ISO; image → gid via search), composes
   prose + `tool_calls` trace. Tool schemas + `dispatch()` are pure-Python and unit-tested without
   the API; the live loop needs `ANTHROPIC_API_KEY`. Text-to-SQL fallback (5.2) still TODO.
-- [ ] **WebUI "Ask" view** (7th nav entry; React/Vite, `webui/src/components/rag/`): chat box +
-  image-upload; render results as a timeline, a BEV trajectory overlay (reuse heatmap/BEV view),
-  camera jump-links, and a heatmap time-window. Add `webui/src/api/` fetch wrappers.
-- [ ] Start replacing the webUI's mocked `src/data/*` with the same FastAPI endpoints (the
-  README already documents these integration seams).
+- [x] **WebUI "Ask" view** (2026-06-29) — 7th nav entry (`ask`, ✦) wired in `App.tsx` + `Sidebar.tsx`
+  + `TopBar` breadcrumb. `webui/src/components/rag/AskView.tsx` (+`ask.css`): NL chat box with
+  optional image attach (calls `POST /ask`); robust to `llm_disabled` (shows a clear message, the
+  deterministic panels still work). Side rail has **Person Search** (image → cosine candidates →
+  click a gid → dwell-by-zone bars + world-trajectory BEV SVG + appearance timeline) and **Top
+  Zones** (footfall/occupancy) — both call the deterministic endpoints directly (Route A/B).
+  `webui/src/api/rag.ts` = the first real backend fetch wrappers (base `VITE_RAG_API`, default :8077).
+  Backend: added `POST /ask` (RagAgent) + CORS to `src/rag/api.py`. `tsc -b` clean; live-smoke-tested
+  against `64pm_cafe_shop_1` (top zones, /ask llm_disabled fallback, persons list all return).
+  NOTE: `npm run build` currently fails on a *pre-existing* broken symlink
+  `webui/public/feeds/cafe_shop_osd.mp4` → a deleted demo OSD video (unrelated to Ask); `npm run dev`
+  and `tsc` are unaffected. Regenerate the demo or fix `setup-assets.sh` to restore production build.
+- [ ] Start replacing the webUI's other mocked `src/data/*` with the same FastAPI endpoints (the
+  README already documents these integration seams). Ask view is the first to use the real backend.
+- [ ] Text-to-SQL fallback (5.2) for open-ended questions the canned analytics functions don't cover.
 
 ### 5.6 Phase E — optional scale-out
 
