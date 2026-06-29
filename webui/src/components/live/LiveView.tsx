@@ -69,7 +69,7 @@ export function LiveView({ nav, go }: { nav: Nav; go: (n: Partial<Nav>) => void 
               onChange={(e) => go({ zoneId: e.target.value })}
               style={{ background: 'transparent', color: 'var(--ink)', border: 'none', fontSize: 11.5 }}
             >
-              {ZONES.map((z) => <option key={z.id} value={z.id} style={{ background: '#10161f' }}>{z.name}</option>)}
+              {ZONES.map((z) => <option key={z.id} value={z.id} style={{ background: 'var(--card)', color: 'var(--ink-strong)' }}>{z.name}</option>)}
             </select>
           </div>
         )}

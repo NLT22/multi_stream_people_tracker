@@ -93,3 +93,7 @@
 .roi__chips { row-gap: 6px; }
 
 .roi__config:focus { border-color: var(--signal); }
+
+.roi__flip { padding: 7px 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--ink); cursor: pointer; font-size: 12px; }
+.roi__flip:hover { border-color: var(--signal); color: var(--signal-deep); }

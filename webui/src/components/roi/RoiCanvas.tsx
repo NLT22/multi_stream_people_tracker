@@ -84,7 +84,7 @@ export function RoiCanvas({
       onPointerLeave={endDrag}
     >
       <image href={frame} x={0} y={0} width={VW} height={VH} preserveAspectRatio="xMidYMid slice" />
-      <rect x={0} y={0} width={VW} height={VH} fill="rgba(5,8,12,0.32)" />
+      <rect x={0} y={0} width={VW} height={VH} fill="rgba(5,8,12,0.12)" />
 
       {rois.map((r) => {
         const col = KIND_COLOR[r.kind]
@@ -93,14 +93,25 @@ export function RoiCanvas({
         if (r.kind === 'counting') {
           const [a, b] = r.points
           const dir = r.direction ?? r.points
+          // explicit filled arrowhead at the end of the direction vector so the
+          // crossing direction is unmistakable (the dashed line alone was ambiguous)
+          const d0 = { x: X(dir[0]), y: Y(dir[0]) }, d1 = { x: X(dir[1]), y: Y(dir[1]) }
+          const ang = Math.atan2(d1.y - d0.y, d1.x - d0.x)
+          const L = VW * 0.02, AW = VW * 0.011
+          const head = [
+            `${d1.x},${d1.y}`,
+            `${d1.x - L * Math.cos(ang) + AW * Math.sin(ang)},${d1.y - L * Math.sin(ang) - AW * Math.cos(ang)}`,
+            `${d1.x - L * Math.cos(ang) - AW * Math.sin(ang)},${d1.y - L * Math.sin(ang) + AW * Math.cos(ang)}`,
+          ].join(' ')
           return (
             <g key={r.id} opacity={op}>
               <line x1={X(a)} y1={Y(a)} x2={X(b)} y2={Y(b)} stroke={col} strokeWidth={sel ? 5 : 3}
                 vectorEffect="non-scaling-stroke" onPointerDown={startDrag({ roiId: r.id, kind: 'body', index: 0 })}
                 style={{ cursor: 'move' }} />
-              {/* direction arrow */}
-              <line x1={X(dir[0])} y1={Y(dir[0])} x2={X(dir[1])} y2={Y(dir[1])} stroke={col}
-                strokeWidth={1.5} strokeDasharray="6 5" vectorEffect="non-scaling-stroke" opacity={0.7} />
+              {/* direction arrow (line + filled arrowhead) */}
+              <line x1={d0.x} y1={d0.y} x2={d1.x} y2={d1.y} stroke={col}
+                strokeWidth={2} strokeDasharray="6 5" vectorEffect="non-scaling-stroke" opacity={0.85} />
+              <polygon points={head} fill={col} opacity={0.95} />
               {sel && r.points.map((p, i) => (
                 <Handle key={i} x={X(p)} y={Y(p)} color={col}
                   onDown={startDrag({ roiId: r.id, kind: 'vertex', index: i })} />

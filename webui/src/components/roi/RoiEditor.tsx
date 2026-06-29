@@ -134,7 +134,7 @@ export function RoiEditor({ nav, go, rois, setRois }: {
         <div className="roi__toolbar">
           <select className="roi__camsel mono" value={camId}
             onChange={(e) => { setCamId(e.target.value); setSelectedId(null); setDraft([]); setMode('select') }}>
-            {camsWithFrame.map((c) => <option key={c.id} value={c.id} style={{ background: '#10161f' }}>
+            {camsWithFrame.map((c) => <option key={c.id} value={c.id} style={{ background: 'var(--card)', color: 'var(--ink-strong)' }}>
               CAM{String(c.streamIndex).padStart(2, '0')} · {c.name}</option>)}
           </select>
           <span className="roi__div" />
@@ -206,7 +206,7 @@ export function RoiEditor({ nav, go, rois, setRois }: {
               <span className="eyebrow">Type</span>
               <select className="mono" value={selected.kind}
                 onChange={(e) => patch(selected.id, (r) => ({ ...r, kind: e.target.value as RoiKind }))}>
-                {KINDS.map((k) => <option key={k.k} value={k.k} style={{ background: '#10161f' }}>{k.label}</option>)}
+                {KINDS.map((k) => <option key={k.k} value={k.k} style={{ background: 'var(--card)', color: 'var(--ink-strong)' }}>{k.label}</option>)}
               </select>
             </label>
             {selected.kind === 'overcrowd' && (
@@ -215,6 +215,14 @@ export function RoiEditor({ nav, go, rois, setRois }: {
                 <input type="number" min={1} className="mono" value={selected.threshold ?? 6}
                   onChange={(e) => patch(selected.id, (r) => ({ ...r, threshold: Math.max(1, +e.target.value) }))} />
               </label>
+            )}
+            {selected.kind === 'counting' && (
+              <div className="roi__field">
+                <span className="eyebrow">Crossing direction (arrow = counted way)</span>
+                <button className="roi__flip" onClick={() => patch(selected.id, (r) => ({
+                  ...r, direction: (r.direction ?? r.points).slice().reverse(),
+                }))}>⇄ Flip direction</button>
+              </div>
             )}
             <div className="roi__field">
               <span className="eyebrow">Assigned analytics</span>
