@@ -18,7 +18,7 @@ export interface Camera {
   health: number        // 0..1 stream health
 }
 
-export type ZoneKind = 'cafe' | 'lobby' | 'office' | 'industry' | 'retail'
+export type ZoneKind = 'cafe' | 'lobby' | 'office' | 'industry' | 'retail' | 'warehouse'
 
 export interface Zone {
   id: string

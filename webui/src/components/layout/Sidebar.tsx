@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Nav, View } from '../../App'
 import { ZONES, camsOfZone } from '../../data/zones'
+import { DATASET_LIST, type DatasetKey } from '../../data/datasets'
 import { StatusDot } from '../common'
 import './Sidebar.css'
 
@@ -13,9 +14,13 @@ const NAV: { view: View; label: string; glyph: string }[] = [
   { view: 'ask', label: 'Ask', glyph: '✦' },
 ]
 
-export function Sidebar({ nav, go }: { nav: Nav; go: (n: Partial<Nav>) => void }) {
+export function Sidebar({ nav, go, dataset, onSwitchDataset }: {
+  nav: Nav; go: (n: Partial<Nav>) => void
+  dataset: DatasetKey; onSwitchDataset: (k: DatasetKey) => void
+}) {
   // All zones collapsed by default — expand on demand.
   const [open, setOpen] = useState<Record<string, boolean>>({})
+  const active = DATASET_LIST.find((d) => d.key === dataset) ?? DATASET_LIST[0]
 
   return (
     <aside className="rail">
@@ -23,8 +28,16 @@ export function Sidebar({ nav, go }: { nav: Nav; go: (n: Partial<Nav>) => void }
         <span className="rail__mark hud">◈</span>
         <div>
           <div className="rail__name hud">SENTINEL</div>
-          <div className="rail__sub eyebrow">MTMC · 20 CAM</div>
+          <div className="rail__sub eyebrow">{active.sub}</div>
         </div>
+      </div>
+
+      <div className="rail__ds" role="tablist" aria-label="Dataset">
+        {DATASET_LIST.map((d) => (
+          <button key={d.key} role="tab" aria-selected={d.key === dataset}
+            className={`rail__dsbtn ${d.key === dataset ? 'is-active' : ''}`}
+            onClick={() => onSwitchDataset(d.key)}>{d.label}</button>
+        ))}
       </div>
 
       <nav className="rail__nav">

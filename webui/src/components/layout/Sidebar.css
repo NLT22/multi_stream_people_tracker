@@ -65,3 +65,13 @@
   display: flex; align-items: center; justify-content: space-between;
   font-size: 10px; color: var(--dim);
 }
+
+/* dataset switcher (MMP ⇄ MTMC) */
+.rail__ds { display: flex; gap: 4px; margin: 10px 14px 4px; }
+.rail__dsbtn {
+  flex: 1; padding: 5px 0; font-size: 11px; letter-spacing: 0.08em; cursor: pointer;
+  background: var(--line-soft); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 6px; text-transform: uppercase; transition: 0.15s;
+}
+.rail__dsbtn:hover { color: var(--ink-strong); border-color: var(--signal); }
+.rail__dsbtn.is-active { background: var(--signal-deep); border-color: var(--signal); color: #001b18; font-weight: 600; }

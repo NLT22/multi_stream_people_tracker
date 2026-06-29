@@ -38,6 +38,7 @@ export const BENCHMARK: Benchmark = {
     office: 0.861,
     industry: 0.805,
     retail: 0.660,
+    warehouse: 0.856,   // MTMC Warehouse_022 cross-camera Global IDF1 (geometry global-linker)
   },
   preset: 'reid0 (NvDCF reidType:0 + SGIE Swin)',
   dataset: 'MMPTracking · 20-cam mixed val · 5 environments',
