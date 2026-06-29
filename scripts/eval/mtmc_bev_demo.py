@@ -203,11 +203,10 @@ def main():
             a = cv2.GaussianBlur(a, (0, 0), sigmaX=max(2, MW // 240))
             if a.max() > 0:
                 a /= a.max()
-            cm = cv2.applyColorMap((a * 255).astype(np.uint8), cv2.COLORMAP_JET)
-            m = (a > 0.06)[..., None]
-            frame = mp.copy()
-            blend = (mp * 0.25 + cm * 0.75).astype(np.uint8)
-            frame[m[..., 0]] = blend[m[..., 0]]
+            cm = cv2.applyColorMap((a * 255).astype(np.uint8), cv2.COLORMAP_JET).astype(np.float32)
+            # keep the real floor map at full brightness; blend heat by continuous alpha
+            aw = (np.clip(a, 0, 1) * 0.85)[..., None]
+            frame = (mp.astype(np.float32) * (1 - aw) + cm * aw).astype(np.uint8)
             cv2.rectangle(frame, (0, 0), (MW, 30), (0, 0, 0), -1)
             cv2.putText(frame, f"{args.warehouse}  live density heatmap  (frame {idx})", (10, 21),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (60, 200, 255), 2)

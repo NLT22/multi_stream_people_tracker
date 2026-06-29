@@ -28,10 +28,11 @@ def colorize(acc, base_bgr, alpha_max=0.85, gamma=0.45, title=None):
     g = np.clip(g, 0, 1)
     cm = cv2.applyColorMap((g * 255).astype(np.uint8), cv2.COLORMAP_JET).astype(np.float32)
     a = (g * alpha_max)[..., None]
-    bg = base_bgr.astype(np.float32) * 0.5          # dim floor so heat dominates (MMP-like)
+    bg = base_bgr.astype(np.float32)                # keep the REAL floor map at full brightness
     out = (bg * (1 - a) + cm * a).astype(np.uint8)
-    if title:
-        cv2.putText(out, title, (12, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (235, 235, 235), 1, cv2.LINE_AA)
+    if title:                                       # dark strip behind title for readability on bright map
+        cv2.rectangle(out, (0, 0), (out.shape[1], 32), (0, 0, 0), -1)
+        cv2.putText(out, title, (12, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (235, 235, 235), 1, cv2.LINE_AA)
     return out
 
 
