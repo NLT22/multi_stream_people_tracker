@@ -45,9 +45,10 @@ def main():
     ap.add_argument("--export-dir", default="output/eval/mtmc_w022_1280")
     ap.add_argument("--assign", required=True, help="global-linker assign-csv")
     ap.add_argument("--cam", type=int, default=2, help="export cam id for the camera panel")
-    ap.add_argument("--mode", choices=["split", "bev", "camera"], default="split",
+    ap.add_argument("--mode", choices=["split", "bev", "camera", "tiled"], default="split",
                     help="split = camera|BEV side-by-side; bev = full-frame top-down map only "
-                         "(MMP-style tracking-BEV video, on the real floor map); camera = camera OSD only")
+                         "(MMP-style tracking-BEV video, on the real floor map); camera = one camera OSD; "
+                         "tiled = all cameras in a grid with OSD + cross-camera IDs (MMP osd_buffered style)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-frame", type=int, default=1799)
     ap.add_argument("--fps", type=int, default=15)
@@ -160,6 +161,50 @@ def main():
         L = banner(fit(left), f"Camera {args.cam}  (frame {frame_idx})", (40, 230, 200))
         B = banner(fit(bev), f"{args.warehouse}  bird's-eye (world meters)", (255, 130, 124))
         return np.hstack([L, np.full((OUT_H, 4, 3), 60, np.uint8), B])
+
+    # tiled mode: all cameras in a grid, each with OSD + the same cross-camera IDs
+    if args.mode == "tiled":
+        cam_ids = sorted(int(f.stem.split("_")[1]) for f in Path(args.export_dir).glob("cam_*_predictions.csv"))
+        caps = {c: cv2.VideoCapture(str(whdir / "videos" / f"Camera_{c:04d}.mp4")) for c in cam_ids}
+        cols = 2 if len(cam_ids) > 1 else 1
+        rows = -(-len(cam_ids) // cols)
+        TW, TH = 960, 540
+        writer = None; idx = 0
+        while idx <= args.max_frame:
+            frames = {}
+            ok_all = True
+            for c in cam_ids:
+                ok, im = caps[c].read()
+                if not ok:
+                    ok_all = False; break
+                frames[c] = im
+            if not ok_all:
+                break
+            tiles = []
+            for c in cam_ids:
+                im = frames[c]
+                for (cc, t, l, tp, w, h, gid) in byframe.get(idx, []):
+                    if cc != c:
+                        continue
+                    col = color_for(gid)
+                    cv2.rectangle(im, (int(l), int(tp)), (int(l + w), int(tp + h)), col, 3)
+                    cv2.putText(im, f"ID{gid}", (int(l), int(tp) - 8), cv2.FONT_HERSHEY_SIMPLEX, 1.0, col, 2)
+                cv2.rectangle(im, (0, 0), (im.shape[1], 46), (0, 0, 0), -1)
+                cv2.putText(im, f"Camera {c}", (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (40, 230, 200), 2)
+                tiles.append(cv2.resize(im, (TW, TH)))
+            while len(tiles) < rows * cols:
+                tiles.append(np.zeros((TH, TW, 3), np.uint8))
+            grid = np.vstack([np.hstack(tiles[r * cols:(r + 1) * cols]) for r in range(rows)])
+            if writer is None:
+                h, w = grid.shape[:2]
+                writer = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"mp4v"), args.fps, (w, h))
+            writer.write(grid); idx += 1
+        if writer:
+            writer.release()
+        for cc in caps.values():
+            cc.release()
+        print(f"[bev-demo] wrote {args.out} ({idx} frames, mode=tiled {len(cam_ids)} cams)")
+        return
 
     def read_frame(idx):
         if cap is None:
