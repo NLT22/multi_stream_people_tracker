@@ -74,8 +74,9 @@
 .roi__cfgbtns button:hover { color: var(--signal); border-color: var(--signal-deep); }
 .roi__config {
   margin: 0; font-size: 10.5px; line-height: 1.55; color: var(--ink);
-  background: var(--void); border-radius: var(--r-sm); padding: 11px; max-height: 260px;
-  overflow: auto; white-space: pre; border: 1px solid var(--line-soft);
+  background: var(--void); border-radius: var(--r-sm); padding: 11px;
+  width: 100%; box-sizing: border-box; height: 240px; resize: vertical;
+  overflow: auto; white-space: pre; border: 1px solid var(--line-soft); outline: none;
 }
 .roi__gozone { padding: 10px; border-radius: var(--r); background: var(--card);
   border: 1px solid var(--line); color: var(--ink); font-size: 12px; }
@@ -90,3 +91,5 @@
    overlaps the panel below. The column scrolls instead. */
 .roi__side > * { flex-shrink: 0; }
 .roi__chips { row-gap: 6px; }
+
+.roi__config:focus { border-color: var(--signal); }

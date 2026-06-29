@@ -42,7 +42,13 @@ export function RoiEditor({ nav, go, rois, setRois }: {
   const selected = camRois.find((r) => r.id === selectedId) ?? null
   const configText = useMemo(() => generateConfig(rois, camId), [rois, camId])
 
-  // AUTOSAVE: debounced write of the nvdsanalytics config straight to disk
+  // The config is EDITABLE: it follows the drawn regions until you hand-edit the text
+  // (then it "detaches"); the ↻ regions button re-syncs. editedCfg=null = follow generated.
+  const [editedCfg, setEditedCfg] = useState<string | null>(null)
+  const effCfg = editedCfg ?? configText
+  useEffect(() => { setEditedCfg(null) }, [camId])   // switch camera -> fresh generated config
+
+  // AUTOSAVE: debounced write of the (possibly hand-edited) config straight to disk
   // (configs/analytics/) via the Vite dev middleware — no manual Export needed.
   const [saveStatus, setSaveStatus] = useState('idle')
   useEffect(() => {
@@ -51,14 +57,14 @@ export function RoiEditor({ nav, go, rois, setRois }: {
     const t = setTimeout(() => {
       fetch('/__save-analytics', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name, text: configText }),
+        body: JSON.stringify({ name, text: effCfg }),
       })
         .then((r) => r.json())
         .then((j) => setSaveStatus(j.ok ? `autosaved → ${j.path}` : `save failed`))
         .catch(() => setSaveStatus('autosave needs npm run dev'))
     }, 600)
     return () => clearTimeout(t)
-  }, [configText, cam.streamIndex])
+  }, [effCfg, cam.streamIndex])
 
   // Esc cancels a draft; Enter closes a polygon.
   useEffect(() => {
@@ -233,17 +239,19 @@ export function RoiEditor({ nav, go, rois, setRois }: {
           </Panel>
         )}
 
-        <Panel title="nvdsanalytics config — autosaved" right={
+        <Panel title="nvdsanalytics config — editable · autosaved" right={
           <div className="roi__cfgbtns">
-            <button onClick={() => navigator.clipboard?.writeText(configText)}>Copy</button>
-            <button onClick={() => download(`nvdsanalytics_${cam.streamIndex}.txt`, configText)}>Download</button>
+            <button onClick={() => navigator.clipboard?.writeText(effCfg)}>Copy</button>
+            <button onClick={() => download(`nvdsanalytics_${cam.streamIndex}.txt`, effCfg)}>Download</button>
+            {editedCfg !== null && <button onClick={() => setEditedCfg(null)}>↻ regions</button>}
             <button onClick={resetCam}>Reset</button>
           </div>
         }>
           <div className={`roi__savestatus ${saveStatus.startsWith('autosaved') ? 'is-ok' : ''}`}>
-            ● {saveStatus}
+            ● {saveStatus}{editedCfg !== null ? '  ·  hand-edited' : ''}
           </div>
-          <pre className="roi__config mono">{configText}</pre>
+          <textarea className="roi__config mono" value={effCfg} spellCheck={false}
+            onChange={(e) => setEditedCfg(e.target.value)} />
         </Panel>
 
         <button className="roi__gozone" onClick={() => go({ view: 'analytics', zoneId: cam.zoneId })}>
