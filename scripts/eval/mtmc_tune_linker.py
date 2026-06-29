@@ -88,12 +88,13 @@ def main():
     print(f"[tune] ORACLE (perfect IDs): IDF1={ro['idf1']:.4f} recall-ceiling="
           f"{ro['idtp']/(ro['idtp']+ro['idfn']):.3f}")
 
-    base = dict(min_overlap=5, spatial_thr=1.5, conflict_thr=4.0, temporal_gap=400, pred_thr=3.5,
-                reacq_gap=60, reacq_thr=1.5, temporal_weight=30.0, min_merge=0.5)
-    # sweep the levers that matter for sparse 16-cam hand-offs
+    base = dict(min_overlap=5, spatial_thr=9.0, conflict_thr=18.0, temporal_gap=400, pred_thr=3.5,
+                reacq_gap=60, reacq_thr=1.5, temporal_weight=30.0, min_merge=0.5,
+                app_weight=0.0, app_thr=0.85)
+    # appearance fusion sweep: app_weight=0 row reproduces geometry-only
     grid = {
-        "conflict_thr": [12.0, 18.0, 30.0],
-        "spatial_thr":  [5.0, 7.0, 9.0],
+        "app_weight": [0.0, 5.0, 15.0, 40.0, 80.0],
+        "app_thr":    [0.80, 0.85],
     }
     keys_g = list(grid)
     results = []

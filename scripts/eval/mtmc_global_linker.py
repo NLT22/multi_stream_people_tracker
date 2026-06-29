@@ -50,14 +50,28 @@ def build_tracklets(export_dir: Path, cal: WarehouseCalibration, cam_offset: int
             raw_rows.append((cam, int(r.frame_no_cam), int(r.local_track_id)))
             if w is not None:
                 traj[(cam, int(r.local_track_id))][int(r.frame_no_cam)] = w
+    # per-tracklet mean ReID embedding (from the SGIE det_emb chunks the pipeline exported)
+    emb_sum: dict = {}; emb_n: dict = defaultdict(int)
+    for p in sorted(export_dir.glob("det_emb_chunk_*.npz")):
+        z = np.load(p)
+        for c, t, e in zip(z["cam_id"], z["local_track_id"], z["embeddings"].astype(np.float32)):
+            key = (int(c) + cam_offset, int(t))
+            emb_sum[key] = e.copy() if key not in emb_sum else emb_sum[key] + e
+            emb_n[key] += 1
+
     keys = sorted(traj)
     meta = []
     for k in keys:
         fr = sorted(traj[k]); pts = np.array([traj[k][f] for f in fr])
         vf = min(vel_frames, len(fr))
         exit_v = (pts[-1] - pts[-vf]) / max(1, fr[-1] - fr[-vf]) if vf > 1 else np.zeros(2)
+        e = emb_sum.get(k); emb = None
+        if e is not None:
+            n = np.linalg.norm(e)
+            if n > 0:
+                emb = e / n
         meta.append({"cam": k[0], "fmin": fr[0], "fmax": fr[-1], "frames": set(fr),
-                     "pos": traj[k], "start": pts[0], "end": pts[-1], "exit_v": exit_v})
+                     "pos": traj[k], "start": pts[0], "end": pts[-1], "exit_v": exit_v, "emb": emb})
     return keys, meta, raw_rows
 
 
@@ -69,7 +83,8 @@ def link(keys, meta, p):
     n = len(keys)
     cadj = [dict() for _ in range(n)]      # node -> {node: aff}  (cluster adjacency; nodes are reps)
     cforbid = [set() for _ in range(n)]    # node -> set of must-not-link nodes
-    n_spatial = n_temporal = n_conflict = 0
+    n_spatial = n_temporal = n_conflict = n_app = 0
+    app_w = getattr(p, "app_weight", 0.0); app_thr = getattr(p, "app_thr", 0.85)
 
     def add_aff(i, j, w):
         cadj[i][j] = cadj[i].get(j, 0.0) + w
@@ -78,9 +93,10 @@ def link(keys, meta, p):
     for i, j in combinations(range(n), 2):
         a, b = meta[i], meta[j]
         common = a["frames"] & b["frames"]
+        forbidden = False
         if a["cam"] == b["cam"]:
             if common:
-                cforbid[i].add(j); cforbid[j].add(i)
+                cforbid[i].add(j); cforbid[j].add(i); forbidden = True
         else:
             if len(common) >= p.min_overlap:
                 ds = [np.hypot(*(np.array(a["pos"][f]) - np.array(b["pos"][f]))) for f in common]
@@ -88,7 +104,7 @@ def link(keys, meta, p):
                 if md < p.spatial_thr:
                     add_aff(i, j, len(common) * (1.0 - md / p.spatial_thr)); n_spatial += 1
                 elif md > p.conflict_thr:
-                    cforbid[i].add(j); cforbid[j].add(i); n_conflict += 1
+                    cforbid[i].add(j); cforbid[j].add(i); n_conflict += 1; forbidden = True
         if a["fmax"] <= b["fmin"]:
             gap = b["fmin"] - a["fmax"]; e0 = a["end"]; pred = a["end"] + a["exit_v"] * gap; s1 = b["start"]
         elif b["fmax"] <= a["fmin"]:
@@ -100,6 +116,14 @@ def link(keys, meta, p):
                 add_aff(i, j, p.temporal_weight); n_temporal += 1
             elif (a["cam"] == b["cam"] and gap <= p.reacq_gap and np.hypot(*(e0 - s1)) <= p.reacq_thr):
                 add_aff(i, j, p.temporal_weight); n_temporal += 1
+        # APPEARANCE fusion: cross-camera, not geometrically forbidden, embeddings agree.
+        # Bridges disjoint hand-offs geometry can't see; the must-not-link constraint still
+        # blocks pairs that are co-present-but-far, so similar-looking distinct people stay apart.
+        if (app_w > 0 and not forbidden and a["cam"] != b["cam"]
+                and a["emb"] is not None and b["emb"] is not None):
+            cos = float(a["emb"] @ b["emb"])
+            if cos >= app_thr:
+                add_aff(i, j, app_w * (cos - app_thr) / (1.0 - app_thr)); n_app += 1
     n_cannot = sum(len(s) for s in cforbid) // 2
 
     # constrained agglomerative clustering on the sparse cluster graph (rep = surviving node)
@@ -133,7 +157,7 @@ def link(keys, meta, p):
         for m in members[cu]:
             tl_gid[keys[m]] = gid
     return tl_gid, {"n_ids": len(active), "n_spatial": n_spatial, "n_temporal": n_temporal,
-                    "n_conflict": n_conflict, "n_cannot": n_cannot}
+                    "n_conflict": n_conflict, "n_cannot": n_cannot, "n_app": n_app}
 
 
 def main():
@@ -161,6 +185,11 @@ def main():
     ap.add_argument("--min-merge", type=float, default=1.0,
                     help="stop merging when the best allowed cluster-pair affinity falls below this")
     ap.add_argument("--vel-frames", type=int, default=8)
+    ap.add_argument("--app-weight", type=float, default=0.0,
+                    help="ReID appearance fusion: affinity weight for cross-camera tracklet pairs "
+                         "whose mean embeddings agree (0 = geometry-only).")
+    ap.add_argument("--app-thr", type=float, default=0.85,
+                    help="min cosine (mean ReID emb) for an appearance edge")
     ap.add_argument("--pred-cam-offset", type=int, default=0)
     ap.add_argument("--sources", default=None,
                     help="source list used for the export; maps export cam_N -> real calibration "
