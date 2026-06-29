@@ -1,6 +1,6 @@
 property:
   gpu-id: 0
-  onnx-file: ../../output/reid_mtmc_swin/swin_tiny_mmp_reid.onnx
+  onnx-file: ../../models/reid/swin_tiny_mtmc_reid.onnx
   net-scale-factor: 0.01735207
   offsets: 123.675;116.28;103.53
   model-color-format: 0

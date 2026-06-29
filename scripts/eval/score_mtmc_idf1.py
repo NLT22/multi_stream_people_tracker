@@ -246,6 +246,14 @@ def main():
     ap.add_argument("--pred-cam-offset", type=int, default=0,
                     help="Add this value to pipeline cam IDs to map to GT cam IDs "
                          "(e.g. -16 when W022 cams appear as 16-19 in a 20-cam run)")
+    ap.add_argument("--max-frame", type=int, default=0,
+                    help="If >0, score only frames <= this (fair eval of a trimmed "
+                         "pipeline run — avoids counting uncovered GT frames as misses).")
+    ap.add_argument("--no-rescale", action="store_true",
+                    help="Skip the max-coord rescale heuristic. Use when pred is already "
+                         "in GT (1920x1080) source space — e.g. pretiler/--no-tiler export. "
+                         "The heuristic spuriously scales because pred people rarely reach "
+                         "the frame edges, biasing the inferred scale upward.")
     args = ap.parse_args()
 
     # auto-discover cam ids from prediction CSVs if not specified
@@ -272,7 +280,15 @@ def main():
         print(f"  cam {cid}: {len(df)} pred boxes, {df['global_id'].nunique()} unique gids, "
               f"{df['frame'].nunique()} frames")
 
-    all_pred = rescale_preds(all_pred, all_gt)
+    if args.no_rescale:
+        print("[score_mtmc] --no-rescale: pred assumed already in GT source space")
+    else:
+        all_pred = rescale_preds(all_pred, all_gt)
+
+    if args.max_frame > 0:
+        all_gt = {c: d[d["frame"] <= args.max_frame] for c, d in all_gt.items()}
+        all_pred = {c: d[d["frame"] <= args.max_frame] for c, d in all_pred.items()}
+        print(f"[score_mtmc] frame cap <= {args.max_frame} (fair trimmed-run eval)")
 
     print("[score_mtmc] computing Global IDF1 ...")
     r = global_idf1(all_gt, all_pred, iou_threshold=args.iou_thr)

@@ -11,7 +11,7 @@ source_configs:
 
 detection:
   enabled: true
-  config_file: configs/models/nvinfer_yolov11_mtmc.yml
+  config_file: configs/models/nvinfer_yolov11_mtmc_1280.yml
   reid_sgie_config: configs/models/nvinfer_reid_swin_sgie_mtmc.yml
 
 tracker:

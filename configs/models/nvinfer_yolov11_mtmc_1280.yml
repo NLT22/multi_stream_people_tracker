@@ -1,6 +1,6 @@
 # =============================================================================
 # nvinfer Config — YOLO11n trained on MTMC_Tracking_2026 (1 class: person)
-# Full 20-warehouse model (retrained 2026-06-27, imgsz 960, min-h 8 small-box set).
+# Full 20-warehouse model (retrained 2026-06-27, imgsz 1280, min-h 8 small-box set).
 # Output tensor: [batch, 5, 8400]  (4 bbox + 1 class score, pre-NMS)
 # MTMC-specific, kept separate from the MMP detector: runs at 960 (small/dense
 # warehouse people) and topk 100 (~55 people/cam, far above MMP's 20).
@@ -9,8 +9,8 @@
 property:
   gpu-id: 0
 
-  onnx-file: ../../models/yolov11/yolo11n_mtmc.onnx
-  model-engine-file: ../../models/yolov11/yolo11n_mtmc.onnx_b4_gpu0_fp16.engine
+  onnx-file: ../../models/yolov11/yolo11n_mtmc_1280.onnx
+  model-engine-file: ../../models/yolov11/yolo11n_mtmc_1280.onnx_b4_gpu0_fp16.engine
 
   labelfile-path: ../labels/people_only_labels.txt
 
@@ -18,7 +18,7 @@ property:
   model-color-format: 0
   maintain-aspect-ratio: 1
   symmetric-padding: 1
-  infer-dims: 3;960;960
+  infer-dims: 3;1280;1280
 
   batch-size: 4
   network-mode: 2
