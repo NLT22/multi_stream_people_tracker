@@ -5,9 +5,4 @@ config-height=1080
 osd-mode=2
 display-font-size=14
 
-[line-crossing-stream-1]
-enable=1
-line-crossing-Line-1=859;357;868;499;746;422;1006;424
-class-id=0
-extended=0
-mode=loose
+# no enabled rules on stream-1

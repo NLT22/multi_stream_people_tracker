@@ -5,8 +5,4 @@ config-height=1080
 osd-mode=2
 display-font-size=14
 
-[overcrowding-stream-0]
-enable=1
-roi-OC-1=859;102;594;1037;1422;1063;1038;98
-object-threshold=2
-class-id=0
+# no enabled rules on stream-0
