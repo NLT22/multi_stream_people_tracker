@@ -1,6 +1,13 @@
-# CHANGE.md — current problem: we cannot improve FPS without losing IDF1
+# CHANGE.md — FPS vs IDF1 trade-off, and the 1080p question (RESOLVED)
 
-The pipeline is stuck at **~11 FPS/cam** (20 cams, 640×360, mean IDF1 ~0.81). Every lever tried
+> **Resolved 2026-06-24:** the open question below — *"can 20 cams hit ≥10 FPS at real 1080p?"* —
+> was measured on `MTMC_Tracking_2026` (1920×1080, 20 cams) and **the target was met: ~11.9 FPS/cam
+> at 1080p, faster than the 640×360 MMP run** (decode is not the dominant term it was feared to be).
+> VRAM/FPS is driven by `maxTargetsPerStream`, not resolution (full table in CLAUDE.md / production_todo §0).
+> The lever analysis below is kept because it still explains *why* per-object GPU work — not
+> resolution — sets the accuracy-preserving operating point.
+
+The pipeline runs at **~11 FPS/cam** (20 cams, 640×360, mean IDF1 ~0.81). Every FPS lever tried
 either does nothing or trades away accuracy:
 
 | Lever | FPS | IDF1 |
@@ -25,8 +32,9 @@ so our mux experiments never paid the 1080p decode bill). At native 1080p source
 20 streams** (resolution-proportional) is a new heavy term on top of the fixed per-object work, so
 **20-cam @ 10 FPS is very likely unreachable at 1080p on the single RTX 5060 Ti — and is unmeasured.**
 
-**Next steps:**
-1. Measure at real resolution — run on **MTMC_Tracking_2026** (1920×1080, ~20 cams) for the true FPS ceiling.
-2. If unreachable: the only real levers left are structural — move SGIE ReID out of the per-frame
-   graph (sidecar prototype hit ~17.8 FPS), downscale decoder input, a lighter detector, or scale
-   across more GPUs. (A Nsight Systems trace would pin which GPU stage dominates.)
+**Outcome:**
+1. ✅ Measured at real resolution on **MTMC_Tracking_2026** (1920×1080, 20 cams): **~11.9 FPS/cam,
+   target met** — the feared 1080p-decode bill did not dominate.
+2. Remaining structural levers (only if a future deployment needs more headroom): move SGIE ReID out
+   of the per-frame graph (sidecar prototype hit ~17.8 FPS), downscale decoder input, a lighter
+   detector, or scale across more GPUs. A Nsight Systems trace would pin the dominant GPU stage.

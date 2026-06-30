@@ -70,7 +70,7 @@ mosaic + per-cell tiles playing in-browser. The pipeline gained a
 pipeline `--no-sync` (see src changes) or it stalls at 0 fps.
 
 Views are deep-linkable via hash: `#dashboard`, `#live`, `#zone`, `#roi`,
-`#analytics`, `#heatmap`.
+`#analytics`, `#heatmap`, `#ask` (the natural-language Q&A view — see `src/rag/`).
 
 ---
 

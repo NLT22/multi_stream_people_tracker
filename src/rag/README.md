@@ -54,7 +54,9 @@ PYTHONPATH=. venv/bin/python3 -m pytest tests/test_rag.py -v   # 12 tests, no LL
 ```
 
 ## Status / not yet built
-- Phase D (webUI "Ask" view) — frontend; the FastAPI endpoints are the integration seam.
+- Phase D (webUI "Ask" view) — **done** (`webui/src/components/rag/AskView.tsx`, 7th nav entry):
+  NL chat + image attach + Person Search + Top Zones, calling the FastAPI endpoints.
+- Text-to-SQL fallback for open-ended questions the canned analytics functions don't cover — TODO.
 - Image search reliability is lowest in **retail** (env IDF1 0.661).
 - For richer "which shelf" answers, define finer ROIs per environment in the ROI editor;
   the resolver picks them up automatically.
