@@ -25,6 +25,10 @@ COPY src/           src/
 COPY models/        models/
 COPY scripts/       scripts/
 
-# Default entrypoint: run the full ReID pipeline.
-# Docker Compose overrides the sources list via command:.
-CMD ["python3", "-m", "src.main", "--sources", "configs/sources/video_files_docker.txt"]
+# Default entrypoint: run the production ReID pipeline headless (no display/sync in
+# a container). Uses the recommended low-VRAM reid0 preset. Docker Compose overrides
+# the config/sources via command:.
+CMD ["python3", "-m", "src.main", \
+     "--config", "configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml", \
+     "--sources", "configs/sources/video_files_docker.txt", \
+     "--no-display", "--no-sync"]

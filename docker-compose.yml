@@ -37,7 +37,7 @@ services:
       - -m
       - src.main
       - --config
-      - configs/pipelines/pipeline_mmp_nvdcf_online_sgie.yaml
+      - configs/pipelines/pipeline_mmp_nvdcf_online_sgie_reid0.yaml
       - --sources
       - configs/sources/video_files_docker.txt
       - --no-display
