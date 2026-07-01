@@ -83,6 +83,67 @@ def _merge_intervals(frames: list[int], fps: float, epoch: float,
     return [(epoch + a / fps, epoch + b / fps, a, b, b - a + 1) for a, b in out]
 
 
+def _mean_unit(gid_vecs: dict) -> dict:
+    """dict[gid -> list of embeddings] -> dict[gid -> mean L2-normalised vector]."""
+    out = {}
+    for gid, vecs in gid_vecs.items():
+        m = np.mean(vecs, axis=0)
+        n = np.linalg.norm(m)
+        out[int(gid)] = (m / n if n > 0 else m).astype(np.float32)
+    return out
+
+
+DET_COLS = ["run_id", "cam_id", "frame_no", "ts", "global_id", "local_track_id",
+            "foot_x", "foot_y", "world_x", "world_y", "zone", "left", "top", "width", "height"]
+
+
+def _write_store(conn, run_id, scene, env, det, fps, epoch, epoch_iso, bucket_s,
+                 gap_frames, n_cams, n_zones, gid_vec_map) -> dict:
+    """Write detections + derived tables (presence/dwell/zone_timeseries/embeddings)
+    for one run. Shared by the MMP and MTMC ingest paths — they differ only in how
+    `det` (the detections DataFrame) and `gid_vec_map` are built."""
+    conn.executescript(SCHEMA)
+    for t in ("runs", "detections", "presence", "dwell", "zone_timeseries", "gid_embeddings"):
+        conn.execute(f"DELETE FROM {t} WHERE run_id=?", (run_id,))
+    conn.executemany("INSERT INTO detections VALUES (" + ",".join(["?"] * 15) + ")",
+                     list(det.itertuples(index=False, name=None)))
+
+    # presence + dwell
+    pres_rows, dwell_acc = [], {}
+    if len(det):
+        for (gid, cam, zone), g in det.groupby(["global_id", "cam_id", "zone"]):
+            for t0, t1, f0, f1, nf in _merge_intervals(g["frame_no"].tolist(), fps, epoch, gap_frames):
+                pres_rows.append((run_id, int(gid), int(cam), zone, t0, t1, int(f0), int(f1),
+                                  int(nf), round(t1 - t0, 3)))
+                k = (int(gid), zone)
+                s, v = dwell_acc.get(k, (0.0, 0))
+                dwell_acc[k] = (s + (t1 - t0), v + 1)
+    conn.executemany("INSERT INTO presence VALUES (" + ",".join(["?"] * 10) + ")", pres_rows)
+    conn.executemany("INSERT INTO dwell VALUES (?,?,?,?,?)",
+                     [(run_id, gid, z, round(s, 3), v) for (gid, z), (s, v) in dwell_acc.items()])
+
+    # zone timeseries (occupancy seconds + unique-gid footfall per bucket)
+    zts_rows = []
+    if len(det):
+        d2 = det.copy()
+        d2["bucket"] = ((d2["frame_no"] / fps) // bucket_s).astype(int)
+        for (zone, b), g in d2.groupby(["zone", "bucket"]):
+            zts_rows.append((run_id, zone, int(b), epoch + b * bucket_s,
+                             round(len(g) / fps, 3), int(g["global_id"].nunique())))
+    conn.executemany("INSERT INTO zone_timeseries VALUES (?,?,?,?,?,?)", zts_rows)
+
+    # per-gid embeddings
+    for gid, vec in gid_vec_map.items():
+        conn.execute("INSERT INTO gid_embeddings VALUES (?,?,?,?)",
+                     (run_id, int(gid), int(vec.shape[0]), vec.tobytes()))
+
+    n_gids = int(det["global_id"].nunique()) if len(det) else 0
+    conn.execute("DELETE FROM runs WHERE run_id=?", (run_id,))
+    conn.execute("INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?)",
+                 (run_id, scene, env, fps, epoch_iso, n_cams, len(det), n_gids, bucket_s))
+    return {"n_gids": n_gids, "n_embeddings": len(gid_vec_map), "zones": n_zones}
+
+
 def ingest_scene(export_dir: str | Path, scene: str, db_path: str | Path,
                  env: str | None = None, fps: float = 15.0,
                  epoch_iso: str = "2026-06-26T09:00:00", bucket_s: float = 30.0,
@@ -136,73 +197,93 @@ def ingest_scene(export_dir: str | Path, scene: str, db_path: str | Path,
                          zones.resolve(cam, fx, fy),
                          float(r.left), float(r.top), float(r.width), float(r.height)))
 
-    conn = sqlite3.connect(str(db_path))
-    conn.executescript(SCHEMA)
-    for t in ("runs", "detections", "presence", "dwell", "zone_timeseries", "gid_embeddings"):
-        conn.execute(f"DELETE FROM {t} WHERE run_id=?", (run_id,))
-    conn.executemany("INSERT INTO detections VALUES (" + ",".join(["?"] * 15) + ")", rows)
+    det = pd.DataFrame(rows, columns=DET_COLS)
 
-    det = pd.DataFrame(rows, columns=["run_id", "cam_id", "frame_no", "ts", "global_id",
-                                      "local_track_id", "foot_x", "foot_y", "world_x", "world_y",
-                                      "zone", "left", "top", "width", "height"])
-    # presence + dwell
-    pres_rows, dwell_acc = [], {}
-    if len(det):
-        for (gid, cam, zone), g in det.groupby(["global_id", "cam_id", "zone"]):
-            for t0, t1, f0, f1, nf in _merge_intervals(g["frame_no"].tolist(), fps, epoch, gap_frames):
-                pres_rows.append((run_id, int(gid), int(cam), zone, t0, t1, int(f0), int(f1),
-                                  int(nf), round(t1 - t0, 3)))
-                k = (int(gid), zone)
-                s, v = dwell_acc.get(k, (0.0, 0))
-                dwell_acc[k] = (s + (t1 - t0), v + 1)
-    conn.executemany("INSERT INTO presence VALUES (" + ",".join(["?"] * 10) + ")", pres_rows)
-    conn.executemany("INSERT INTO dwell VALUES (?,?,?,?,?)",
-                     [(run_id, gid, z, round(s, 3), v) for (gid, z), (s, v) in dwell_acc.items()])
-
-    # zone timeseries (occupancy seconds + unique-gid footfall per bucket)
-    zts_rows = []
-    if len(det):
-        det = det.copy()
-        det["bucket"] = ((det["frame_no"] / fps) // bucket_s).astype(int)
-        for (zone, b), g in det.groupby(["zone", "bucket"]):
-            zts_rows.append((run_id, zone, int(b), epoch + b * bucket_s,
-                             round(len(g) / fps, 3), int(g["global_id"].nunique())))
-    conn.executemany("INSERT INTO zone_timeseries VALUES (?,?,?,?,?,?)", zts_rows)
-
-    # per-gid mean embedding (from tracklet embeddings, grouped by gid)
-    n_emb = 0
+    # per-gid mean embedding (from tracklet embeddings, remapped to buffered gid)
+    gid_vecs: dict = {}
     tnpz, tcsv = export_dir / "tracklet_embeddings.npz", export_dir / "tracklets.csv"
-    if tnpz.exists() and tcsv.exists():
+    if tnpz.exists() and tcsv.exists() and len(det):
         z = np.load(tnpz)
         tid2vec = dict(zip(z["tracklet_ids"].astype(int), z["embeddings"].astype(np.float32)))
         tk = pd.read_csv(tcsv)
         # tracklets carry RAW global_id; remap to buffered gid via majority over its detections
-        tl2buf: dict = {}
         for r in tk.itertuples():
             key_gids = det[(det.cam_id == r.cam_id) & (det.local_track_id == r.local_track_id)]["global_id"]
-            if len(key_gids):
-                tl2buf[int(r.tracklet_id)] = int(key_gids.mode().iloc[0])
-        gid_vecs: dict = {}
-        for tid, gid in tl2buf.items():
-            if tid in tid2vec:
-                gid_vecs.setdefault(gid, []).append(tid2vec[tid])
-        for gid, vecs in gid_vecs.items():
-            m = np.mean(vecs, axis=0)
-            n = np.linalg.norm(m)
-            m = (m / n) if n > 0 else m
-            conn.execute("INSERT INTO gid_embeddings VALUES (?,?,?,?)",
-                         (run_id, int(gid), int(m.shape[0]), m.astype(np.float32).tobytes()))
-            n_emb += 1
+            if len(key_gids) and int(r.tracklet_id) in tid2vec:
+                gid_vecs.setdefault(int(key_gids.mode().iloc[0]), []).append(tid2vec[int(r.tracklet_id)])
 
-    n_gids = int(det["global_id"].nunique()) if len(det) else 0
-    conn.execute("DELETE FROM runs WHERE run_id=?", (run_id,))
-    conn.execute("INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?)",
-                 (run_id, scene, env, fps, epoch_iso, len(source_ids), len(rows), n_gids, bucket_s))
+    conn = sqlite3.connect(str(db_path))
+    info = _write_store(conn, run_id, scene, env, det, fps, epoch, epoch_iso, bucket_s,
+                        gap_frames, len(source_ids), len(zones.zone_names()), _mean_unit(gid_vecs))
     conn.commit()
     conn.close()
     return {"run_id": run_id, "env": env, "n_cams": len(source_ids), "n_dets": len(rows),
-            "n_gids": n_gids, "n_embeddings": n_emb, "zones": len(zones.zone_names()),
-            "db": str(db_path)}
+            **info, "db": str(db_path)}
+
+
+def ingest_mtmc_scene(export_dir: str | Path, scene: str, db_path: str | Path,
+                      calib_json: str | Path, analytics_path: str | Path,
+                      fps: float = 30.0, epoch_iso: str = "2026-06-26T09:00:00",
+                      bucket_s: float = 30.0, gap_s: float = 2.0,
+                      run_id: str | None = None, env: str | None = None) -> dict:
+    """RAG ingest for the MTMC warehouse path. Differs from MMP: identity is the
+    global-linker `_assign_global.csv` (cross-camera constrained clustering), world XY
+    comes from the metric `calibration.json` (WarehouseCalibration.foot_to_world), and
+    embeddings are the per-detection `det_emb_chunk_*.npz`. Predictions are 1920x1080."""
+    export_dir = Path(export_dir)
+    run_id = run_id or scene
+    env = env or scene.lower()
+    epoch = datetime.fromisoformat(epoch_iso).timestamp()
+    gap_frames = int(gap_s * fps)
+
+    from src.mtmc.mtmc_calib import WarehouseCalibration
+    from src.rag.zones import ZoneRegistry
+    calib = WarehouseCalibration(calib_json)
+    zones = (ZoneRegistry.from_analytics(analytics_path)
+             if Path(analytics_path).exists() else ZoneRegistry())
+
+    # linked global-id map (cam, frame, ltid) -> gid, from the global constrained linker
+    a = pd.read_csv(export_dir / "_assign_global.csv")
+    gid_map = {(int(r.cam_id), int(r.frame_no), int(r.local_track_id)): int(r.global_id)
+               for r in a.itertuples()}
+
+    pred_files = sorted(export_dir.glob("cam_*_predictions.csv"))
+    source_ids = [int(p.stem.split("_")[1]) for p in pred_files]
+    rows = []
+    for p, cam in zip(pred_files, source_ids):
+        df = pd.read_csv(p)
+        for r in df.itertuples():
+            gid = gid_map.get((cam, int(r.frame_no_cam), int(r.local_track_id)), -1)
+            if gid < 0:
+                continue
+            fx, fy = float(r.left) + float(r.width) / 2.0, float(r.top) + float(r.height)
+            wx = wy = None
+            fw = calib.foot_to_world(cam, fx, fy) if calib.has(cam) else None
+            if fw is not None:
+                wx, wy = fw
+            rows.append((run_id, cam, int(r.frame_no_cam), epoch + int(r.frame_no_cam) / fps,
+                         gid, int(r.local_track_id), fx, fy, wx, wy,
+                         zones.resolve(cam, fx, fy, pred_w=1920.0, pred_h=1080.0),
+                         float(r.left), float(r.top), float(r.width), float(r.height)))
+    det = pd.DataFrame(rows, columns=DET_COLS)
+
+    # per-gid mean embedding from the per-detection chunks
+    gid_vecs: dict = {}
+    for f in sorted(export_dir.glob("det_emb_chunk_*.npz")):
+        z = np.load(f)
+        for cam_id, frame_no, ltid, emb in zip(z["cam_id"], z["frame_no"],
+                                                z["local_track_id"], z["embeddings"]):
+            gid = gid_map.get((int(cam_id), int(frame_no), int(ltid)), -1)
+            if gid >= 0:
+                gid_vecs.setdefault(gid, []).append(emb)
+
+    conn = sqlite3.connect(str(db_path))
+    info = _write_store(conn, run_id, scene, env, det, fps, epoch, epoch_iso, bucket_s,
+                        gap_frames, len(source_ids), len(zones.zone_names()), _mean_unit(gid_vecs))
+    conn.commit()
+    conn.close()
+    return {"run_id": run_id, "env": env, "n_cams": len(source_ids), "n_dets": len(rows),
+            **info, "db": str(db_path)}
 
 
 def main():
@@ -214,11 +295,19 @@ def main():
     ap.add_argument("--fps", type=float, default=15.0)
     ap.add_argument("--epoch-iso", default="2026-06-26T09:00:00")
     ap.add_argument("--bucket-s", type=float, default=30.0)
+    ap.add_argument("--mtmc", action="store_true", help="MTMC warehouse path (metric calib + global linker)")
+    ap.add_argument("--calib", help="MTMC calibration.json (required with --mtmc)")
+    ap.add_argument("--analytics", help="nvdsanalytics zones .txt (defaults per env / w022)")
     args = ap.parse_args()
     Path(args.db).parent.mkdir(parents=True, exist_ok=True)
-    print(json.dumps(ingest_scene(args.export_dir, args.scene, args.db,
-                                  fps=args.fps, epoch_iso=args.epoch_iso,
-                                  bucket_s=args.bucket_s), indent=2))
+    if args.mtmc:
+        ana = args.analytics or "configs/analytics/nvdsanalytics_w022.txt"
+        out = ingest_mtmc_scene(args.export_dir, args.scene, args.db, args.calib, ana,
+                                fps=args.fps, epoch_iso=args.epoch_iso, bucket_s=args.bucket_s)
+    else:
+        out = ingest_scene(args.export_dir, args.scene, args.db,
+                           fps=args.fps, epoch_iso=args.epoch_iso, bucket_s=args.bucket_s)
+    print(json.dumps(out, indent=2))
 
 
 if __name__ == "__main__":

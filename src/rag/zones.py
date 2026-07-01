@@ -64,7 +64,7 @@ class ZoneRegistry:
             if line.startswith("[") and not line.startswith("[roi") and not line.startswith("[over"):
                 cur_cam = None
                 continue
-            m = re.match(r"roi-([A-Za-z0-9_]+)\s*=\s*(.+)", line)
+            m = re.match(r"roi-([A-Za-z0-9_-]+)\s*=\s*(.+)", line)
             if m and cur_cam is not None:
                 name = m.group(1)
                 nums = [float(v) for v in re.split(r"[;,]", m.group(2).strip()) if v.strip()]
