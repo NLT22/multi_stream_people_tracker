@@ -66,7 +66,9 @@ def person_timeline(gid: int, run_id: str | None = None,
 def person_trajectory(gid: int, run_id: str | None = None, step: int = 1,
                       t_start: str | None = None, t_end: str | None = None):
     s = _store(run_id); out = s.person_trajectory_bev(gid, _range(t_start, t_end), step); s.close()
-    return {"global_id": gid, "points": out}
+    # map to the {t, x, y} BevPoint shape the web UI expects (rows carry world_x/world_y)
+    pts = [{"t": p["ts"], "x": p["world_x"], "y": p["world_y"]} for p in out]
+    return {"global_id": gid, "points": pts}
 
 
 @app.get("/person/{gid}/dwell")
