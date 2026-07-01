@@ -81,13 +81,21 @@ class RagStore:
 
     # ---- Route A: aggregate ----
     def top_zones(self, time_range=None, metric: str = "footfall", k: int = 5) -> list[dict]:
-        """Ranked zones by footfall (unique people) or occupancy (person-seconds)."""
-        agg = "SUM(footfall)" if metric == "footfall" else "ROUND(SUM(occupancy_s),2)"
-        w, p = self._tr("t_bucket", time_range)
-        rows = self.conn.execute(
-            f"SELECT zone, {agg} AS value FROM zone_timeseries WHERE run_id=?" + w +
-            " GROUP BY zone ORDER BY value DESC LIMIT ?",
-            [self.run_id] + p + [k]).fetchall()
+        """Ranked zones by footfall (distinct people through the zone) or occupancy
+        (person-seconds). Footfall counts each person once — NOT once per time bucket
+        (summing the bucketed footfall over-counts anyone present in many buckets)."""
+        if metric == "footfall":
+            w, p = self._tr("ts", time_range)
+            rows = self.conn.execute(
+                "SELECT zone, COUNT(DISTINCT global_id) AS value FROM detections WHERE run_id=?" + w +
+                " GROUP BY zone ORDER BY value DESC LIMIT ?",
+                [self.run_id] + p + [k]).fetchall()
+        else:
+            w, p = self._tr("t_bucket", time_range)
+            rows = self.conn.execute(
+                "SELECT zone, ROUND(SUM(occupancy_s),2) AS value FROM zone_timeseries WHERE run_id=?" + w +
+                " GROUP BY zone ORDER BY value DESC LIMIT ?",
+                [self.run_id] + p + [k]).fetchall()
         return [{"zone": r["zone"], "metric": metric, "value": r["value"]} for r in rows]
 
     def zone_occupancy(self, zone: str, time_range=None) -> list[dict]:
