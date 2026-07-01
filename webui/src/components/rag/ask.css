@@ -68,6 +68,9 @@
 
 /* ---- side panels ---- */
 .ask__side { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+/* keep each panel at its natural height so the rail scrolls instead of the panel
+   shrinking below its content (which spilled the appearances past the border) */
+.ask__side > .c-panel { flex: none; }
 .ask__drop {
   display: block; text-align: center; padding: 16px; border: 1px dashed var(--line);
   border-radius: 8px; cursor: pointer; color: var(--ink); transition: 0.15s;
