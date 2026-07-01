@@ -42,6 +42,7 @@ Cython
 # Offline tracking/evaluation
 motmetrics>=1.4
 trackeval>=0.1
+scikit-learn>=1.3    # AgglomerativeClustering in src/eval/offline_anchor_faithful.py (live_buffered)
 pytest>=8.0
 
 # Natural-language Q&A / RAG layer (src/rag/, production_todo §5)
