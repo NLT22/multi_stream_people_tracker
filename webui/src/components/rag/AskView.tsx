@@ -23,6 +23,15 @@ const hhmm = (t: number) => new Date(t * 1000).toLocaleTimeString([], {
   hour: '2-digit', minute: '2-digit', second: '2-digit',
 })
 
+// render markdown **bold** as <strong> and strip `inline code` backticks (React
+// nodes, no innerHTML); newlines/lists kept by .ask__msg white-space: pre-wrap
+const fmt = (text: string) =>
+  text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((seg, i) => {
+    if (seg.startsWith('**') && seg.endsWith('**')) return <strong key={i}>{seg.slice(2, -2)}</strong>
+    if (seg.startsWith('`') && seg.endsWith('`')) return seg.slice(1, -1)
+    return seg
+  })
+
 interface Turn { role: 'user' | 'assistant'; text: string; tools?: AskResult['tool_calls']; pending?: boolean }
 
 export function AskView({ nav: _nav, go: _go }: { nav: Nav; go: (n: Partial<Nav>) => void }) {
@@ -78,7 +87,7 @@ export function AskView({ nav: _nav, go: _go }: { nav: Nav; go: (n: Partial<Nav>
               <div key={i} className={`ask__turn ask__turn--${t.role}`}>
                 <span className="ask__who eyebrow">{t.role === 'user' ? 'YOU' : 'SENTINEL'}</span>
                 {t.pending ? <span className="ask__dots mono">analysing…</span>
-                  : <div className="ask__msg">{t.text}</div>}
+                  : <div className="ask__msg">{fmt(t.text)}</div>}
                 {t.tools && t.tools.length > 0 && <ToolTrace calls={t.tools} />}
               </div>
             ))}
