@@ -1,4 +1,4 @@
-"""RAG Phase C — tool-using LLM agent (Anthropic Messages API tool-use).
+"""RAG Phase C — tool-using LLM agent (Anthropic or OpenAI tool-use).
 
 The LLM is a *router*: it picks one of the deterministic query tools (Phase B),
 fills params (resolving "10am today" -> ISO range, an uploaded crop -> global_id
@@ -10,18 +10,25 @@ Usage:
   ans = RagAgent("output/rag/rag.sqlite").ask("which area was busiest?")
   ans = RagAgent(db).ask("when did this person appear?", image_path="crop.jpg")
 
-Requires ANTHROPIC_API_KEY. The TOOLS schema + dispatch are pure-Python and
-unit-testable without the API (see tests).
+Provider is chosen by model name: `claude-*` -> Anthropic (needs ANTHROPIC_API_KEY),
+`gpt-*`/`o*` -> OpenAI (needs OPENAI_API_KEY). Default model is `RAG_MODEL` env
+(fallback claude-sonnet-4-6), e.g. `RAG_MODEL=gpt-4o`. The TOOLS schema + dispatch
+are pure-Python and unit-testable without any API (see tests).
 """
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
 from src.rag.queries import RagStore
 
-MODEL = "claude-sonnet-4-6"
+MODEL = os.environ.get("RAG_MODEL", "claude-sonnet-4-6")
+
+
+def _is_openai(model: str) -> bool:
+    return model.startswith(("gpt", "o1", "o3", "o4", "chatgpt"))
 
 TOOLS = [
     {"name": "top_zones",
@@ -106,10 +113,17 @@ class RagAgent:
                 "Resolve relative times to ISO datetimes within the run's epoch.")
 
     def ask(self, question: str, image_path: str | None = None, max_steps: int = 6) -> dict:
-        """Run the tool-use loop and return {'answer': str, 'tool_calls': [...]}"""
-        import anthropic
+        """Run the tool-use loop and return {'answer': str, 'tool_calls': [...]}.
+
+        Routes to OpenAI (gpt-*/o*) or Anthropic (claude-*) based on self.model."""
         if image_path:
             self.image_path = image_path
+        if _is_openai(self.model):
+            return self._ask_openai(question, max_steps)
+        return self._ask_anthropic(question, max_steps)
+
+    def _ask_anthropic(self, question: str, max_steps: int) -> dict:
+        import anthropic
         client = anthropic.Anthropic()
         messages = [{"role": "user", "content": question}]
         calls = []
@@ -128,6 +142,32 @@ class RagAgent:
                     results.append({"type": "tool_result", "tool_use_id": b.id,
                                     "content": json.dumps(out, default=str)})
             messages.append({"role": "user", "content": results})
+        return {"answer": "(stopped: max tool steps reached)", "tool_calls": calls}
+
+    def _ask_openai(self, question: str, max_steps: int) -> dict:
+        from openai import OpenAI
+        client = OpenAI()
+        # Anthropic input_schema -> OpenAI function parameters (same JSON schema).
+        tools = [{"type": "function", "function": {
+            "name": t["name"], "description": t["description"],
+            "parameters": t.get("input_schema", {"type": "object", "properties": {}})}}
+            for t in TOOLS]
+        messages = [{"role": "system", "content": self._system()},
+                    {"role": "user", "content": question}]
+        calls = []
+        for _ in range(max_steps):
+            resp = client.chat.completions.create(model=self.model, messages=messages,
+                                                  tools=tools, max_tokens=1024)
+            msg = resp.choices[0].message
+            if not msg.tool_calls:
+                return {"answer": msg.content or "", "tool_calls": calls}
+            messages.append(msg.model_dump(exclude_none=True))
+            for tc in msg.tool_calls:
+                args = json.loads(tc.function.arguments or "{}")
+                out = self.dispatch(tc.function.name, args)
+                calls.append({"tool": tc.function.name, "args": args, "result_preview": str(out)[:200]})
+                messages.append({"role": "tool", "tool_call_id": tc.id,
+                                 "content": json.dumps(out, default=str)})
         return {"answer": "(stopped: max tool steps reached)", "tool_calls": calls}
 
     def close(self):

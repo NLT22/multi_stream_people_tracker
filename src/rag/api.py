@@ -116,14 +116,16 @@ async def ask(question: str = Form(...), run_id: str | None = Form(None),
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             f.write(data); tmp = f.name
     try:
-        agent = RagAgent(DB, run_id)
+        agent = RagAgent(DB, run_id)  # model from RAG_MODEL env (default claude-sonnet-4-6)
         out = agent.ask(question, image_path=tmp)
     except Exception as e:
         msg = str(e)
-        if "ANTHROPIC_API_KEY" in msg or "api_key" in msg.lower():
-            return {"answer": "The language model is not configured on this server "
-                              "(set ANTHROPIC_API_KEY). The analytics and person-search "
-                              "endpoints still work without it.",
+        if "API_KEY" in msg.upper() or "api_key" in msg.lower():
+            need = "OPENAI_API_KEY" if agent.model.startswith(("gpt", "o1", "o3", "o4", "chatgpt")) \
+                else "ANTHROPIC_API_KEY"
+            return {"answer": f"The language model is not configured on this server (set {need}, "
+                              f"model={agent.model}). The analytics and person-search endpoints "
+                              "still work without it.",
                     "tool_calls": [], "llm_disabled": True}
         raise HTTPException(500, f"agent error: {msg}")
     finally:
