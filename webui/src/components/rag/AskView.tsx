@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Nav } from '../../App'
 import { Panel } from '../common'
-import { getActiveDatasetKey } from '../../data/zones'
 import {
-  ask, searchImage, topZones, personTimeline, personTrajectory, personDwell,
+  ask, searchImage, topZones, personTimeline, personTrajectory, personDwell, getRunInfo,
   type AskResult, type PersonCandidate, type ZoneRank,
   type TimelineInterval, type BevPoint,
 } from '../../api/rag'
@@ -125,6 +124,11 @@ function PersonSearch() {
   const [bev, setBev] = useState<BevPoint[]>([])
   const [dwell, setDwell] = useState<{ zone: string; seconds: number; visits: number }[]>([])
   const [err, setErr] = useState<string | null>(null)
+  const [env, setEnv] = useState('')
+  // decide the BEV floor map from the served run (not the UI toggle) so it works
+  // whenever the backend is a warehouse store
+  useEffect(() => { getRunInfo().then((r) => setEnv(r.env)).catch(() => {}) }, [])
+  const map = env.startsWith('warehouse') ? MTMC_BEV : undefined
 
   const onFile = async (f: File | null) => {
     if (!f) return
@@ -143,7 +147,9 @@ function PersonSearch() {
 
   return (
     <Panel title="Person Search" right={<span className="eyebrow">image → identity</span>}>
-      <label className="ask__drop">
+      <label className="ask__drop"
+        onDragOver={(e) => { e.preventDefault() }}
+        onDrop={(e) => { e.preventDefault(); onFile(e.dataTransfer.files?.[0] ?? null) }}>
         <span className="mono">Drop / choose a person crop</span>
         <input type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
       </label>
@@ -171,7 +177,7 @@ function PersonSearch() {
               <span className="mono">{d.seconds.toFixed(0)}s</span>
             </div>
           ))}
-          {bev.length > 1 && <BevPath points={bev} map={bevMapFor()} />}
+          {bev.length > 1 && <BevPath points={bev} map={map} />}
           {timeline.length > 0 && (
             <div className="ask__timeline">
               <div className="eyebrow">appearances</div>
@@ -197,9 +203,6 @@ const MTMC_BEV: BevMap = {
   url: '/maps/warehouse_022.png', sf: 21.586118551949482,
   tx: 102.84569562990934, ty: 100.24632708444943, w: 1920, h: 1080,
 }
-const bevMapFor = (): BevMap | undefined =>
-  getActiveDatasetKey() === 'mtmc' ? MTMC_BEV : undefined
-
 function BevPath({ points, map }: { points: BevPoint[]; map?: BevMap }) {
   if (map) {
     // draw the trajectory on the real warehouse floor map using the metric transform

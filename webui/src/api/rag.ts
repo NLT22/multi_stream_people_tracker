@@ -11,12 +11,16 @@ export interface PersonCandidate { global_id: number; score: number }
 export interface ZoneRank { zone: string; value: number }
 export interface TimelineInterval { cam: number; zone: string; t_start: number; t_end: number }
 export interface BevPoint { t: number; x: number; y: number }
+export interface RunInfo { run_id: string; scene: string; env: string; fps: number; n_cams: number; n_gids: number }
 
 async function getJSON<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`)
   if (!r.ok) throw new Error(`${path} -> ${r.status}`)
   return r.json() as Promise<T>
 }
+
+// The store currently served by the backend (independent of the UI dataset toggle).
+export const getRunInfo = () => getJSON<RunInfo[]>('/runs').then((r) => r[0])
 
 export async function ask(question: string, image?: File | null, runId?: string): Promise<AskResult> {
   const fd = new FormData()
