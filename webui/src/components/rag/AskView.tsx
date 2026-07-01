@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Nav } from '../../App'
 import { Panel } from '../common'
+import { getActiveDatasetKey } from '../../data/zones'
 import {
   ask, searchImage, topZones, personTimeline, personTrajectory, personDwell,
   type AskResult, type PersonCandidate, type ZoneRank,
@@ -170,7 +171,7 @@ function PersonSearch() {
               <span className="mono">{d.seconds.toFixed(0)}s</span>
             </div>
           ))}
-          {bev.length > 1 && <BevPath points={bev} />}
+          {bev.length > 1 && <BevPath points={bev} map={bevMapFor()} />}
           {timeline.length > 0 && (
             <div className="ask__timeline">
               <div className="eyebrow">appearances</div>
@@ -188,7 +189,38 @@ function PersonSearch() {
   )
 }
 
-function BevPath({ points }: { points: BevPoint[] }) {
+interface BevMap { url: string; sf: number; tx: number; ty: number; w: number; h: number }
+
+// ponytail: W022 floor map + metric world->pixel transform from calibration.json
+// (map_px = (world + translation) * scaleFactor). Add per-warehouse entries if more land.
+const MTMC_BEV: BevMap = {
+  url: '/maps/warehouse_022.png', sf: 21.586118551949482,
+  tx: 102.84569562990934, ty: 100.24632708444943, w: 1920, h: 1080,
+}
+const bevMapFor = (): BevMap | undefined =>
+  getActiveDatasetKey() === 'mtmc' ? MTMC_BEV : undefined
+
+function BevPath({ points, map }: { points: BevPoint[]; map?: BevMap }) {
+  if (map) {
+    // draw the trajectory on the real warehouse floor map using the metric transform
+    const px = (p: BevPoint) => (p.x + map.tx) * map.sf
+    const py = (p: BevPoint) => (p.y + map.ty) * map.sf
+    // drop back-projection outliers that fall outside the floor map
+    const inb = points.filter((p) => px(p) >= 0 && px(p) <= map.w && py(p) >= 0 && py(p) <= map.h)
+    const pts = inb.length > 1 ? inb : points
+    const d = pts.map((p, i) => `${i ? 'L' : 'M'}${px(p).toFixed(1)},${py(p).toFixed(1)}`).join(' ')
+    return (
+      <div className="ask__bev">
+        <div className="eyebrow">world trajectory (BEV · floor map)</div>
+        <svg viewBox={`0 0 ${map.w} ${map.h}`} className="ask__bevsvg" preserveAspectRatio="xMidYMid meet">
+          <image href={map.url} x={0} y={0} width={map.w} height={map.h} />
+          <path d={d} fill="none" stroke="var(--signal)" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+          <circle cx={px(pts[0])} cy={py(pts[0])} r={22} fill="var(--signal)" stroke="#fff" strokeWidth={4} />
+          <circle cx={px(pts[pts.length - 1])} cy={py(pts[pts.length - 1])} r={22} fill="var(--alert)" stroke="#fff" strokeWidth={4} />
+        </svg>
+      </div>
+    )
+  }
   const xs = points.map((p) => p.x), ys = points.map((p) => p.y)
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys)
   const W = 220, H = 130, pad = 8
