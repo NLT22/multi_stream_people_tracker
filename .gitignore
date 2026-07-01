@@ -1,6 +1,10 @@
 venv
 dataset/
 output/
+
+# Secrets — local .env holds API keys. Keep the tracked .env.example template.
+.env
+!.env.example
 # src/dataset/ is source code — not ignored despite "dataset/" above
 !src/dataset/
 runs/

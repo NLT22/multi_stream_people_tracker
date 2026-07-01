@@ -24,6 +24,26 @@ from pathlib import Path
 
 from src.rag.queries import RagStore
 
+
+def _load_dotenv() -> None:
+    # ponytail: minimal repo-root .env reader (KEY=VALUE lines), no dependency;
+    # does not override vars already set in the real environment.
+    env = Path(__file__).resolve().parents[2] / ".env"
+    if not env.exists():
+        return
+    for line in env.read_text().splitlines():
+        line = line.strip()
+        if line.startswith("export "):
+            line = line[len("export "):]
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        v = v.strip().strip('"').strip("'")
+        if v:
+            os.environ.setdefault(k.strip(), v)
+
+
+_load_dotenv()
 MODEL = os.environ.get("RAG_MODEL", "claude-sonnet-4-6")
 
 
