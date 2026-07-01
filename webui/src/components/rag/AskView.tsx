@@ -6,7 +6,11 @@ import {
   type AskResult, type PersonCandidate, type ZoneRank,
   type TimelineInterval, type BevPoint,
 } from '../../api/rag'
+import { getActiveDatasetKey } from '../../data/zones'
 import './ask.css'
+
+// UI dataset toggle -> RAG run_id in the combined store (both runs live in one DB)
+const RAG_RUN: Record<string, string> = { mmp: '64pm_cafe_shop_1', mtmc: 'Warehouse_022' }
 
 const EXAMPLES = [
   'Which zones got the most footfall today?',
@@ -27,13 +31,14 @@ export function AskView({ nav: _nav, go: _go }: { nav: Nav; go: (n: Partial<Nav>
   const [img, setImg] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const runId = RAG_RUN[getActiveDatasetKey()]
 
   const send = async (text: string) => {
     if (!text.trim() || busy) return
     setTurns((t) => [...t, { role: 'user', text }, { role: 'assistant', text: '', pending: true }])
     setQ(''); setBusy(true)
     try {
-      const res = await ask(text, img)
+      const res = await ask(text, img, runId)
       setTurns((t) => t.map((turn, i) =>
         i === t.length - 1 ? { role: 'assistant', text: res.answer, tools: res.tool_calls } : turn))
     } catch (e) {
@@ -95,8 +100,8 @@ export function AskView({ nav: _nav, go: _go }: { nav: Nav; go: (n: Partial<Nav>
         </Panel>
 
         <div className="ask__side">
-          <PersonSearch />
-          <TopZones />
+          <PersonSearch runId={runId} />
+          <TopZones runId={runId} />
         </div>
       </div>
     </div>
@@ -117,7 +122,7 @@ function ToolTrace({ calls }: { calls: AskResult['tool_calls'] }) {
   )
 }
 
-function PersonSearch() {
+function PersonSearch({ runId }: { runId?: string }) {
   const [cands, setCands] = useState<PersonCandidate[] | null>(null)
   const [sel, setSel] = useState<number | null>(null)
   const [timeline, setTimeline] = useState<TimelineInterval[]>([])
@@ -125,22 +130,21 @@ function PersonSearch() {
   const [dwell, setDwell] = useState<{ zone: string; seconds: number; visits: number }[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [env, setEnv] = useState('')
-  // decide the BEV floor map from the served run (not the UI toggle) so it works
-  // whenever the backend is a warehouse store
-  useEffect(() => { getRunInfo().then((r) => setEnv(r.env)).catch(() => {}) }, [])
+  // decide the BEV floor map from the selected run's env (warehouse -> floor map)
+  useEffect(() => { getRunInfo(runId).then((r) => setEnv(r.env)).catch(() => {}) }, [runId])
   const map = env.startsWith('warehouse') ? MTMC_BEV : undefined
 
   const onFile = async (f: File | null) => {
     if (!f) return
     setErr(null); setCands(null); setSel(null)
-    try { setCands(await searchImage(f, 5)) }
+    try { setCands(await searchImage(f, 5, runId)) }
     catch (e) { setErr(String(e)) }
   }
   const pick = async (gid: number) => {
     setSel(gid)
     try {
       const [tl, tr, dw] = await Promise.all([
-        personTimeline(gid), personTrajectory(gid, 4), personDwell(gid)])
+        personTimeline(gid, runId), personTrajectory(gid, 4, runId), personDwell(gid, runId)])
       setTimeline(tl.intervals); setBev(tr.points); setDwell(dw.dwell)
     } catch (e) { setErr(String(e)) }
   }
@@ -242,16 +246,16 @@ function BevPath({ points, map }: { points: BevPoint[]; map?: BevMap }) {
   )
 }
 
-function TopZones() {
+function TopZones({ runId }: { runId?: string }) {
   const [metric, setMetric] = useState<'footfall' | 'occupancy'>('footfall')
   const [rows, setRows] = useState<ZoneRank[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const load = async (m: 'footfall' | 'occupancy') => {
     setMetric(m); setErr(null)
-    try { setRows((await topZones(m, 6)).top) } catch (e) { setErr(String(e)) }
+    try { setRows((await topZones(m, 6, runId)).top) } catch (e) { setErr(String(e)) }
   }
   // initial load in an effect, not during render (render-time setState infinite-loops)
-  useEffect(() => { void load('footfall') }, [])
+  useEffect(() => { void load('footfall') }, [runId])
   const max = Math.max(...(rows ?? []).map((r) => r.value), 1)
   return (
     <Panel title="Top Zones" right={
