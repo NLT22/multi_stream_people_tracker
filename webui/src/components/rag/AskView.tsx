@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Nav } from '../../App'
 import { Panel } from '../common'
 import {
@@ -215,7 +215,8 @@ function TopZones() {
     setMetric(m); setErr(null)
     try { setRows((await topZones(m, 6)).top) } catch (e) { setErr(String(e)) }
   }
-  if (rows === null && err === null) void load(metric)
+  // initial load in an effect, not during render (render-time setState infinite-loops)
+  useEffect(() => { void load('footfall') }, [])
   const max = Math.max(...(rows ?? []).map((r) => r.value), 1)
   return (
     <Panel title="Top Zones" right={
