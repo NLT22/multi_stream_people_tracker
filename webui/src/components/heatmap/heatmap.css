@@ -19,7 +19,9 @@
   display: flex; align-items: center; justify-content: center;
 }
 .hm__underlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: grayscale(0.5) brightness(0.6); }
-.hm__heat { position: relative; max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: screen; }
+/* must scale exactly like the underlay (same box + object-fit) or the heat sits in a
+   smaller centred box while the frame fills the stage */
+.hm__heat { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: screen; }
 .hm__ramp { position: absolute; bottom: 12px; right: 12px; display: flex; align-items: center; gap: 8px;
   background: rgba(5,8,12,0.7); padding: 6px 10px; border-radius: var(--r); backdrop-filter: blur(3px); }
 .hm__ramp .mono { font-size: 9px; color: var(--dim); }
